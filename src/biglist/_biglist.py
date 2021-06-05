@@ -224,7 +224,17 @@ class Biglist(Iterable):
 
         return obj
 
-    def __init__(self, path: Union[str, Path, Upath]):
+    def __init__(self, path: Union[str, Path, Upath], multi_writers: bool = True):
+        '''
+        `multi_writers`: if `true`, this Biglist is possibly being written to
+        (i.e. appended to) by other workers besides the current one.
+        The default value, `True`, is a conservative setting---it does no harm
+        other than slowing down random access. Setting it to `False` only when
+        you are sure the current object is the only one that may be writing
+        to the Biglist at this time.
+
+        TODO: find a better name for `multi_writers`.
+        '''
         if isinstance(path, str):
             path = Path(path)
         if isinstance(path, Path):
@@ -232,6 +242,9 @@ class Biglist(Iterable):
         # Else it's something that already satisfies the
         # `Upath` protocol.
         self.path = path
+
+        self._multi_writers = multi_writers
+        self._data_files = None
 
         self._read_buffer: Optional[list] = None
         self._read_buffer_file: Optional[int] = None
@@ -277,18 +290,18 @@ class Biglist(Iterable):
     def data_info_file(self) -> Upath:
         return self.path / 'datafiles_info.json'
 
-    @property
-    def file_ranges(self) -> List:
-        # Index ranges of items stored in the files, in order.
-        files = self.get_data_files()
-        if not files:
-            return []
-        n = 0
-        cumlens = []
-        for _, length in files:
-            cumlens.append([n, n + length])
-            n += length
-        return cumlens
+    # @property
+    # def file_ranges(self) -> List:
+    #     # Index ranges of items stored in the files, in order.
+    #     files = self.get_data_files()
+    #     if not files:
+    #         return []
+    #     n = 0
+    #     cumlens = []
+    #     for _, length in files:
+    #         cumlens.append([n, n + length])
+    #         n += length
+    #     return cumlens
 
     @property
     def info_file(self) -> Upath:
@@ -499,9 +512,14 @@ class Biglist(Iterable):
         self._file_dumper.wait()
 
     def get_data_files(self) -> list:
+        if not self._multi_writers and self._data_files is not None:
+            return self._data_files
+
         if self.data_info_file.exists():
-            return json.loads(self.data_info_file.read_text())
-        return []
+            self._data_files = json.loads(self.data_info_file.read_text())
+        else:
+            self._data_files = []
+        return self._data_files
 
     def view(self) -> ListView:
         # During the use of this view, the underlying Biglist should not change.

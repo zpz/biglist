@@ -11,7 +11,7 @@ def test_numbers():
     if os.path.isdir(PATH):
         rmtree(PATH)
 
-    mylist = Biglist.new(PATH, batch_size=5, keep_files=False)
+    mylist = Biglist.new(PATH, batch_size=5)
     for i in range(21):
         mylist.append(i)
 
@@ -69,7 +69,7 @@ def test_fileview():
     bl.flush()
     assert len(bl.get_data_files()) == 6
 
-    assert list(bl.file_view(1)) == [4, 5, 6, 7]
+    assert list(bl.file_views()[1]) == [4, 5, 6, 7]
 
     vs = bl.file_views()
     list(vs[2]) == [8, 9, 10, 11]
@@ -95,7 +95,7 @@ def add_to_biglist(path, prefix, length):
 def test_multi_workers():
     sets = [('a', 10), ('b', 8), ('c', 22), ('d', 17), ('e', 24)]
     bl = Biglist.new(batch_size=6, keep_files=True)
-    print('bl at', bl.path)
+    # print('bl at', bl.path)
 
     prefix, ll = sets[0]
     for i in range(ll):
@@ -114,7 +114,7 @@ def test_multi_workers():
     ]
 
     for t in as_completed(future1 + future2):
-        print(t.result)
+        pass
 
     data = []
     for prefix, ll in sets:

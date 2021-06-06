@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Union, List, Dict, Optional, Tuple, Type, Callable
 from uuid import uuid4
 
-from upathlib import LocalUpath, Upath
+from upathlib import LocalUpath, Upath  # type: ignore
 from ._serializer import (
     Serializer, PickleSerializer, CompressedPickleSerializer,
     JsonSerializer, OrjsonSerializer)
@@ -50,12 +50,12 @@ class Dumper:
         if t.exception():
             raise t.exception()
 
-    def dump_file(self, data: List, data_file: Upath, file_dumper):
+    def dump_file(self, file_dumper, data_file: Upath, data: List):
         if self._executor is None:
             self._executor = ThreadPoolExecutor(self._max_workers)
             self._sem = threading.Semaphore(self._max_workers)
         self._sem.acquire()
-        task = self._executor.submit(file_dumper, data, data_file)
+        task = self._executor.submit(file_dumper, data_file, data)
         self._task_file_data[task] = (data_file.name, data)
         task.add_done_callback(self._callback)
         # If task is already finished when this callback is being added,
@@ -77,7 +77,7 @@ class Dumper:
         self.wait()
 
 
-class Biglist(Iterable):
+class Biglist(Sequence):
     '''
     Data access is optimized for iteration, whereas random access
     (via index or slice) is less efficient, and assumed to be rare.
@@ -114,7 +114,7 @@ class Biglist(Iterable):
         return path
 
     @classmethod
-    def dump_data_file(cls, data: list, path: Upath):
+    def dump_data_file(cls, path: Upath, data: list):
         serializer = cls.registered_storage_formats[path.suffix.lstrip('.')]
         with no_gc():
             data = [cls.pre_serialize(v) for v in data]
@@ -147,7 +147,14 @@ class Biglist(Iterable):
         return x
 
     @classmethod
-    def new(cls, path: Union[str, Path, Upath] = None, **kwargs):
+    def new(cls,
+            path: Union[str, Path, Upath] = None,
+            *,
+            batch_size: int = None,
+            keep_files: bool = None,
+            storage_format: str = None,
+            **kwargs,
+            ):
         # A Biglist object constrution is in either of the two modes
         # below:
         #    a) create a new Biglist to store new data.
@@ -175,12 +182,6 @@ class Biglist(Iterable):
         # may be used when calling `new`, in which case they will be passed
         # on to `__init__`.
 
-        batch_size: Optional[int] = kwargs.pop('batch_size', None)
-        keep_files: Optional[bool] = kwargs.pop('keep_files', None)
-        storage_format: str = kwargs.pop('stroage_format', None)
-        # If `kwargs` contains anything else, they must be accepted by
-        # the `__init__` of a subclass.
-
         if not path:
             path = cls.get_temp_path()
             if keep_files is None:
@@ -192,12 +193,8 @@ class Biglist(Iterable):
                 path = LocalUpath('/', path.absolute())
             if keep_files is None:
                 keep_files = True
-        if path.exists():
-            if path.is_dir():
-                if list(path.iterdir()):
-                    raise Exception(f'directory "{path}" already exists')
-            else:
-                raise Exception(f'directory "{path}" not available')
+        if path.is_dir() and list(path.iterdir()):
+            raise Exception(f'directory "{path}" already exists')
 
         obj = cls(path, **kwargs)  # type: ignore
 
@@ -224,7 +221,10 @@ class Biglist(Iterable):
 
         return obj
 
-    def __init__(self, path: Union[str, Path, Upath], multi_writers: bool = True):
+    def __init__(self,
+                 path: Union[str, Path, Upath],
+                 *,
+                 multi_writers: bool = True):
         '''
         `multi_writers`: if `true`, this Biglist is possibly being written to
         (i.e. appended to) by other workers besides the current one.
@@ -244,11 +244,11 @@ class Biglist(Iterable):
         self.path = path
 
         self._multi_writers = multi_writers
-        self._data_files = None
+        self._data_files: Optional[list] = None
 
         self._read_buffer: Optional[list] = None
         self._read_buffer_file: Optional[int] = None
-        self._read_buffer_item_range: Tuple = None
+        self._read_buffer_item_range: Optional[Tuple] = None
         # `self._read_buffer` contains the content of the file
         # indicated by `self._read_buffer_file`.
 
@@ -271,7 +271,8 @@ class Biglist(Iterable):
                     k, n in enumerate(file_lengths)
                 ]
                 self.data_info_file.write_text(
-                    json.dumps(files_info)
+                    json.dumps(files_info),
+                    overwrite=False,
                 )
                 self.info_file.write_text(json.dumps(info), overwrite=True)
         else:
@@ -289,19 +290,6 @@ class Biglist(Iterable):
     @property
     def data_info_file(self) -> Upath:
         return self.path / 'datafiles_info.json'
-
-    # @property
-    # def file_ranges(self) -> List:
-    #     # Index ranges of items stored in the files, in order.
-    #     files = self.get_data_files()
-    #     if not files:
-    #         return []
-    #     n = 0
-    #     cumlens = []
-    #     for _, length in files:
-    #         cumlens.append([n, n + length])
-    #         n += length
-    #     return cumlens
 
     @property
     def info_file(self) -> Upath:
@@ -336,9 +324,9 @@ class Biglist(Iterable):
                 f'{self.__class__.__name__} indices must be integers, not {type(idx).__name__}')
 
         if idx >= 0 and self._read_buffer_file is not None:
-            n1, n2 = self._read_buffer_item_range
+            n1, n2 = self._read_buffer_item_range  # type: ignore
             if n1 <= idx < n2:
-                return self._read_buffer[idx - n1]
+                return self._read_buffer[idx - n1]  # type: ignore
 
         datafiles = self.get_data_files()
         length = sum(l for _, l in datafiles)
@@ -349,9 +337,9 @@ class Biglist(Iterable):
             return self._append_buffer[idx - length]  # type: ignore
 
         if self._read_buffer_file is not None:
-            n1, n2 = self._read_buffer_item_range
+            n1, n2 = self._read_buffer_item_range  # type: ignore
             if n1 <= idx < n2:
-                return self._read_buffer[idx - n1]
+                return self._read_buffer[idx - n1]  # type: ignore
 
         n = 0
         for name, l in datafiles:
@@ -422,7 +410,7 @@ class Biglist(Iterable):
         if len(self._append_buffer) >= self.batch_size:
             self._flush()
 
-    def append_data_files_info(self, filename: str, length: int):
+    def _append_data_files_info(self, filename: str, length: int):
         with self.data_info_file.lock():
             z = self.get_data_files()
             z.append((filename, length))
@@ -430,7 +418,7 @@ class Biglist(Iterable):
 
     def destroy(self) -> None:
         '''
-        Clears all the disk files and releases all in-memory data held by this object,
+        Clears all the files and releases all in-memory data held by this object,
         so that the object is as if upon `__init__` with an empty directory pointed to
         by `self.path`.
 
@@ -447,21 +435,12 @@ class Biglist(Iterable):
         for v in x:
             self.append(v)
 
-    def file_view(self, file_name: Union[str, int]) -> FileView:
-        self.flush()
-        if isinstance(file_name, int):
-            file_name = self.get_data_files()[file_name][0]
-        return FileView(
-            self.data_dir / file_name,
-            self.load_data_file,
-        )
-
     def file_views(self) -> List[FileView]:
         # This is intended to facilitate parallel processing,
         # e.g. send views to diff files to diff `multiprocessing.Process`es.
         datafiles = self.get_data_files()
         return [
-            self.file_view(f)
+            FileView(self.data_dir / f, self.load_data_file)
             for f, l in datafiles
         ]
 
@@ -482,9 +461,9 @@ class Biglist(Iterable):
             f'{uuid4()}.{self.storage_format}'
 
         self._file_dumper.dump_file(
-            self._append_buffer,
-            data_file,
             self.dump_data_file,
+            data_file,
+            self._append_buffer,
         )
         # This call will return quickly if the dumper has queue
         # capacity for the file. The file meta data below
@@ -493,7 +472,7 @@ class Biglist(Iterable):
         # data to be accessed property.
 
         self._append_buffer = []
-        self.append_data_files_info(data_file.name, buffer_len)
+        self._append_data_files_info(data_file.name, buffer_len)
 
     def flush(self):
         '''
@@ -519,7 +498,7 @@ class Biglist(Iterable):
             self._data_files = json.loads(self.data_info_file.read_text())
         else:
             self._data_files = []
-        return self._data_files
+        return self._data_files  # type: ignore
 
     def view(self) -> ListView:
         # During the use of this view, the underlying Biglist should not change.

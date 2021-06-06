@@ -92,7 +92,7 @@ def add_to_biglist(path, prefix, length):
         raise
 
 
-def test_multi_workers():
+def test_multi_appenders():
     sets = [('a', 10), ('b', 8), ('c', 22), ('d', 17), ('e', 24)]
     bl = Biglist.new(batch_size=6, keep_files=True)
     # print('bl at', bl.path)
@@ -120,3 +120,35 @@ def test_multi_workers():
     for prefix, ll in sets:
         data.extend(f'{prefix}-{i}' for i in range(ll))
     assert sorted(data) == sorted(bl)
+
+
+def iter_file(path):
+    bl = Biglist(path)
+    data = []
+    for batch in bl.iter_files():
+        data.extend(batch)
+    return data
+
+
+def test_file_views():
+    bl = Biglist.new(batch_size=5)
+    nn = 567
+    bl.extend(range(nn))
+    bl.flush()
+    bl.reset_file_iter()
+    print(bl.file_iter_stat())
+
+    executor = ProcessPoolExecutor(6)
+    tasks = [
+        executor.submit(iter_file, bl.path)
+        for _ in range(6)
+    ]
+    print(bl.file_iter_stat())
+
+    data = []
+    for t in as_completed(tasks):
+        data.extend(t.result())
+
+    assert sorted(data) == list(bl)
+    assert bl.file_iter_stat().finished
+    print(bl.file_iter_stat())

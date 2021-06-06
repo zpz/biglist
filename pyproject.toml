@@ -1,0 +1,11 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+
+[tool.pytest.ini_options]
+#cache_dir = "/tmp/.pytest_cache/docker-project-template-py"
+addopts = "-p no:cacheprovider"
+
+[tool.coverage.run]
+data_file = "/tmp/.coverage"

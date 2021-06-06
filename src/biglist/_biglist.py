@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import gc
 import json
+import logging
+import multiprocessing
 import os
 import os.path
 import queue
@@ -12,14 +14,18 @@ import threading
 from collections.abc import Sequence, Iterable
 from concurrent.futures import ThreadPoolExecutor, Future
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
-from typing import Union, List, Dict, Optional, Tuple, Type, Callable
+from typing import Iterator, Union, List, Dict, Optional, Tuple, Type, Callable
 from uuid import uuid4
 
 from upathlib import LocalUpath, Upath  # type: ignore
 from ._serializer import (
     Serializer, PickleSerializer, CompressedPickleSerializer,
     JsonSerializer, OrjsonSerializer)
+
+
+logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -75,6 +81,79 @@ class Dumper:
 
     def cancel(self):
         self.wait()
+
+
+class FileIterStat:
+    def __init__(self, data_info=None, iter_info=None):
+        self._data_info = data_info
+        self._iter_info = iter_info
+
+    def __repr__(self) -> str:
+        return "{}({}, {}, {})".format(
+            self.__class__.__name__,
+            self.n_files_total,
+            self.n_files_claimed,
+            self.n_files_finished
+        )
+
+    def __str__(self) -> str:
+        return self.__repr__()
+
+    @property
+    def time_started(self) -> Optional[datetime]:
+        if self._iter_info is None:
+            return None
+        return datetime.fromisoformat(
+            self._iter_info[0]['time_started'])
+
+    @property
+    def time_finished(self) -> Optional[datetime]:
+        if self._iter_info is None:
+            return None
+        if len(self._iter_info) < len(self._data_info):
+            return None
+        tt = None
+        for z in self._iter_info:
+            t = z.get('time_finished')
+            if t is None:
+                return None
+            t = datetime.fromisoformat(t)
+            if tt is None or t > tt:
+                tt = t
+        return tt
+
+    @property
+    def finished(self) -> bool:
+        t = self.time_finished
+        return t is not None
+
+    @property
+    def n_files_total(self) -> int:
+        return len(self._data_info)
+
+    @property
+    def n_files_claimed(self) -> int:
+        if self._iter_info is None:
+            return 0
+        return len(self._iter_info)
+
+    @property
+    def n_files_finished(self) -> int:
+        if self._iter_info is None:
+            return 0
+        n = 0
+        for z in self._iter_info:
+            if 'time_finished' in z:
+                n += 1
+        return n
+
+    @property
+    def status(self) -> str:
+        if self.started is None:
+            return 'NOT STARTED'
+        if self.finished:
+            return 'FINISHED'
+        return 'IN PROGRESS'
 
 
 class Biglist(Sequence):
@@ -292,6 +371,10 @@ class Biglist(Sequence):
         return self.path / 'datafiles_info.json'
 
     @property
+    def _fileiter_info_file(self) -> Upath:
+        return self.path / 'fileiter_info.json'
+
+    @property
     def _info_file(self) -> Upath:
         return self.path / 'info.json'
 
@@ -435,12 +518,24 @@ class Biglist(Sequence):
         for v in x:
             self.append(v)
 
+    def file_iter_stat(self) -> FileIterStat:
+        try:
+            iter_info = json.loads(self._fileiter_info_file.read_text())
+        except FileNotFoundError:
+            return FileIterStat()
+        datafiles = self.get_data_files()
+        return FileIterStat(datafiles, iter_info)
+
+    def file_view(self, file: Upath) -> FileView:
+        return FileView(file, self.load_data_file)
+
     def file_views(self) -> List[FileView]:
         # This is intended to facilitate parallel processing,
-        # e.g. send views to diff files to diff `multiprocessing.Process`es.
+        # e.g. send views on diff files to diff `multiprocessing.Process`es.
+        # However, `iter_files` may be a better way to do that.
         datafiles = self.get_data_files()
         return [
-            FileView(self._data_dir / f, self.load_data_file)
+            self.file_view(self._data_dir / f)
             for f, l in datafiles
         ]
 
@@ -499,6 +594,46 @@ class Biglist(Sequence):
         else:
             self._data_files = []
         return self._data_files  # type: ignore
+
+    def iter_files(self, reader_id: str = None) -> Iterator[list]:
+        if not reader_id and isinstance(self.path, LocalUpath):
+            reader_id = multiprocessing.current_process().name
+        datafiles = self.get_data_files()
+        file_idx = None
+        file_name = None
+        while True:
+            with self._fileiter_info_file.lock() as ff:
+                iter_info = json.loads(ff.read_text())
+                if file_idx is not None:
+                    z = iter_info[file_idx]
+                    assert z['file_name'] == file_name
+                    assert z['reader_id'] == reader_id
+                    iter_info[file_idx]['time_finished'] = str(
+                        datetime.utcnow())
+                if len(iter_info) >= len(datafiles):
+                    ff.write_text(json.dumps(iter_info), overwrite=True)
+                    break
+                file_idx = len(iter_info)
+                file_name = datafiles[file_idx][0]
+                iter_info.append({
+                    'file_name': file_name,
+                    'reader_id': reader_id,
+                    'time_started': str(datetime.utcnow()),
+                })
+                ff.write_text(json.dumps(iter_info), overwrite=True)
+            fv = self.file_view(self._data_dir / file_name)
+            logger.info('yielding data of file "%s"', file_name)
+            yield fv.data
+
+    def reset_file_iter(self) -> None:
+        '''
+        One worker, such as a "coordinator", calls this method once.
+        After that, one or more workers independently call `iter_files`
+        to iterate over the Biglist. The content of the Biglist is
+        split between the workers.
+        '''
+        self._fileiter_info_file.write_text(
+            json.dumps([]), overwrite=True)
 
     def view(self) -> ListView:
         # During the use of this view, the underlying Biglist should not change.

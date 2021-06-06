@@ -4,7 +4,7 @@
 
 Mutation is append-only. Updating existing elements of the list is not supported.
 
-Random element access by index and slice is supported, but not optimized. Iteration is optimized, which is the main target scenario of consumption.
+Random element access by index and slice is supported, but not optimized. The recommended way of consumption is by iteration, which is optimized for speed.
 
 Distributed reading and writing are supported. This means appending to or reading from a `Biglist` by multiple workers concurrently. In the case of reading, the data of the `Biglist` is split between the workers. When the storage is local, the workers are multiple threads or processes. When the storage is remote (i.e. in a cloud blob store), the workers are multiple threads or processes on one or more machines.
 

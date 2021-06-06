@@ -526,7 +526,10 @@ class Biglist(Sequence):
         datafiles = self.get_data_files()
         return FileIterStat(datafiles, iter_info)
 
-    def file_view(self, file: Upath) -> FileView:
+    def file_view(self, file: Union[Upath, int]) -> FileView:
+        if isinstance(file, int):
+            datafiles = self.get_data_files()
+            file = self._data_dir / datafiles[file][0]
         return FileView(file, self.load_data_file)
 
     def file_views(self) -> List[FileView]:

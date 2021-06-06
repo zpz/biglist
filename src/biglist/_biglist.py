@@ -217,7 +217,7 @@ class Biglist(Sequence):
                 raise ValueError(
                     f"invalid value of `storage_format`: '{storage_format}'")
         obj.info['storage_format'] = storage_format.replace('-', '_')
-        obj.info_file.write_text(json.dumps(obj.info), overwrite=False)
+        obj._info_file.write_text(json.dumps(obj.info), overwrite=False)
 
         return obj
 
@@ -257,10 +257,10 @@ class Biglist(Sequence):
         self.keep_files = True
         self._file_dumper = Dumper()
 
-        if self.info_file.is_file():
+        if self._info_file.is_file():
             # Instantiate a Biglist object pointing to
             # existing data.
-            info = json.loads(self.info_file.read_text())
+            info = json.loads(self._info_file.read_text())
 
             if 'file_lengths' in info:
                 # Migrate to new storage plan.
@@ -270,11 +270,11 @@ class Biglist(Sequence):
                     (f'{k}.{suffix}', n) for
                     k, n in enumerate(file_lengths)
                 ]
-                self.data_info_file.write_text(
+                self._data_info_file.write_text(
                     json.dumps(files_info),
                     overwrite=False,
                 )
-                self.info_file.write_text(json.dumps(info), overwrite=True)
+                self._info_file.write_text(json.dumps(info), overwrite=True)
         else:
             info = {}
         self.info = info
@@ -284,15 +284,15 @@ class Biglist(Sequence):
         return self.info['batch_size']
 
     @property
-    def data_dir(self) -> Upath:
+    def _data_dir(self) -> Upath:
         return self.path / 'store'
 
     @property
-    def data_info_file(self) -> Upath:
+    def _data_info_file(self) -> Upath:
         return self.path / 'datafiles_info.json'
 
     @property
-    def info_file(self) -> Upath:
+    def _info_file(self) -> Upath:
         return self.path / 'info.json'
 
     @property
@@ -345,7 +345,7 @@ class Biglist(Sequence):
         for name, l in datafiles:
             if n <= idx < n + l:
                 self._read_buffer_item_range = (n, n + l)
-                file = self.data_dir / name
+                file = self._data_dir / name
                 data = self._file_dumper.get_file_data(file)
                 if data is None:
                     data = self.load_data_file(file)
@@ -362,7 +362,7 @@ class Biglist(Sequence):
         ndatafiles = len(datafiles)
 
         if ndatafiles == 1:
-            yield from self.load_data_file(self.data_dir / datafiles[0][0])
+            yield from self.load_data_file(self._data_dir / datafiles[0][0])
         elif ndatafiles > 1:
             max_workers = min(3, ndatafiles)
             tasks = queue.Queue(max_workers)
@@ -370,7 +370,7 @@ class Biglist(Sequence):
             for i in range(max_workers):
                 t = executor.submit(
                     self.load_data_file,
-                    self.data_dir / datafiles[i][0]
+                    self._data_dir / datafiles[i][0]
                 )
                 tasks.put(t)
             nfiles_queued = max_workers
@@ -382,7 +382,7 @@ class Biglist(Sequence):
                 if nfiles_queued < ndatafiles:
                     t = executor.submit(
                         self.load_data_file,
-                        self.data_dir / datafiles[nfiles_queued][0]
+                        self._data_dir / datafiles[nfiles_queued][0]
                     )
                     tasks.put(t)
                     nfiles_queued += 1
@@ -411,10 +411,10 @@ class Biglist(Sequence):
             self._flush()
 
     def _append_data_files_info(self, filename: str, length: int):
-        with self.data_info_file.lock():
+        with self._data_info_file.lock():
             z = self.get_data_files()
             z.append((filename, length))
-            self.data_info_file.write_text(json.dumps(z), overwrite=True)
+            self._data_info_file.write_text(json.dumps(z), overwrite=True)
 
     def destroy(self) -> None:
         '''
@@ -440,7 +440,7 @@ class Biglist(Sequence):
         # e.g. send views to diff files to diff `multiprocessing.Process`es.
         datafiles = self.get_data_files()
         return [
-            FileView(self.data_dir / f, self.load_data_file)
+            FileView(self._data_dir / f, self.load_data_file)
             for f, l in datafiles
         ]
 
@@ -457,7 +457,7 @@ class Biglist(Sequence):
 
         buffer_len = len(self._append_buffer)
 
-        data_file = self.data_dir / \
+        data_file = self._data_dir / \
             f'{uuid4()}.{self.storage_format}'
 
         self._file_dumper.dump_file(
@@ -494,8 +494,8 @@ class Biglist(Sequence):
         if not self._multi_writers and self._data_files is not None:
             return self._data_files
 
-        if self.data_info_file.exists():
-            self._data_files = json.loads(self.data_info_file.read_text())
+        if self._data_info_file.exists():
+            self._data_files = json.loads(self._data_info_file.read_text())
         else:
             self._data_files = []
         return self._data_files  # type: ignore

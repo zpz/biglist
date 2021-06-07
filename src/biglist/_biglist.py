@@ -555,8 +555,11 @@ class Biglist(Sequence):
 
         buffer_len = len(self._append_buffer)
 
-        data_file = self._data_dir / \
-            f'{uuid4()}.{self.storage_format}'
+        while True:
+            data_file = self._data_dir / \
+                f'{uuid4()}.{self.storage_format}'
+            if not data_file.exists():
+                break
 
         self._file_dumper.dump_file(
             self.dump_data_file,

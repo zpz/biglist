@@ -18,6 +18,16 @@ class Serializer(abc.ABC):
         raise NotImplementedError
 
 
+class PickleSerializer(Serializer):
+    @classmethod
+    def serialize(cls, x):
+        return pickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+
+    @classmethod
+    def deserialize(cls, y):
+        return pickle.loads(y)
+
+
 class CompressedPickleSerializer(Serializer):
     @classmethod
     def serialize(cls, x):
@@ -50,11 +60,13 @@ class OrjsonSerializer(Serializer):
         return orjson.loads(y)
 
 
-class PickleSerializer(Serializer):
+class CompressedOrjsonSerializer(Serializer):
     @classmethod
     def serialize(cls, x):
-        return pickle.dumps(x, protocol=pickle.HIGHEST_PROTOCOL)
+        return zlib.compress(
+            orjson.dumps(x),
+            level=3)
 
     @classmethod
     def deserialize(cls, y):
-        return pickle.loads(y)
+        return orjson.loads(zlib.decompress(y))

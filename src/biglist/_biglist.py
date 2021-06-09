@@ -2,7 +2,6 @@ from __future__ import annotations
 # Will no longer be needed at Python 3.10.
 
 import gc
-import json
 import logging
 import multiprocessing
 import os
@@ -22,7 +21,8 @@ from uuid import uuid4
 from upathlib import LocalUpath, Upath  # type: ignore
 from ._serializer import (
     Serializer, PickleSerializer, CompressedPickleSerializer,
-    JsonSerializer, OrjsonSerializer)
+    JsonSerializer, OrjsonSerializer, CompressedOrjsonSerializer,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -296,7 +296,7 @@ class Biglist(Sequence):
                 raise ValueError(
                     f"invalid value of `storage_format`: '{storage_format}'")
         obj.info['storage_format'] = storage_format.replace('-', '_')
-        obj._info_file.write_text(json.dumps(obj.info), overwrite=False)
+        obj._info_file.write_json(obj.info, overwrite=False)
 
         return obj
 
@@ -339,7 +339,7 @@ class Biglist(Sequence):
         if self._info_file.is_file():
             # Instantiate a Biglist object pointing to
             # existing data.
-            info = json.loads(self._info_file.read_text())
+            info = self._info_file.read_json()
 
             if 'file_lengths' in info:
                 # Migrate to new storage plan.
@@ -349,11 +349,11 @@ class Biglist(Sequence):
                     (f'{k}.{suffix}', n) for
                     k, n in enumerate(file_lengths)
                 ]
-                self._data_info_file.write_text(
-                    json.dumps(files_info),
+                self._data_info_file.write_json(
+                    files_info,
                     overwrite=False,
                 )
-                self._info_file.write_text(json.dumps(info), overwrite=True)
+                self._info_file.write_json(info, overwrite=True)
         else:
             info = {}
         self.info = info
@@ -497,7 +497,7 @@ class Biglist(Sequence):
         with self._data_info_file.lock():
             z = self.get_data_files()
             z.append((filename, length))
-            self._data_info_file.write_text(json.dumps(z), overwrite=True)
+            self._data_info_file.write_json(z, overwrite=True)
 
     def destroy(self) -> None:
         '''
@@ -520,7 +520,7 @@ class Biglist(Sequence):
 
     def file_iter_stat(self) -> FileIterStat:
         try:
-            iter_info = json.loads(self._fileiter_info_file.read_text())
+            iter_info = self._fileiter_info_file.read_json()
         except FileNotFoundError:
             return FileIterStat()
         datafiles = self.get_data_files()
@@ -596,7 +596,7 @@ class Biglist(Sequence):
             return self._data_files
 
         if self._data_info_file.exists():
-            self._data_files = json.loads(self._data_info_file.read_text())
+            self._data_files = self._data_info_file.read_json()
         else:
             self._data_files = []
         return self._data_files  # type: ignore
@@ -609,7 +609,7 @@ class Biglist(Sequence):
         file_name = None
         while True:
             with self._fileiter_info_file.lock() as ff:
-                iter_info = json.loads(ff.read_text())
+                iter_info = ff.read_json()
                 if file_idx is not None:
                     z = iter_info[file_idx]
                     assert z['file_name'] == file_name
@@ -617,7 +617,7 @@ class Biglist(Sequence):
                     iter_info[file_idx]['time_finished'] = str(
                         datetime.utcnow())
                 if len(iter_info) >= len(datafiles):
-                    ff.write_text(json.dumps(iter_info), overwrite=True)
+                    ff.write_json(iter_info, overwrite=True)
                     break
                 file_idx = len(iter_info)
                 file_name = datafiles[file_idx][0]
@@ -626,7 +626,7 @@ class Biglist(Sequence):
                     'reader_id': reader_id,
                     'time_started': str(datetime.utcnow()),
                 })
-                ff.write_text(json.dumps(iter_info), overwrite=True)
+                ff.write_json(iter_info, overwrite=True)
             fv = self.file_view(self._data_dir / file_name)
             logger.info('yielding data of file "%s"', file_name)
             yield fv.data
@@ -638,8 +638,7 @@ class Biglist(Sequence):
         to iterate over the Biglist. The content of the Biglist is
         split between the workers.
         '''
-        self._fileiter_info_file.write_text(
-            json.dumps([]), overwrite=True)
+        self._fileiter_info_file.write_json([], overwrite=True)
 
     def view(self) -> ListView:
         # During the use of this view, the underlying Biglist should not change.
@@ -731,3 +730,4 @@ class ListView(Sequence):
 
 Biglist.register_storage_format('json', JsonSerializer)
 Biglist.register_storage_format('pickle-z', CompressedPickleSerializer)
+Biglist.register_storage_format('orjson-z', CompressedOrjsonSerializer)

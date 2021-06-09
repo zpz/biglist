@@ -1,0 +1,10 @@
+Release 0.5.1
+=============
+
+- Added `CompressedOrjsonSerializer`, with file extension 'orjson_z'.
+
+
+Release 0.5.0
+=============
+
+First public release. Most APIs are in place.

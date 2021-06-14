@@ -189,7 +189,7 @@ class Biglist(Sequence):
         '''
         path = tempfile.mkdtemp(dir=os.environ.get('TMPDIR', '/tmp'))
         # This directory is already created by now.
-        path = LocalUpath('/', path)
+        path = LocalUpath(path)
         return path
 
     @classmethod
@@ -269,7 +269,7 @@ class Biglist(Sequence):
             if isinstance(path, str):
                 path = Path(path)
             if isinstance(path, Path):
-                path = LocalUpath('/', path.absolute())
+                path = LocalUpath(path.absolute())
             if keep_files is None:
                 keep_files = True
         if path.is_dir() and list(path.iterdir()):
@@ -317,7 +317,7 @@ class Biglist(Sequence):
         if isinstance(path, str):
             path = Path(path)
         if isinstance(path, Path):
-            path = LocalUpath('/', path.absolute())
+            path = LocalUpath(path.absolute())
         # Else it's something that already satisfies the
         # `Upath` protocol.
         self.path = path

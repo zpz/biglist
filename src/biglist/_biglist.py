@@ -272,7 +272,7 @@ class Biglist(Sequence):
                 path = LocalUpath(path.absolute())
             if keep_files is None:
                 keep_files = True
-        if path.is_dir() and list(path.iterdir()):
+        if path.is_dir() and not path.is_empty_dir():
             raise Exception(f'directory "{path}" already exists')
 
         obj = cls(path, **kwargs)  # type: ignore

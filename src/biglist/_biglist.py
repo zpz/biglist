@@ -476,7 +476,7 @@ class Biglist(Sequence):
 
     def __len__(self) -> int:
         z = self.get_data_files()
-        return sum(k for _, k in z)
+        return sum(k for _, k in z) + len(self._append_buffer)
 
     def append(self, x) -> None:
         '''
@@ -726,6 +726,10 @@ class ListView(Sequence):
         else:
             for i in self._range:
                 yield self._list[i]
+
+    @property
+    def raw(self):
+        return self._list
 
 
 Biglist.register_storage_format('json', JsonSerializer)

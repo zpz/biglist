@@ -356,9 +356,8 @@ class Biglist(Sequence):
     def _data_info_file(self) -> Upath:
         return self.path / 'datafiles_info.json'
 
-    @property
-    def _fileiter_info_file(self) -> Upath:
-        return self.path / 'fileiter_info.json'
+    def _fileiter_info_file(self, task_id: str) -> Upath:
+        return self.path / task_id / 'fileiter_info.json'
 
     @property
     def _info_file(self) -> Upath:
@@ -504,9 +503,9 @@ class Biglist(Sequence):
         for v in x:
             self.append(v)
 
-    def file_iter_stat(self) -> FileIterStat:
+    def file_iter_stat(self, task_id: str) -> FileIterStat:
         try:
-            iter_info = self._fileiter_info_file.read_json()
+            iter_info = self._fileiter_info_file(task_id).read_json()
         except FileNotFoundError:
             return FileIterStat()
         datafiles = self.get_data_files()
@@ -587,14 +586,14 @@ class Biglist(Sequence):
             self._data_files = []
         return self._data_files  # type: ignore
 
-    def iter_files(self, reader_id: str = None) -> Iterator[list]:
+    def iter_files(self, task_id: str, *, reader_id: str = None) -> Iterator[list]:
         if not reader_id and isinstance(self.path, LocalUpath):
             reader_id = multiprocessing.current_process().name
         datafiles = self.get_data_files()
         file_idx = None
         file_name = None
         while True:
-            with self._fileiter_info_file.lock() as ff:
+            with self._fileiter_info_file(task_id).lock() as ff:
                 iter_info = ff.read_json()
                 if file_idx is not None:
                     z = iter_info[file_idx]
@@ -617,14 +616,16 @@ class Biglist(Sequence):
             logger.info('yielding data of file "%s"', file_name)
             yield fv.data
 
-    def reset_file_iter(self) -> None:
+    def reset_file_iter(self) -> str:
         '''
         One worker, such as a "coordinator", calls this method once.
         After that, one or more workers independently call `iter_files`
         to iterate over the Biglist. The content of the Biglist is
         split between the workers.
         '''
-        self._fileiter_info_file.write_json([], overwrite=True)
+        task_id = datetime.utcnow().isoformat()
+        self._fileiter_info_file(task_id).write_json([], overwrite=True)
+        return task_id
 
     def view(self) -> ListView:
         # During the use of this view, the underlying Biglist should not change.

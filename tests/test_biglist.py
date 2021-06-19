@@ -122,10 +122,10 @@ def test_multi_appenders():
     assert sorted(data) == sorted(bl)
 
 
-def iter_file(path):
+def iter_file(path, task_id):
     bl = Biglist(path)
     data = []
-    for batch in bl.iter_files():
+    for batch in bl.iter_files(task_id):
         data.extend(batch)
     return data
 
@@ -135,20 +135,20 @@ def test_file_views():
     nn = 567
     bl.extend(range(nn))
     bl.flush()
-    bl.reset_file_iter()
-    print(bl.file_iter_stat())
+    task_id = bl.reset_file_iter()
+    print(bl.file_iter_stat(task_id))
 
     executor = ProcessPoolExecutor(6)
     tasks = [
-        executor.submit(iter_file, bl.path)
+        executor.submit(iter_file, bl.path, task_id)
         for _ in range(6)
     ]
-    print(bl.file_iter_stat())
+    print(bl.file_iter_stat(task_id))
 
     data = []
     for t in as_completed(tasks):
         data.extend(t.result())
 
     assert sorted(data) == list(bl)
-    assert bl.file_iter_stat().finished
-    print(bl.file_iter_stat())
+    assert bl.file_iter_stat(task_id).finished
+    print(bl.file_iter_stat(task_id))

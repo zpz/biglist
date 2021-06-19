@@ -340,20 +340,6 @@ class Biglist(Sequence):
             # Instantiate a Biglist object pointing to
             # existing data.
             info = self._info_file.read_json()
-
-            if 'file_lengths' in info:
-                # Migrate to new storage plan.
-                file_lengths = info.pop('file_lengths')
-                suffix = self.storage_format
-                files_info = [
-                    (f'{k}.{suffix}', n) for
-                    k, n in enumerate(file_lengths)
-                ]
-                self._data_info_file.write_json(
-                    files_info,
-                    overwrite=False,
-                )
-                self._info_file.write_json(info, overwrite=True)
         else:
             info = {}
         self.info = info

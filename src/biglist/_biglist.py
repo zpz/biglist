@@ -398,7 +398,7 @@ class Biglist(Sequence):
 
         datafiles = self.get_data_files()
         length = sum(l for _, l in datafiles)
-        idx = range(length)[idx]
+        idx = range(length + len(self._append_buffer))[idx]
 
         if idx >= length:
             self._read_buffer_file = None

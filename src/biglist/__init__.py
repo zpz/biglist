@@ -2,7 +2,7 @@ from ._biglist import Biglist, ListView, FileView, FileIterStat
 from ._serializer import Serializer
 
 
-__version__ = '0.5.3'
+__version__ = '0.5.4'
 
 
 __all__ = [

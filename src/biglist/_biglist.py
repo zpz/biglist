@@ -478,8 +478,12 @@ class Biglist(Sequence):
         if len(self._append_buffer) >= self.batch_size:
             self._flush()
 
+    @classmethod
+    def _lockfile(self, file: Upath):
+        return file.lock()
+
     def _append_data_files_info(self, filename: str, length: int):
-        with self._data_info_file.lock():
+        with self._lockfile(self._data_info_file):
             z = self.get_data_files()
             z.append((filename, length))
             self._data_info_file.write_json(z, overwrite=True)

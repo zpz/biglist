@@ -207,6 +207,12 @@ class Biglist(Sequence):
             return [cls.post_deserialize(v) for v in z]
 
     @classmethod
+    @contextmanager
+    def _lockfile(cls, file: Upath):
+        with file.lock():
+            yield
+
+    @classmethod
     def pre_serialize(cls, x):
         '''When the data element is an instance of a custom type,
         it is preferred to convert it to a native type, such as dict,
@@ -478,12 +484,8 @@ class Biglist(Sequence):
         if len(self._append_buffer) >= self.batch_size:
             self._flush()
 
-    @classmethod
-    def _lockfile(self, file: Upath):
-        return file.lock()
-
     def _append_data_files_info(self, filename: str, length: int):
-        with self._lockfile(self._data_info_file):
+        with self._lockfile(self._data_info_file.with_suffix('.json.lock')):
             z = self.get_data_files()
             z.append((filename, length))
             self._data_info_file.write_json(z, overwrite=True)
@@ -597,7 +599,8 @@ class Biglist(Sequence):
         file_idx = None
         file_name = None
         while True:
-            with self._fileiter_info_file(task_id).lock() as ff:
+            ff = self._fileiter_info_file(task_id)
+            with self._lockfile(ff.with_suffix('.json.lock')):
                 iter_info = ff.read_json()
                 if file_idx is not None:
                     z = iter_info[file_idx]

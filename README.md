@@ -8,6 +8,6 @@ Random element access by index and slice is supported, but not optimized. The re
 
 Distributed reading and writing are supported. This means appending to or reading from a `Biglist` by multiple workers concurrently. In the case of reading, the data of the `Biglist` is split between the workers. When the storage is local, the workers are multiple threads or processes. When the storage is remote (i.e. in a cloud blob store), the workers are multiple threads or processes on one or more machines.
 
-Of course, reading the entire list concurrently by each of a number of independent workers is also possible. That, however, is not called "distributed" reading.
+Of course, reading the entire list concurrently by a number of independent workers is also possible. That, however, is not called "distributed" reading.
 
 A very early version of this work is described in [a blog post](https://zpz.github.io/blog/biglist/).

@@ -149,7 +149,7 @@ class FileIterStat:
 
     @property
     def status(self) -> str:
-        if self.started is None:
+        if self.time_started is None:
             return 'NOT STARTED'
         if self.finished:
             return 'FINISHED'
@@ -189,8 +189,8 @@ class Biglist(Sequence):
         '''
         path = tempfile.mkdtemp(dir=os.environ.get('TMPDIR', '/tmp'))
         # This directory is already created by now.
-        path = LocalUpath(path)
-        return path
+        path = LocalUpath(path)  # type: ignore
+        return path  # type: ignore
 
     @classmethod
     def dump_data_file(cls, path: Upath, data: list):
@@ -275,11 +275,11 @@ class Biglist(Sequence):
             if isinstance(path, str):
                 path = Path(path)
             if isinstance(path, Path):
-                path = LocalUpath(path.absolute())
+                path = LocalUpath(str(path.absolute()))
             if keep_files is None:
                 keep_files = True
-        if path.is_dir() and not path.is_empty_dir():
-            raise Exception(f'directory "{path}" already exists')
+            if path.isdir():
+                raise Exception(f'directory "{path}" already exists')
 
         obj = cls(path, **kwargs)  # type: ignore
 
@@ -323,7 +323,7 @@ class Biglist(Sequence):
         if isinstance(path, str):
             path = Path(path)
         if isinstance(path, Path):
-            path = LocalUpath(path.absolute())
+            path = LocalUpath(str(path.absolute()))
         # Else it's something that already satisfies the
         # `Upath` protocol.
         self.path = path
@@ -342,7 +342,7 @@ class Biglist(Sequence):
         self.keep_files = True
         self._file_dumper = Dumper()
 
-        if self._info_file.is_file():
+        if self._info_file.isfile():
             # Instantiate a Biglist object pointing to
             # existing data.
             info = self._info_file.read_json()
@@ -521,7 +521,7 @@ class Biglist(Sequence):
         if isinstance(file, int):
             datafiles = self.get_data_files()
             file = self._data_dir / datafiles[file][0]
-        return FileView(file, self.load_data_file)
+        return FileView(file, self.load_data_file)  # type: ignore
 
     def file_views(self) -> List[FileView]:
         # This is intended to facilitate parallel processing,

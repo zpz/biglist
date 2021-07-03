@@ -3,7 +3,7 @@ import json
 import pickle
 import zlib
 
-import orjson
+import orjson  # type: ignore
 
 
 class Serializer(abc.ABC):

@@ -306,20 +306,7 @@ class Biglist(Sequence):
 
         return obj
 
-    def __init__(self,
-                 path: Union[str, Path, Upath],
-                 *,
-                 multi_writers: bool = True):
-        '''
-        `multi_writers`: if `true`, this Biglist is possibly being written to
-        (i.e. appended to) by other workers besides the current one.
-        The default value, `True`, is a conservative setting---it does no harm
-        other than slowing down random access. Setting it to `False` only when
-        you are sure the current object is the only one that may be writing
-        to the Biglist at this time.
-
-        TODO: find a better name for `multi_writers`.
-        '''
+    def __init__(self, path: Union[str, Path, Upath]):
         if isinstance(path, str):
             path = Path(path)
         if isinstance(path, Path):
@@ -328,7 +315,6 @@ class Biglist(Sequence):
         # `Upath` protocol.
         self.path = path
 
-        self._multi_writers = multi_writers
         self._data_files: Optional[list] = None
 
         self._read_buffer: Optional[list] = None
@@ -402,7 +388,7 @@ class Biglist(Sequence):
             if n1 <= idx < n2:
                 return self._read_buffer[idx - n1]  # type: ignore
 
-        datafiles = self.get_data_files()
+        datafiles = self.get_data_files(lazy=True)
         length = sum(l for _, l in datafiles)
         idx = range(length + len(self._append_buffer))[idx]
 
@@ -466,7 +452,7 @@ class Biglist(Sequence):
             yield from self._append_buffer
 
     def __len__(self) -> int:
-        z = self.get_data_files()
+        z = self.get_data_files(lazy=True)
         return sum(k for _, k in z) + len(self._append_buffer)
 
     def append(self, x) -> None:
@@ -519,7 +505,7 @@ class Biglist(Sequence):
 
     def file_view(self, file: Union[Upath, int]) -> FileView:
         if isinstance(file, int):
-            datafiles = self.get_data_files()
+            datafiles = self.get_data_files(lazy=True)
             file = self._data_dir / datafiles[file][0]
         return FileView(file, self.load_data_file)  # type: ignore
 
@@ -582,8 +568,8 @@ class Biglist(Sequence):
         self._flush()
         self._file_dumper.wait()
 
-    def get_data_files(self) -> list:
-        if not self._multi_writers and self._data_files is not None:
+    def get_data_files(self, lazy: bool = False) -> list:
+        if lazy and self._data_files is not None:
             return self._data_files
 
         if self._data_info_file.exists():

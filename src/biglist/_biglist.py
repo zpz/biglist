@@ -187,7 +187,9 @@ class Biglist(Sequence):
         '''Subclass needs to customize this if it prefers to use
         a remote blobstore for temp Biglist.
         '''
-        path = tempfile.mkdtemp(dir=os.environ.get('TMPDIR', '/tmp'))
+        p = os.environ.get('TMPDIR', '/tmp')
+        os.makedirs(p, exist_ok=True)
+        path = tempfile.mkdtemp(dir=p)
         # This directory is already created by now.
         path = LocalUpath(path)  # type: ignore
         return path  # type: ignore
@@ -548,6 +550,10 @@ class Biglist(Sequence):
         # will be updated as if the saving has completed, although
         # it hasn't (it is only queued). This allows the waiting-to-be-saved
         # data to be accessed property.
+
+        # TODO:
+        # what if dump fails later? the index file will be updated
+        # already assuming everything will be fine.
 
         self._append_buffer = []
         self._append_data_files_info(data_file.name, buffer_len)

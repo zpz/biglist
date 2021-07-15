@@ -10,6 +10,7 @@ import queue
 import string
 import tempfile
 import threading
+import uuid
 from collections.abc import Sequence, Iterable
 from concurrent.futures import ThreadPoolExecutor, Future
 from contextlib import contextmanager
@@ -187,11 +188,8 @@ class Biglist(Sequence):
         '''Subclass needs to customize this if it prefers to use
         a remote blobstore for temp Biglist.
         '''
-        p = os.environ.get('TMPDIR', '/tmp')
-        os.makedirs(p, exist_ok=True)
-        path = tempfile.mkdtemp(dir=p)
-        # This directory is already created by now.
-        path = LocalUpath(path)  # type: ignore
+        path = LocalUpath(os.path.abspath(tempfile.gettempdir()),
+                          str(uuid.uuid4()))  # type: ignore
         return path  # type: ignore
 
     @classmethod
@@ -280,8 +278,10 @@ class Biglist(Sequence):
                 path = LocalUpath(str(path.absolute()))
             if keep_files is None:
                 keep_files = True
-            if path.isdir():
-                raise Exception(f'directory "{path}" already exists')
+        if path.isdir():
+            raise Exception(f'directory "{path}" already exists')
+        elif path.isfile():
+            raise FileExistsError(path)
 
         obj = cls(path, **kwargs)  # type: ignore
 

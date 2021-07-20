@@ -278,9 +278,9 @@ class Biglist(Sequence):
                 path = LocalUpath(str(path.absolute()))
             if keep_files is None:
                 keep_files = True
-        if path.isdir():
+        if path.is_dir():
             raise Exception(f'directory "{path}" already exists')
-        elif path.isfile():
+        elif path.is_file():
             raise FileExistsError(path)
 
         obj = cls(path, **kwargs)  # type: ignore
@@ -330,7 +330,7 @@ class Biglist(Sequence):
         self.keep_files = True
         self._file_dumper = Dumper()
 
-        if self._info_file.isfile():
+        if self._info_file.is_file():
             # Instantiate a Biglist object pointing to
             # existing data.
             info = self._info_file.read_json()

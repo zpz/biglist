@@ -29,7 +29,7 @@ def test_numbers():
 
 
 def test_view():
-    bl = Biglist.new()
+    bl = Biglist.new(storage_format='json')
     bl.extend(range(20))
     bl.flush()
     datalv = bl.view()
@@ -64,7 +64,7 @@ def test_view():
 
 
 def test_fileview():
-    bl = Biglist.new(batch_size=4)
+    bl = Biglist.new(batch_size=4, storage_format='pickle')
     bl.extend(range(22))
     bl.flush()
     assert len(bl.get_data_files()) == 6
@@ -94,7 +94,7 @@ def add_to_biglist(path, prefix, length):
 
 def test_multi_appenders():
     sets = [('a', 10), ('b', 8), ('c', 22), ('d', 17), ('e', 24)]
-    bl = Biglist.new(batch_size=6, keep_files=True)
+    bl = Biglist.new(batch_size=6, keep_files=True, storage_format='orjson-z')
     # print('bl at', bl.path)
 
     prefix, ll = sets[0]
@@ -131,7 +131,7 @@ def iter_file(path, task_id):
 
 
 def test_file_views():
-    bl = Biglist.new(batch_size=5)
+    bl = Biglist.new(batch_size=5, storage_format='pickle-z')
     nn = 567
     bl.extend(range(nn))
     bl.flush()

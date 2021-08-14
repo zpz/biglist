@@ -20,9 +20,9 @@ from typing import Iterator, Union, List, Dict, Optional, Tuple, Type, Callable
 from uuid import uuid4
 
 from upathlib import LocalUpath, Upath  # type: ignore
-from ._serializer import (
-    Serializer, PickleSerializer, CompressedPickleSerializer,
-    JsonSerializer, OrjsonSerializer, CompressedOrjsonSerializer,
+from upathlib.serializer import (
+    ByteSerializer, PickleSerializer, CompressedPickleSerializer,
+    JsonByteSerializer, OrjsonSerializer, CompressedOrjsonSerializer,
 )
 
 
@@ -172,7 +172,7 @@ class Biglist(Sequence):
     @classmethod
     def register_storage_format(cls,
                                 name: str,
-                                serializer: Type[Serializer],
+                                serializer: Type[ByteSerializer],
                                 overwrite: bool = False,
                                 ):
         good = string.ascii_letters + string.digits + '-_'
@@ -368,7 +368,7 @@ class Biglist(Sequence):
         if self.keep_files:
             self.flush()
         else:
-            self.destroy()
+            self.destroy(concurrency=0)
 
     def __getitem__(self, idx: int):  # type: ignore
         '''
@@ -478,7 +478,7 @@ class Biglist(Sequence):
             z.append((filename, length))
             self._data_info_file.write_json(z, overwrite=True)
 
-    def destroy(self) -> None:
+    def destroy(self, *, concurrency: int = None) -> None:
         '''
         Clears all the files and releases all in-memory data held by this object,
         so that the object is as if upon `__init__` with an empty directory pointed to
@@ -491,7 +491,7 @@ class Biglist(Sequence):
         self._read_buffer_file = None
         self._read_buffer_item_range = None
         self._append_buffer = []
-        self.path.rmrf()
+        self.path.rmrf(concurrency=concurrency)
 
     def extend(self, x: Iterable) -> None:
         for v in x:
@@ -521,7 +521,7 @@ class Biglist(Sequence):
             for f, l in datafiles
         ]
 
-    def _flush(self):
+    def _flush(self, *, wait: bool = False):
         '''
         Persist the content of the in-memory buffer to a file,
         reset the buffer, and update relevant book-keeping variables.
@@ -540,16 +540,20 @@ class Biglist(Sequence):
             if not data_file.exists():
                 break
 
-        self._file_dumper.dump_file(
-            self.dump_data_file,
-            data_file,
-            self._append_buffer,
-        )
-        # This call will return quickly if the dumper has queue
-        # capacity for the file. The file meta data below
-        # will be updated as if the saving has completed, although
-        # it hasn't (it is only queued). This allows the waiting-to-be-saved
-        # data to be accessed property.
+        if wait:
+            self._file_dumper.wait()
+            self.dump_data_file(data_file, self._append_buffer)
+        else:
+            self._file_dumper.dump_file(
+                self.dump_data_file,
+                data_file,
+                self._append_buffer,
+            )
+            # This call will return quickly if the dumper has queue
+            # capacity for the file. The file meta data below
+            # will be updated as if the saving has completed, although
+            # it hasn't (it is only queued). This allows the waiting-to-be-saved
+            # data to be accessed property.
 
         # TODO:
         # what if dump fails later? the index file will be updated
@@ -571,8 +575,7 @@ class Biglist(Sequence):
         In summary, call this method once the user is done with adding elements
         to the list *in this session*, meaning in this run of the program.
         '''
-        self._flush()
-        self._file_dumper.wait()
+        self._flush(wait=True)
 
     def get_data_files(self, lazy: bool = False) -> list:
         if lazy and self._data_files is not None:
@@ -718,6 +721,6 @@ class ListView(Sequence):
         return self._list
 
 
-Biglist.register_storage_format('json', JsonSerializer)
+Biglist.register_storage_format('json', JsonByteSerializer)
 Biglist.register_storage_format('pickle-z', CompressedPickleSerializer)
 Biglist.register_storage_format('orjson-z', CompressedOrjsonSerializer)

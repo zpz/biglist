@@ -51,6 +51,11 @@ class Dumper:
 
         self._task_file_data: Dict[Future, Tuple] = {}
 
+    def __del__(self):
+        if self._executor is not None:
+            self._executor.shutdown()
+            self._executor = None
+
     def _callback(self, t):
         self._sem.release()
         del self._task_file_data[t]
@@ -428,27 +433,27 @@ class Biglist(Sequence):
         elif ndatafiles > 1:
             max_workers = min(3, ndatafiles)
             tasks = queue.Queue(max_workers)
-            executor = ThreadPoolExecutor(max_workers)
-            for i in range(max_workers):
-                t = executor.submit(
-                    self.load_data_file,
-                    self._data_dir / datafiles[i][0]
-                )
-                tasks.put(t)
-            nfiles_queued = max_workers
-
-            for _ in range(ndatafiles):
-                t = tasks.get()
-                data = t.result()
-
-                if nfiles_queued < ndatafiles:
+            with ThreadPoolExecutor(max_workers) as executor:
+                for i in range(max_workers):
                     t = executor.submit(
                         self.load_data_file,
-                        self._data_dir / datafiles[nfiles_queued][0]
+                        self._data_dir / datafiles[i][0]
                     )
                     tasks.put(t)
-                    nfiles_queued += 1
-                yield from data
+                nfiles_queued = max_workers
+
+                for _ in range(ndatafiles):
+                    t = tasks.get()
+                    data = t.result()
+
+                    if nfiles_queued < ndatafiles:
+                        t = executor.submit(
+                            self.load_data_file,
+                            self._data_dir / datafiles[nfiles_queued][0]
+                        )
+                        tasks.put(t)
+                        nfiles_queued += 1
+                    yield from data
 
         if self._append_buffer:
             yield from self._append_buffer

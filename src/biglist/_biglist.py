@@ -226,7 +226,7 @@ class Biglist(Sequence):
         When using Biglist to store data of a custom class, it's recommended
         to create a subclass of Biglist for the particular class, and implement
         `pre_serialize` and `post_deserialize`. A good pattern is to define
-        instance method `to_dict` and class method `from_dict` on the 
+        instance method `to_dict` and class method `from_dict` on the
         custom class, and call them in `pre_serialize` and `post_deserialize`.
         '''
         return x
@@ -339,8 +339,9 @@ class Biglist(Sequence):
             # Instantiate a Biglist object pointing to
             # existing data.
             info = self._info_file.read_json()
+            info.setdefault('storage_version', 0)
         else:
-            info = {}
+            info = {'storage_version': 1}  # version 1: 2022/3/7
         self.info = info
 
     @property
@@ -356,7 +357,7 @@ class Biglist(Sequence):
         return self.path / 'datafiles_info.json'
 
     def _fileiter_info_file(self, task_id: str) -> Upath:
-        return self.path / task_id / 'fileiter_info.json'
+        return self.path / 'file_iter' / task_id / 'fileiter_info.json'
 
     @property
     def _info_file(self) -> Upath:
@@ -365,6 +366,10 @@ class Biglist(Sequence):
     @property
     def storage_format(self) -> str:
         return self.info['storage_format']
+
+    @property
+    def storage_version(self) -> int:
+        return self.info['storage_version']
 
     def __bool__(self) -> bool:
         return len(self) > 0
@@ -531,7 +536,7 @@ class Biglist(Sequence):
         Persist the content of the in-memory buffer to a file,
         reset the buffer, and update relevant book-keeping variables.
 
-        This method is called any time the size of the in-memory buffer 
+        This method is called any time the size of the in-memory buffer
         reaches `self.batch_size`. This happens w/o the user's intervention.
         '''
         if not self._append_buffer:
@@ -542,6 +547,10 @@ class Biglist(Sequence):
         while True:
             data_file = self._data_dir / \
                 f'{uuid4()}.{self.storage_format}'
+
+            # TODO: this check can be expensive for cloud storage, yet
+            # most of the time this check is not necessary. Is there a way
+            # to skip this safely?
             if not data_file.exists():
                 break
 
@@ -586,9 +595,9 @@ class Biglist(Sequence):
         if lazy and self._data_files is not None:
             return self._data_files
 
-        if self._data_info_file.exists():
+        try:
             self._data_files = self._data_info_file.read_json()
-        else:
+        except FileNotFoundError:
             self._data_files = []
         return self._data_files  # type: ignore
 
@@ -598,8 +607,8 @@ class Biglist(Sequence):
         datafiles = self.get_data_files()
         file_idx = None
         file_name = None
+        ff = self._fileiter_info_file(task_id)
         while True:
-            ff = self._fileiter_info_file(task_id)
             with self._lockfile(ff.with_suffix('.json.lock')):
                 iter_info = ff.read_json()
                 if file_idx is not None:
@@ -621,7 +630,7 @@ class Biglist(Sequence):
                 ff.write_json(iter_info, overwrite=True)
             fv = self.file_view(self._data_dir / file_name)
             logger.info('yielding data of file "%s"', file_name)
-            yield fv.data
+            yield fv.data  # this is the data list contained in the data file
 
     def reset_file_iter(self) -> str:
         '''

@@ -1,3 +1,4 @@
+'''Biglist'''
 from ._biglist import Biglist, ListView, FileView, FileIterStat
 
 

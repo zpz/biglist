@@ -1,6 +1,7 @@
 from __future__ import annotations
 # Will no longer be needed at Python 3.10.
 
+import concurrent.futures
 import gc
 import logging
 import multiprocessing
@@ -49,12 +50,10 @@ class Dumper:
         # They would cause trouble when `Biglist`
         # file-views are sent to other processes.
 
-        self._task_file_data: Dict[Future, Tuple] = {}
+        self._task_file_data: Dict[Future, tuple] = {}
 
     def __del__(self):
-        if self._executor is not None:
-            self._executor.shutdown()
-            self._executor = None
+        self.cancel()
 
     def _callback(self, t):
         self._sem.release()
@@ -62,13 +61,18 @@ class Dumper:
         if t.exception():
             raise t.exception()
 
-    def dump_file(self, file_dumper, data_file: Upath, data: List):
+    def dump_file(self,
+                  file_dumper: Callable[[Upath, list], None],
+                  data_file: Upath,
+                  data: list):
         if self._executor is None:
             self._executor = ThreadPoolExecutor(self._max_workers)
             self._sem = threading.Semaphore(self._max_workers)
-        self._sem.acquire()
+        self._sem.acquire()  # Wait here if the executor is busy at capacity.
         task = self._executor.submit(file_dumper, data_file, data)
         self._task_file_data[task] = (data_file.name, data)
+        # It's useful to keep the data here, as it will be needed
+        # by `get_file_data`.
         task.add_done_callback(self._callback)
         # If task is already finished when this callback is being added,
         # then it is called immediately.
@@ -76,17 +80,19 @@ class Dumper:
     def get_file_data(self, data_file: Upath):
         file_name = data_file.name
         for name, data in self._task_file_data.values():
+            # `_task_file_data` is not long, so this is OK.
             if name == file_name:
                 return data
         return None
 
     def wait(self):
-        for t in list(self._task_file_data.keys()):
-            _ = t.result()
-        assert not self._task_file_data
+        concurrent.futures.wait(list(self._task_file_data.keys()))
 
     def cancel(self):
-        self.wait()
+        if self._executor is not None:
+            self._executor.shutdown()
+            self._executor = None
+        self._task_file_data = {}
 
 
 class FileIterStat:
@@ -200,9 +206,9 @@ class Biglist(Sequence):
     @classmethod
     def dump_data_file(cls, path: Upath, data: list):
         serializer = cls.registered_storage_formats[path.suffix.lstrip('.')]
-        with no_gc():
-            data = [cls.pre_serialize(v) for v in data]
-            path.write_bytes(serializer.serialize(data))
+        #with no_gc():
+        data = [cls.pre_serialize(v) for v in data]
+        path.write_bytes(serializer.serialize(data))
 
     @classmethod
     def load_data_file(cls, path: Upath):
@@ -214,6 +220,10 @@ class Biglist(Sequence):
     @classmethod
     @contextmanager
     def _lockfile(cls, file: Upath):
+        # Although by default this uses `file.lock()`, it doesn't have to be.
+        # All this method needs is to guarantee that the code block identified
+        # by `file` (essentially the name) is NOT excecuted concurrently
+        # by two "workers". It by no means has to be "locking that file".
         with file.lock():
             yield
 
@@ -341,7 +351,7 @@ class Biglist(Sequence):
             info = self._info_file.read_json()
             info.setdefault('storage_version', 0)
         else:
-            info = {'storage_version': 1}  # version 1: 2022/3/7
+            info = {'storage_version': 1}  # version 1 introduced on 2022/3/7
         self.info = info
 
     @property

@@ -206,7 +206,6 @@ class Biglist(Sequence):
     @classmethod
     def dump_data_file(cls, path: Upath, data: list):
         serializer = cls.registered_storage_formats[path.suffix.lstrip('.')]
-        #with no_gc():
         data = [cls.pre_serialize(v) for v in data]
         path.write_bytes(serializer.serialize(data))
 

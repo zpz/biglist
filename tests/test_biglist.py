@@ -1,8 +1,13 @@
+import asyncio
 import os
 import os.path
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+import multiprocessing
+import random
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed, wait
 from shutil import rmtree
 
+import pytest
+from boltons import iterutils
 from biglist._biglist import Biglist, ListView
 
 
@@ -28,12 +33,27 @@ def test_numbers():
     assert list(mylist) == data
 
 
-def test_view():
-    bl = Biglist.new(storage_format='json')
-    bl.extend(range(20))
-    bl.flush()
-    datalv = bl.view()
+def test_existing_numbers():
+    PATH = os.path.join(os.environ.get('TMPDIR', '/tmp'), 'test', 'biglist')
+    if os.path.isdir(PATH):
+        rmtree(PATH)
+    yourlist = Biglist.new(PATH)
+    yourlist.extend(range(29))
+    yourlist.flush()
 
+    mylist = Biglist(PATH)
+    mylist.append(29)
+    mylist.append(30)
+    mylist.append(31)
+    mylist.extend([32, 33, 34, 35, 36])
+
+    data = list(range(len(mylist)))
+    assert list(mylist) == data
+
+    rmtree(PATH)
+
+
+def _test_view(datalv):
     data = list(range(20))
     assert list(datalv) == data
 
@@ -63,6 +83,18 @@ def test_view():
     assert list(lv[::-3]) == data[1::6]
 
 
+def test_listview():
+    _test_view(ListView(list(range(20))))
+
+
+def test_biglistview():
+    bl = Biglist.new(storage_format='json')
+    bl.extend(range(20))
+    bl.flush()
+    datalv = bl.view()
+    _test_view(datalv)
+
+
 def test_fileview():
     bl = Biglist.new(batch_size=4, storage_format='pickle')
     bl.extend(range(22))
@@ -78,11 +110,24 @@ def test_fileview():
     assert list(vvs) == [9, 10]
 
 
+def test_iter_cancel():
+    bl = Biglist.new(batch_size=7)
+    bl.extend(range(27))
+    n = 0
+    total = 0
+    for x in bl:
+        total += x
+        n += 1
+        if n == 9:
+            break
+    assert total == sum(range(9))
+
+
 def add_to_biglist(path, prefix, length):
     try:
         bl = Biglist(path)
         for i in range(length):
-            bl.append(f'{prefix}-{i}')
+            bl.concurrent_append(f'{prefix}-{i}')
         bl.flush()
         return prefix, length
     except Exception as e:
@@ -103,18 +148,13 @@ def test_multi_appenders():
     bl.flush()
 
     pool1 = ThreadPoolExecutor(2)
-    future1 = [
-        pool1.submit(add_to_biglist, bl.path, *sets[1]),
-        pool1.submit(add_to_biglist, bl.path, *sets[2]),
-    ]
+    t1 = pool1.submit(add_to_biglist, bl.path, *sets[1])
+    t2 = pool1.submit(add_to_biglist, bl.path, *sets[2])
     pool2 = ProcessPoolExecutor(2)
-    future2 = [
-        pool2.submit(add_to_biglist, bl.path, *sets[3]),
-        pool2.submit(add_to_biglist, bl.path, *sets[4]),
-    ]
+    t3 = pool2.submit(add_to_biglist, bl.path, *sets[3])
+    t4 = pool2.submit(add_to_biglist, bl.path, *sets[4])
 
-    for t in as_completed(future1 + future2):
-        pass
+    wait([t1, t2, t3, t4])
 
     data = []
     for prefix, ll in sets:
@@ -125,8 +165,8 @@ def test_multi_appenders():
 def iter_file(path, task_id):
     bl = Biglist(path)
     data = []
-    for batch in bl.iter_files(task_id):
-        data.extend(batch)
+    for x in bl.concurrent_iter(task_id):
+        data.append(x)
     return data
 
 
@@ -135,20 +175,99 @@ def test_file_views():
     nn = 567
     bl.extend(range(nn))
     bl.flush()
-    task_id = bl.reset_file_iter()
-    print(bl.file_iter_stat(task_id))
+    task_id = bl.new_concurrent_iter()
+    print(bl.concurrent_iter_stat(task_id))
 
     executor = ProcessPoolExecutor(6)
     tasks = [
         executor.submit(iter_file, bl.path, task_id)
         for _ in range(6)
     ]
-    print(bl.file_iter_stat(task_id))
+    print(bl.concurrent_iter_stat(task_id))
 
     data = []
     for t in as_completed(tasks):
         data.extend(t.result())
 
     assert sorted(data) == list(bl)
-    assert bl.file_iter_stat(task_id).finished
-    print(bl.file_iter_stat(task_id))
+    assert bl.concurrent_iter_stat(task_id).finished
+    print(bl.concurrent_iter_stat(task_id))
+
+
+def square_sum(x):
+    print('process', multiprocessing.current_process())
+    z = 0
+    for v in x:
+        z += v * v
+    return z
+
+
+def test_mp1():
+    data = [random.randint(1, 1000) for _ in range(3245)]
+    biglist = Biglist.new(batch_size=128)
+    biglist.extend(data)
+    biglist.flush()
+
+    print('')
+    assert len(biglist.get_data_files()) == len(data) // biglist.batch_size + 1
+
+    results = []
+    for batch in iterutils.chunked_iter(biglist, biglist.batch_size):
+        results.append(square_sum(batch))
+
+    with ProcessPoolExecutor(3) as pool:
+        jobs = [
+            pool.submit(square_sum, v)
+            for v in biglist.file_views()
+        ]
+        for j, result in zip(jobs, results):
+            assert j.result() == result
+
+
+def find_big(mylist):
+    z = Biglist.new(batch_size=20, keep_files=True)
+    for v in mylist:
+        if v > 40:
+            z.append(v)
+    z.flush()
+    return z.path
+
+
+def test_mp2():
+    data = [random.randint(1, 1000) for _ in range(3245)]
+    biglist = Biglist.new(batch_size=128)
+    biglist.extend(data)
+    biglist.flush()
+
+    yourlist = Biglist.new(batch_size=33)
+    with multiprocessing.Pool(10) as pool:
+        for path in pool.imap_unordered(find_big, biglist.file_views()):
+            z = Biglist(path)
+            yourlist.extend(z)
+            z.destroy()
+    yourlist.flush()
+
+    assert sorted(yourlist) == sorted(v for v in data if v > 40)
+    biglist.destroy()
+    yourlist.destroy()
+
+
+async def sum_square(mylist):
+    z = 0
+    for v in mylist:
+        await asyncio.sleep(0.1)
+        z += v * v
+    return z
+
+
+@pytest.mark.asyncio
+async def test_async():
+    data = [random.randint(1, 1000) for _ in range(3245)]
+    biglist = Biglist.new(batch_size=128)
+    biglist.extend(data)
+    biglist.flush()
+
+    tasks = (sum_square(x) for x in biglist.file_views())
+    results = await asyncio.gather(*tasks)
+    assert sum(results) == sum(v*v for v in biglist)
+    biglist.destroy()

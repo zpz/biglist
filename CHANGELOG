@@ -1,3 +1,17 @@
+Release 0.6.3
+=============
+
+- Minor refinements and speed improvements.
+- Explicitly separate concurrent (multi-worker) and non-concurrent
+  (uni-worker) writing, so as to improve speed in the non-concurrent case.
+  - New methods `concurrent_append`, `concurrent_extend`.
+- Renamings:
+  - `reset_file_iter` -> `new_concurrent_iter`
+  - `iter_files` -> `concurrent_iter`
+  - `file_iter_stat` -> `concurrent_iter_stat`
+- Refactor and simplify test and build processes.
+
+
 Release 0.6.2
 =============
 

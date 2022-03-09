@@ -1,11 +1,10 @@
 '''Biglist'''
-from ._biglist import Biglist, ListView, FileView, FileIterStat
+from ._biglist import Biglist, ListView, FileView, ConcurrentIterStat
 
 
-__version__ = '0.6.2'
+__version__ = '0.6.3'
 
 
 __all__ = [
-    'Biglist', 'ListView', 'FileView',
-    'FileIterStat',
+    'Biglist', 'ListView', 'FileView', 'ConcurrentIterStat',
 ]

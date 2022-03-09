@@ -127,7 +127,7 @@ def add_to_biglist(path, prefix, length):
     try:
         bl = Biglist(path)
         for i in range(length):
-            bl.append(f'{prefix}-{i}')
+            bl.concurrent_append(f'{prefix}-{i}')
         bl.flush()
         return prefix, length
     except Exception as e:
@@ -165,8 +165,8 @@ def test_multi_appenders():
 def iter_file(path, task_id):
     bl = Biglist(path)
     data = []
-    for batch in bl.iter_files(task_id):
-        data.extend(batch)
+    for x in bl.concurrent_iter(task_id):
+        data.append(x)
     return data
 
 
@@ -175,23 +175,23 @@ def test_file_views():
     nn = 567
     bl.extend(range(nn))
     bl.flush()
-    task_id = bl.reset_file_iter()
-    print(bl.file_iter_stat(task_id))
+    task_id = bl.new_concurrent_iter()
+    print(bl.concurrent_iter_stat(task_id))
 
     executor = ProcessPoolExecutor(6)
     tasks = [
         executor.submit(iter_file, bl.path, task_id)
         for _ in range(6)
     ]
-    print(bl.file_iter_stat(task_id))
+    print(bl.concurrent_iter_stat(task_id))
 
     data = []
     for t in as_completed(tasks):
         data.extend(t.result())
 
     assert sorted(data) == list(bl)
-    assert bl.file_iter_stat(task_id).finished
-    print(bl.file_iter_stat(task_id))
+    assert bl.concurrent_iter_stat(task_id).finished
+    print(bl.concurrent_iter_stat(task_id))
 
 
 def square_sum(x):

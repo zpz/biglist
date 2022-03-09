@@ -9,6 +9,7 @@ Release 0.6.3
   - `reset_file_iter` -> `new_concurrent_iter`
   - `iter_files` -> `concurrent_iter`
   - `file_iter_stat` -> `concurrent_iter_stat`
+- Refactor and simplify test and build processes.
 
 
 Release 0.6.2

@@ -436,6 +436,8 @@ class Biglist(Sequence):
             else:
                 ifile0 = self._read_buffer_file_idx_ + 1
 
+        # Now find the data file that contains the target item.
+
         ifile = bisect.bisect_right(self._data_files_cumlength_, idx, lo=ifile0, hi=ifile1)
         # `ifile`: index of data file that contains the target element.
         # `n`: total length before `ifile`.
@@ -573,6 +575,7 @@ class Biglist(Sequence):
 
             while True:
                 data_file = f'{uuid4()}.{self.storage_format}'
+                # TODO: this could be inefficient if there are many files.
                 if not any((data_file == v[0] for v in data_files)):
                     break
 
@@ -627,10 +630,10 @@ class Biglist(Sequence):
 
         try:
             self._data_files = self._data_info_file.read_json()
-            self._data_files_length_ = sum(l for _, l in self._data_files)
             self._data_files_cumlength_ = list(itertools.accumulate(
                 v[1] for v in self._data_files
             ))
+            self._data_files_length_ = self._data_files_cumlength_[-1]
         except FileNotFoundError:
             self._data_files = []
             self._data_files_length_ = 0
@@ -674,19 +677,26 @@ class Biglist(Sequence):
         datafiles = self.get_data_files()
         file_idx = None
         file_name = None
-        ff = self._concurrent_iter_info_file(task_id)
         while True:
+            ff = self._concurrent_iter_info_file(task_id)
             with self._lockfile(ff.with_suffix('.json.lock')):
                 iter_info = ff.read_json()
                 if file_idx is not None:
+                    # This is the file processed in last round.
+                    # Update its record.
                     z = iter_info[file_idx]
                     assert z['file_name'] == file_name
                     assert z['reader_id'] == reader_id
                     iter_info[file_idx]['time_finished'] = str(
                         datetime.utcnow())
+
                 if len(iter_info) >= len(datafiles):
+                    # No more date files to process.
                     ff.write_json(iter_info, overwrite=True)
                     break
+
+                # Get the next file to process.
+                # Claim its spot in the book-keeping file.
                 file_idx = len(iter_info)
                 file_name = datafiles[file_idx][0]
                 iter_info.append({
@@ -695,8 +705,9 @@ class Biglist(Sequence):
                     'time_started': str(datetime.utcnow()),
                 })
                 ff.write_json(iter_info, overwrite=True)
+
             fv = self.file_view(self._data_dir / file_name)
-            logger.info('yielding data of file "%s"', file_name)
+            logger.debug('yielding data of file "%s"', file_name)
             yield from fv.data  # this is the data list contained in the data file
 
     def concurrent_iter_stat(self, task_id: str, lazy: bool = True) -> ConcurrentIterStat:

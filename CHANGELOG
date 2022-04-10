@@ -1,3 +1,9 @@
+Release 0.6.4
+=============
+
+- Change default format from 'orjson' to 'pickle'.
+
+
 Release 0.6.3
 =============
 

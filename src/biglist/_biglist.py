@@ -183,10 +183,9 @@ class Biglist(Sequence):
     '''
     registered_storage_formats = {
         'pickle': PickleSerializer,
-        'orjson': OrjsonSerializer,
     }
 
-    DEFAULT_STORAGE_FORMAT = 'orjson'
+    DEFAULT_STORAGE_FORMAT = 'pickle'
 
     @classmethod
     def register_storage_format(cls,
@@ -430,11 +429,11 @@ class Biglist(Sequence):
         if self._read_buffer_file is not None:
             n1, n2 = self._read_buffer_item_range  # type: ignore
             if idx < n1:
-                ifile1 = self._read_buffer_file_idx_
+                ifile1 = self._read_buffer_file_idx_  # pylint: disable=access-member-before-definition
             elif idx < n2:
                 return self._read_buffer[idx - n1]  # type: ignore
             else:
-                ifile0 = self._read_buffer_file_idx_ + 1
+                ifile0 = self._read_buffer_file_idx_ + 1  # pylint: disable=access-member-before-definition
 
         # Now find the data file that contains the target item.
 
@@ -807,5 +806,6 @@ class ListView(Sequence):
 
 
 Biglist.register_storage_format('json', JsonByteSerializer)
+Biglist.register_storage_format('orjson', OrjsonSerializer)
 Biglist.register_storage_format('pickle-z', CompressedPickleSerializer)
 Biglist.register_storage_format('orjson-z', CompressedOrjsonSerializer)

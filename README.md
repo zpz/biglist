@@ -11,3 +11,7 @@ Distributed reading and writing are supported. This means appending to or readin
 Of course, reading the entire list concurrently by a number of independent workers is also possible. That, however, is not called "distributed" reading.
 
 A very early version of this work is described in [a blog post](https://zpz.github.io/blog/biglist/).
+
+## Status
+
+Production ready.

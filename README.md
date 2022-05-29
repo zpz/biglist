@@ -1,6 +1,8 @@
 # biglist
 
-`biglist` provides a class `Biglist`, which implements a persisted, out-of-memory list for Python. The main use case is processing large amounts of data on single or multiple machines while leveraging local disk or a cloud blob store for storage. It is a pure Python utility with a familiar Pythonic interface.
+`biglist` provides a class `Biglist`, which implements a persisted, out-of-memory Python data structure operations by the familiar *list* interface. The main use case is processing large amounts of data that can not fit in memory.
+
+Persistence can be on local disk or in a cloud blob store.
 
 Mutation is append-only. Updating existing elements of the list is not supported.
 

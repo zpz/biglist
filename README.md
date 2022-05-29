@@ -1,6 +1,8 @@
 # biglist
 
-`biglist` provides a class `Biglist`, which implements a persisted, out-of-memory list for Python. The main use case is processing large amounts of data on single or multiple machines while leveraging local disk or a cloud blob store for storage. It is a pure Python utility with a familiar Pythonic interface.
+`biglist` provides a class `Biglist`, which implements a persisted, out-of-memory Python data structure operations by the familiar *list* interface. The main use case is processing large amounts of data that can not fit in memory.
+
+Persistence can be on local disk or in a cloud blob store.
 
 Mutation is append-only. Updating existing elements of the list is not supported.
 
@@ -11,3 +13,7 @@ Distributed reading and writing are supported. This means appending to or readin
 Of course, reading the entire list concurrently by a number of independent workers is also possible. That, however, is not called "distributed" reading.
 
 A very early version of this work is described in [a blog post](https://zpz.github.io/blog/biglist/).
+
+## Status
+
+Production ready.

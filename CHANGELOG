@@ -1,3 +1,13 @@
+Release 0.6.5
+=============
+
+- Minor changes to prepare for `upathlib` upgrade.
+- Make Orjson-based storage formats optional.
+- Dependency on `upathlib` specifies default `upathlib` only.
+  User who needs enhanced `upathlib` can simply install that explicitly
+  prior to installing `biglist`, e.g. `pip install upathlib[azure, orjson]`.
+
+
 Release 0.6.4
 =============
 

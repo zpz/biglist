@@ -27,12 +27,6 @@ Source = "https://github.com/zpz/biglist"
 
 
 [project.optional-dependencies]
-azure = [
-    "upathlib[azure]",
-]
-gcp = [
-    "upathlib[gcp]",
-]
 test = [
     "bandit",
     "boltons",

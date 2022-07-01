@@ -139,7 +139,7 @@ def add_to_biglist(path, prefix, length):
 
 def test_multi_appenders():
     sets = [('a', 10), ('b', 8), ('c', 22), ('d', 17), ('e', 24)]
-    bl = Biglist.new(batch_size=6, keep_files=True, storage_format='orjson-z')
+    bl = Biglist.new(batch_size=6, keep_files=True, storage_format='pickle-z')
     # print('bl at', bl.path)
 
     prefix, ll = sets[0]

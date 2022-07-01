@@ -25,7 +25,7 @@ from uuid import uuid4
 from upathlib import LocalUpath, Upath  # type: ignore
 from upathlib.serializer import (
     ByteSerializer, PickleSerializer, CompressedPickleSerializer,
-    JsonByteSerializer, OrjsonSerializer, CompressedOrjsonSerializer,
+    JsonByteSerializer,
 )
 
 
@@ -391,7 +391,7 @@ class Biglist(Sequence):
         if self.keep_files:
             self.flush()
         else:
-            self.destroy(concurrency=0)
+            self.destroy()
 
     def __getitem__(self, idx: int):  # type: ignore
         '''
@@ -519,7 +519,7 @@ class Biglist(Sequence):
     def append(self, x) -> None:
         self._append(x, concurrent=False)
 
-    def destroy(self, *, concurrency: int = None) -> None:
+    def destroy(self) -> None:
         '''
         Clears all the files and releases all in-memory data held by this object,
         so that the object is as if upon `__init__` with an empty directory pointed to
@@ -532,7 +532,7 @@ class Biglist(Sequence):
         self._read_buffer_file = None
         self._read_buffer_item_range = None
         self._append_buffer = []
-        self.path.rmrf(concurrency=concurrency)
+        self.path.rmrf()
 
     def extend(self, x: Iterable) -> None:
         for v in x:
@@ -806,6 +806,13 @@ class ListView(Sequence):
 
 
 Biglist.register_storage_format('json', JsonByteSerializer)
-Biglist.register_storage_format('orjson', OrjsonSerializer)
 Biglist.register_storage_format('pickle-z', CompressedPickleSerializer)
-Biglist.register_storage_format('orjson-z', CompressedOrjsonSerializer)
+
+
+try:
+    from upathlib.serializer import JsonByteSerializer, OrjsonSerializer, CompressedOrjsonSerializer
+except ImportError:
+    pass
+else:
+    Biglist.register_storage_format('orjson', OrjsonSerializer)
+    Biglist.register_storage_format('orjson-z', CompressedOrjsonSerializer)

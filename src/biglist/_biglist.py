@@ -5,6 +5,7 @@ import bisect
 import concurrent.futures
 import gc
 import itertools
+import json
 import logging
 import multiprocessing
 import os
@@ -24,8 +25,10 @@ from uuid import uuid4
 
 from upathlib import LocalUpath, Upath  # type: ignore
 from upathlib.serializer import (
-    ByteSerializer, PickleSerializer, CompressedPickleSerializer,
-    JsonByteSerializer,
+    ByteSerializer, _loads,
+    ZJsonSerializer, ZstdJsonSerializer,
+    PickleSerializer, ZPickleSerializer, ZstdPickleSerializer,
+    OrjsonSerializer, ZOrjsonSerializer, ZstdOrjsonSerializer,
 )
 
 
@@ -181,9 +184,7 @@ class Biglist(Sequence):
     Data access is optimized for iteration, whereas random access
     (via index or slice) is less efficient, and assumed to be rare.
     '''
-    registered_storage_formats = {
-        'pickle': PickleSerializer,
-    }
+    registered_storage_formats = {}
 
     DEFAULT_STORAGE_FORMAT = 'pickle'
 
@@ -320,11 +321,12 @@ class Biglist(Sequence):
 
         if storage_format is None:
             storage_format = cls.DEFAULT_STORAGE_FORMAT
+            obj.info['storage_format'] = storage_format
         else:
             if storage_format.replace('-', '_') not in cls.registered_storage_formats:
                 raise ValueError(
                     f"invalid value of `storage_format`: '{storage_format}'")
-        obj.info['storage_format'] = storage_format.replace('-', '_')
+            obj.info['storage_format'] = storage_format.replace('-', '_')
         obj.info['storage_version'] = 0
         # version 0 designator introduced on 2022/3/8
         obj._info_file.write_json(obj.info, overwrite=False)
@@ -805,14 +807,22 @@ class ListView(Sequence):
         return self._list
 
 
+class JsonByteSerializer(ByteSerializer):
+    @classmethod
+    def serialize(cls, x, **kwargs):
+        return json.dumps(x, **kwargs).encode()
+
+    @classmethod
+    def deserialize(cls, y, **kwargs):
+        return _loads(json.loads, y.decode(), **kwargs)
+
+
 Biglist.register_storage_format('json', JsonByteSerializer)
-Biglist.register_storage_format('pickle-z', CompressedPickleSerializer)
-
-
-try:
-    from upathlib.serializer import JsonByteSerializer, OrjsonSerializer, CompressedOrjsonSerializer
-except ImportError:
-    pass
-else:
-    Biglist.register_storage_format('orjson', OrjsonSerializer)
-    Biglist.register_storage_format('orjson-z', CompressedOrjsonSerializer)
+Biglist.register_storage_format('json-z', ZJsonSerializer)
+Biglist.register_storage_format('json-zstd', ZstdJsonSerializer)
+Biglist.register_storage_format('pickle', PickleSerializer)
+Biglist.register_storage_format('pickle-z', ZPickleSerializer)
+Biglist.register_storage_format('pickle-zstd', ZstdPickleSerializer)
+Biglist.register_storage_format('orjson', OrjsonSerializer)
+Biglist.register_storage_format('orjson-z', ZOrjsonSerializer)
+Biglist.register_storage_format('orjson-zstd', ZstdOrjsonSerializer)

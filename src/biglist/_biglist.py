@@ -213,13 +213,13 @@ class Biglist(Sequence):
 
     @classmethod
     def dump_data_file(cls, path: Upath, data: list):
-        serializer = cls.registered_storage_formats[path.suffix.lstrip('.')]
+        serializer = cls.registered_storage_formats[path.suffix.lstrip('.').replace('-', '_')]
         data = [cls.pre_serialize(v) for v in data]
         path.write_bytes(serializer.serialize(data))
 
     @classmethod
     def load_data_file(cls, path: Upath):
-        deserializer = cls.registered_storage_formats[path.suffix.lstrip('.')]
+        deserializer = cls.registered_storage_formats[path.suffix.lstrip('.').replace('-', '_')]
         with no_gc():
             z = deserializer.deserialize(path.read_bytes())
             return [cls.post_deserialize(v) for v in z]

@@ -2,7 +2,7 @@
 from ._biglist import Biglist, ListView, FileView, ConcurrentIterStat
 
 
-__version__ = '0.6.6'
+__version__ = '0.6.7b2'
 
 
 __all__ = [

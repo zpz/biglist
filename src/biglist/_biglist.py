@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import bisect
 import concurrent.futures
-import gc
 import itertools
 import json
 import logging
@@ -33,16 +32,6 @@ from upathlib.serializer import (
 
 
 logger = logging.getLogger(__name__)
-
-
-@contextmanager
-def no_gc():
-    isgc = gc.isenabled()
-    if isgc:
-        gc.disable()
-    yield
-    if isgc:
-        gc.enable()
 
 
 class Dumper:
@@ -196,10 +185,10 @@ class Biglist(Sequence):
                                 ):
         good = string.ascii_letters + string.digits + '-_'
         assert all(n in good for n in name)
-        if name.replace('-', '_') in cls.registered_storage_formats:
+        if name.replace('_', '-') in cls.registered_storage_formats:
             if not overwrite:
                 raise ValueError(f"serializer '{name}' is already registered")
-        name = name.replace('-', '_')
+        name = name.replace('_', '-')
         cls.registered_storage_formats[name] = serializer
 
     @classmethod
@@ -213,16 +202,16 @@ class Biglist(Sequence):
 
     @classmethod
     def dump_data_file(cls, path: Upath, data: list):
-        serializer = cls.registered_storage_formats[path.suffix.lstrip('.')]
+        serializer = cls.registered_storage_formats[path.suffix.lstrip('.').replace('_', '-')]
         data = [cls.pre_serialize(v) for v in data]
         path.write_bytes(serializer.serialize(data))
 
     @classmethod
     def load_data_file(cls, path: Upath):
-        deserializer = cls.registered_storage_formats[path.suffix.lstrip('.')]
-        with no_gc():
-            z = deserializer.deserialize(path.read_bytes())
-            return [cls.post_deserialize(v) for v in z]
+        deserializer = cls.registered_storage_formats[path.suffix.lstrip('.').replace('_', '-')]
+        data = path.read_bytes()
+        z = deserializer.deserialize(data)
+        return [cls.post_deserialize(v) for v in z]
 
     @classmethod
     @contextmanager
@@ -321,12 +310,10 @@ class Biglist(Sequence):
 
         if storage_format is None:
             storage_format = cls.DEFAULT_STORAGE_FORMAT
-            obj.info['storage_format'] = storage_format
-        else:
-            if storage_format.replace('-', '_') not in cls.registered_storage_formats:
-                raise ValueError(
-                    f"invalid value of `storage_format`: '{storage_format}'")
-            obj.info['storage_format'] = storage_format.replace('-', '_')
+        if storage_format.replace('_', '-') not in cls.registered_storage_formats:
+            raise ValueError(
+                f"invalid value of `storage_format`: '{storage_format}'")
+        obj.info['storage_format'] = storage_format.replace('_', '-')
         obj.info['storage_version'] = 0
         # version 0 designator introduced on 2022/3/8
         obj._info_file.write_json(obj.info, overwrite=False)
@@ -380,7 +367,11 @@ class Biglist(Sequence):
 
     @property
     def storage_format(self) -> str:
-        return self.info['storage_format']
+        return self.info['storage_format'].replace('_', '-')
+
+    @property
+    def datafile_ext(self) -> str:
+        return self.storage_format.replace('-', '_')
 
     @property
     def storage_version(self) -> int:
@@ -553,7 +544,7 @@ class Biglist(Sequence):
         datafiles = self.get_data_files()
         return [
             self.file_view(self._data_dir / f)
-            for f, l in datafiles
+            for f, _ in datafiles
         ]
 
     def _flush(self, *, wait: bool = False, concurrent: bool = True):
@@ -575,7 +566,7 @@ class Biglist(Sequence):
             data_files = self.get_data_files(lazy=not concurrent)
 
             while True:
-                data_file = f'{uuid4()}.{self.storage_format}'
+                data_file = f"{uuid4()}.{self.datafile_ext}"
                 # TODO: this could be inefficient if there are many files.
                 if not any((data_file == v[0] for v in data_files)):
                     break
@@ -688,8 +679,7 @@ class Biglist(Sequence):
                     z = iter_info[file_idx]
                     assert z['file_name'] == file_name
                     assert z['reader_id'] == reader_id
-                    iter_info[file_idx]['time_finished'] = str(
-                        datetime.utcnow())
+                    iter_info[file_idx]['time_finished'] = str(datetime.utcnow())
 
                 if len(iter_info) >= len(datafiles):
                     # No more date files to process.

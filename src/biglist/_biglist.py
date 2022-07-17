@@ -89,85 +89,6 @@ class Dumper:
         self._task_file_data = {}
 
 
-class ConcurrentIterStat:
-    def __init__(self, data_info=None, iter_info=None):
-        self._data_info = data_info
-        self._iter_info = iter_info
-
-    def __repr__(self) -> str:
-        return "{}({}, {}, {})".format(
-            self.__class__.__name__,
-            self.n_files_total,
-            self.n_files_claimed,
-            self.n_files_finished
-        )
-
-    def __str__(self) -> str:
-        return self.__repr__()
-
-    @property
-    def time_started(self) -> Optional[datetime]:
-        if self._iter_info is None:
-            return None
-        return datetime.fromisoformat(
-            self._iter_info[0]['time_started'])
-
-    @property
-    def time_finished(self) -> Optional[datetime]:
-        if self._iter_info is None:
-            return None
-        if len(self._iter_info) < len(self._data_info):
-            return None
-        tt = None
-        for z in self._iter_info:
-            t = z.get('time_finished')
-            if t is None:
-                return None
-            t = datetime.fromisoformat(t)
-            if tt is None or t > tt:
-                tt = t
-        return tt
-
-    @property
-    def finished(self) -> bool:
-        if self._iter_info is None:
-            return False
-        if len(self._iter_info) < len(self._data_info):
-            return False
-        for z in self._iter_info:
-            if 'time_finished' not in z:
-                return False
-        return True
-
-    @property
-    def n_files_total(self) -> int:
-        return len(self._data_info)
-
-    @property
-    def n_files_claimed(self) -> int:
-        if self._iter_info is None:
-            return 0
-        return len(self._iter_info)
-
-    @property
-    def n_files_finished(self) -> int:
-        if self._iter_info is None:
-            return 0
-        n = 0
-        for z in self._iter_info:
-            if 'time_finished' in z:
-                n += 1
-        return n
-
-    @property
-    def status(self) -> str:
-        if self.time_started is None:
-            return 'NOT STARTED'
-        if self.finished:
-            return 'FINISHED'
-        return 'IN PROGRESS'
-
-
 class Biglist(Sequence):
     '''
     Data access is optimized for iteration, whereas random access
@@ -660,58 +581,44 @@ class Biglist(Sequence):
         by exactly one worker.
         '''
         task_id = datetime.utcnow().isoformat()
-        self._concurrent_iter_info_file(task_id).write_json([], overwrite=True)
+        self._concurrent_iter_info_file(task_id).write_json(
+            {'n_files_claimed': 0}, overwrite=True)
         return task_id
 
     def concurrent_iter(self, task_id: str, *, reader_id: str = None) -> Iterator:
         if not reader_id and isinstance(self.path, LocalUpath):
             reader_id = multiprocessing.current_process().name
         datafiles = self.get_data_files()
-        file_idx = None
-        file_name = None
         while True:
             ff = self._concurrent_iter_info_file(task_id)
             with self._lockfile(ff.with_suffix('.json.lock')):
                 iter_info = ff.read_json()
-                if file_idx is not None:
-                    # This is the file processed in last round.
-                    # Update its record.
-                    z = iter_info[file_idx]
-                    assert z['file_name'] == file_name
-                    assert z['reader_id'] == reader_id
-                    iter_info[file_idx]['time_finished'] = str(datetime.utcnow())
-
-                if len(iter_info) >= len(datafiles):
+                n_files_claimed = iter_info['n_files_claimed']
+                if n_files_claimed >= len(datafiles):
                     # No more date files to process.
-                    ff.write_json(iter_info, overwrite=True)
                     break
 
-                # Get the next file to process.
-                # Claim its spot in the book-keeping file.
-                file_idx = len(iter_info)
-                file_name = datafiles[file_idx][0]
-                iter_info.append({
-                    'file_name': file_name,
-                    'reader_id': reader_id,
-                    'time_started': str(datetime.utcnow()),
-                })
+                iter_info['n_files_claimed'] = n_files_claimed + 1
                 ff.write_json(iter_info, overwrite=True)
+                file_name = datafiles[n_files_claimed][0]
+                fv = self.file_view(self._data_dir / file_name)
+                # This does not actually read the file.
+                # TODO: make this read the file here?
 
-            fv = self.file_view(self._data_dir / file_name)
             logger.debug('yielding data of file "%s"', file_name)
             yield from fv.data  # this is the data list contained in the data file
 
-    def concurrent_iter_stat(self, task_id: str, lazy: bool = True) -> ConcurrentIterStat:
+    def concurrent_iter_done(self, task_id: str, lazy: bool = True) -> Optional[bool]:
         try:
             iter_info = self._concurrent_iter_info_file(task_id).read_json()
         except FileNotFoundError:
-            return ConcurrentIterStat()
+            return None
         datafiles = self.get_data_files(lazy=lazy)
         # Usually, this method is called by a "controller" node to
         # check the status of iteration of the biglist by multiple worker nodes.
         # In the meantime, the biglist remain unchanged, hence
         # `get_data_files` can use the lazy mode.
-        return ConcurrentIterStat(datafiles, iter_info)
+        return iter_info['n_files_claimed'] >= len(datafiles)
 
 
 class FileView(Sequence):

@@ -176,22 +176,22 @@ def test_file_views():
     bl.extend(range(nn))
     bl.flush()
     task_id = bl.new_concurrent_iter()
-    print(bl.concurrent_iter_stat(task_id))
+    print(bl.concurrent_iter_done(task_id))
 
     executor = ProcessPoolExecutor(6)
     tasks = [
         executor.submit(iter_file, bl.path, task_id)
         for _ in range(6)
     ]
-    print(bl.concurrent_iter_stat(task_id))
+    print(bl.concurrent_iter_done(task_id))
 
     data = []
     for t in as_completed(tasks):
         data.extend(t.result())
 
     assert sorted(data) == list(bl)
-    assert bl.concurrent_iter_stat(task_id).finished
-    print(bl.concurrent_iter_stat(task_id))
+    assert bl.concurrent_iter_done(task_id)
+    print(bl.concurrent_iter_done(task_id))
 
 
 def square_sum(x):

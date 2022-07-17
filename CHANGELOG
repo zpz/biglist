@@ -2,6 +2,7 @@ Release 0.6.7
 =============
 
 - Bug fixes.
+- Simplified bookkeeping for 'concurrent_iter'.
 
 
 Release 0.6.6

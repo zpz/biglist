@@ -2,7 +2,7 @@
 from ._biglist import Biglist, ListView, FileView
 
 
-__version__ = '0.6.7'
+__version__ = '0.6.8b1'
 
 
 __all__ = [

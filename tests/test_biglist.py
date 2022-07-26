@@ -159,7 +159,12 @@ def test_multi_appenders():
     data = []
     for prefix, ll in sets:
         data.extend(f'{prefix}-{i}' for i in range(ll))
-    assert sorted(data) == sorted(bl)
+    try:
+        assert sorted(data) == sorted(bl)
+    except:
+        print('data:', sorted(data))
+        print('bl:', sorted(bl))
+        raise
 
 
 def iter_file(path, task_id):

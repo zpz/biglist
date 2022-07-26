@@ -1,3 +1,14 @@
+Release 0.6.8
+=============
+
+- Removed the "data_info_file" which contains names and lengths of data files, along
+  with indicating their order. Changed the file name pattern to contain timestamp
+  and length in name, so that the info previously stored in and loaded from the
+  "data_info_file" are now parsed out by on-demand iterating over available files.
+  This change is meant to improve speed during "concurrent" writing to a biglist
+  with a large number of data files.
+
+
 Release 0.6.7
 =============
 

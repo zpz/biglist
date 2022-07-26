@@ -12,6 +12,7 @@ import os.path
 import queue
 import string
 import tempfile
+import time
 import threading
 import uuid
 from collections.abc import Sequence, Iterable
@@ -235,8 +236,9 @@ class Biglist(Sequence):
             raise ValueError(
                 f"invalid value of `storage_format`: '{storage_format}'")
         obj.info['storage_format'] = storage_format.replace('_', '-')
-        obj.info['storage_version'] = 0
+        obj.info['storage_version'] = 1
         # version 0 designator introduced on 2022/3/8
+        # version 1 designator introduced on 2022/7/25
         obj._info_file.write_json(obj.info, overwrite=False)
 
         return obj
@@ -277,10 +279,6 @@ class Biglist(Sequence):
     @property
     def _data_dir(self) -> Upath:
         return self.path / 'store'
-
-    @property
-    def _data_info_file(self) -> Upath:
-        return self.path / 'datafiles_info.json'
 
     @property
     def _info_file(self) -> Upath:
@@ -462,7 +460,7 @@ class Biglist(Sequence):
         # This is intended to facilitate parallel processing,
         # e.g. send views on diff files to diff `multiprocessing.Process`es.
         # However, `iter_files` may be a better way to do that.
-        datafiles = self.get_data_files()
+        datafiles = self.get_data_files(lazy=True)
         return [
             self.file_view(self._data_dir / f)
             for f, _ in datafiles
@@ -483,26 +481,16 @@ class Biglist(Sequence):
         buffer_len = len(buffer)
         self._append_buffer = []
 
-        def _append_data_file():
-            data_files = self.get_data_files(lazy=not concurrent)
+        filename = f"{time.time()}_{uuid4()}_{buffer_len}.{self.datafile_ext}"
+        # File name pattern introduced on 7/25/2022.
+        # this should almost guarantee the file name is unique, hence
+        # we do not need to verify this file name does not exist in `data_files`.
+        # Also include timestamp and item count in the file name, in case
+        # later we decide to use these pieces of info.
 
-            while True:
-                data_file = f"{uuid4()}.{self.datafile_ext}"
-                # TODO: this could be inefficient if there are many files.
-                if not any((data_file == v[0] for v in data_files)):
-                    break
-
-            data_files.append((data_file, buffer_len))
-            self._data_info_file.write_json(data_files, overwrite=True)
-            self._data_files = data_files
-            return data_file
-
-        if concurrent:
-            with self._lockfile(self._data_info_file.with_suffix('.json.lock')):
-                filename = _append_data_file()
-        else:
-            filename = _append_data_file()
-
+        # TODO: rethink here; these are only accurate when
+        # not working in `concurrent` mode.
+        self.get_data_files(lazy=True).append((filename, buffer_len))
         self._data_files_length_ = self._data_files_length_ + buffer_len
         self._data_files_cumlength_.append(self._data_files_length_)
 
@@ -537,20 +525,44 @@ class Biglist(Sequence):
         '''
         self._flush(wait=True)
 
-    def get_data_files(self, lazy: bool = False) -> list:
+    def get_data_files(self, *, lazy: bool = False) -> list:
         if lazy and self._data_files is not None:
             return self._data_files
 
-        try:
-            self._data_files = self._data_info_file.read_json()
-            self._data_files_cumlength_ = list(itertools.accumulate(
-                v[1] for v in self._data_files
-            ))
-            self._data_files_length_ = self._data_files_cumlength_[-1]
-        except FileNotFoundError:
-            self._data_files = []
-            self._data_files_length_ = 0
-            self._data_files_cumlength_ = []
+        if self.storage_version < 1:
+            try:
+                data_info_file = self.path / 'datafiles_info.json'
+                self._data_files = data_info_file.read_json()
+                self._data_files_cumlength_ = list(itertools.accumulate(
+                    v[1] for v in self._data_files
+                ))
+                self._data_files_length_ = self._data_files_cumlength_[-1]
+            except FileNotFoundError:
+                self._data_files = []
+                self._data_files_length_ = 0
+                self._data_files_cumlength_ = []
+        else:
+            # Starting with storage_version 1, data file name is
+            #   <timestamp>_<uuid>_<itemcount>.<ext>
+            # <timestamp> contains a '.', no '_';
+            # <uuid> contains '-', no '_';
+            # <itemcount> contains no '-' nor '_';
+            # <ext> may contain '_'.
+            files = (v.name for v in self._data_dir.iterdir())
+            files = (v.split('_') + [v] for v in files)
+            files = ((float(v[0]), v[-1], int(v[2].partition('.')[0])) for v in files)
+            files = sorted(files)
+            if files:
+                self._data_files = [(v[1], v[2]) for v in files]   # file name, item count
+                self._data_files_cumlength_ = list(itertools.accumulate(
+                    v[1] for v in self._data_files
+                ))
+                self._data_files_length_ = self._data_files_cumlength_[-1]
+            else:
+                self._data_files = []
+                self._data_files_length_ = 0
+                self._data_files_cumlength_ = []
+
         return self._data_files  # type: ignore
 
     def view(self) -> ListView:
@@ -608,12 +620,12 @@ class Biglist(Sequence):
             logger.debug('yielding data of file "%s"', file_name)
             yield from fv.data  # this is the data list contained in the data file
 
-    def concurrent_iter_done(self, task_id: str, lazy: bool = True) -> Optional[bool]:
+    def concurrent_iter_done(self, task_id: str) -> Optional[bool]:
         try:
             iter_info = self._concurrent_iter_info_file(task_id).read_json()
         except FileNotFoundError:
             return None
-        datafiles = self.get_data_files(lazy=lazy)
+        datafiles = self.get_data_files(lazy=True)
         # Usually, this method is called by a "controller" node to
         # check the status of iteration of the biglist by multiple worker nodes.
         # In the meantime, the biglist remain unchanged, hence

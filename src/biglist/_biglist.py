@@ -15,6 +15,7 @@ import tempfile
 import time
 import threading
 import uuid
+import warnings
 from collections.abc import Sequence, Iterable
 from concurrent.futures import ThreadPoolExecutor, Future
 from contextlib import contextmanager
@@ -237,6 +238,10 @@ class Biglist(Sequence):
                 f"invalid value of `storage_format`: '{storage_format}'")
         obj.info['storage_format'] = storage_format.replace('_', '-')
         obj.info['storage_version'] = 1
+        # `storage_version` is a flag for certain breaking changes in the implementation,
+        # such that certain parts of the code (mainly concerning I/O) need to
+        # branch into different treatments according to the version.
+        # This has little relation to `storage_format`.
         # version 0 designator introduced on 2022/3/8
         # version 1 designator introduced on 2022/7/25
         obj._info_file.write_json(obj.info, overwrite=False)
@@ -281,16 +286,16 @@ class Biglist(Sequence):
         return self.path / 'store'
 
     @property
+    def datafile_ext(self) -> str:
+        return self.storage_format.replace('-', '_')
+
+    @property
     def _info_file(self) -> Upath:
         return self.path / 'info.json'
 
     @property
     def storage_format(self) -> str:
         return self.info['storage_format'].replace('_', '-')
-
-    @property
-    def datafile_ext(self) -> str:
-        return self.storage_format.replace('-', '_')
 
     @property
     def storage_version(self) -> int:
@@ -328,7 +333,10 @@ class Biglist(Sequence):
         if idx < 0 and (-idx) <= len(self._append_buffer):
             return self._append_buffer[idx]
 
+        # TODO: this is reliable only if there is no other "worker node"
+        # changing the object by calling `append` or `extend`.
         datafiles = self.get_data_files(lazy=True)
+
         length = self._data_files_length_
         idx = range(length + len(self._append_buffer))[idx]
 
@@ -413,7 +421,7 @@ class Biglist(Sequence):
         self.get_data_files(lazy=True)
         return self._data_files_length_ + len(self._append_buffer)
 
-    def _append(self, x, concurrent: bool) -> None:
+    def append(self, x) -> None:
         '''
         Append a single element to the in-memory buffer.
         Once the buffer size reaches `self.batch_size`, the buffer's content
@@ -426,10 +434,7 @@ class Biglist(Sequence):
         '''
         self._append_buffer.append(x)
         if len(self._append_buffer) >= self.batch_size:
-            self._flush(concurrent=concurrent)
-
-    def append(self, x) -> None:
-        self._append(x, concurrent=False)
+            self._flush()
 
     def destroy(self) -> None:
         '''
@@ -466,7 +471,7 @@ class Biglist(Sequence):
             for f, _ in datafiles
         ]
 
-    def _flush(self, *, wait: bool = False, concurrent: bool = True):
+    def _flush(self, *, wait: bool = False):
         '''
         Persist the content of the in-memory buffer to a file,
         reset the buffer, and update relevant book-keeping variables.
@@ -489,7 +494,10 @@ class Biglist(Sequence):
         # later we decide to use these pieces of info.
 
         # TODO: rethink here; these are only accurate when
-        # not working in `concurrent` mode.
+        # not working in `concurrent` mode, that is, there is only one
+        # "worker node" calling `append` or `extend`.
+        # In concurrent mode, if you want to call `__len__`, you should
+        # call `get_data_files` first to fetch relevant info.
         self.get_data_files(lazy=True).append((filename, buffer_len))
         self._data_files_length_ = self._data_files_length_ + buffer_len
         self._data_files_cumlength_.append(self._data_files_length_)
@@ -577,11 +585,14 @@ class Biglist(Sequence):
         return self.path / 'concurrent_iter' / task_id / 'iter_info.json'
 
     def concurrent_append(self, x) -> None:
-        self._append(x, concurrent=True)
+        warnings.warn(f"`concurrent_append` is deprecated and will be removed; use `append` instead",
+            DeprecationWarning, stacklevel=2)
+        self.append(x)
 
     def concurrent_extend(self, x: Iterable) -> None:
-        for v in x:
-            self.concurrent_append(v)
+        warnings.warn(f"`concurrent_extend` is deprecated and will be removed; use `extend` instead",
+            DeprecationWarning, stacklevel=2)
+        self.extend(x)
 
     def new_concurrent_iter(self) -> str:
         '''
@@ -591,6 +602,9 @@ class Biglist(Sequence):
         this method. The content of the Biglist is
         split between the workers because each data file will be obtained
         by exactly one worker.
+
+        During this iteration, the Biglist object should stay unchanged---no
+        calls to `append` and `extend`.
         '''
         task_id = datetime.utcnow().isoformat()
         self._concurrent_iter_info_file(task_id).write_json(
@@ -598,6 +612,9 @@ class Biglist(Sequence):
         return task_id
 
     def concurrent_iter(self, task_id: str, *, reader_id: str = None) -> Iterator:
+        '''
+        `task_id`: returned by `new_concurrent_iter`.
+        '''
         if not reader_id and isinstance(self.path, LocalUpath):
             reader_id = multiprocessing.current_process().name
         datafiles = self.get_data_files()
@@ -621,6 +638,9 @@ class Biglist(Sequence):
             yield from fv.data  # this is the data list contained in the data file
 
     def concurrent_iter_done(self, task_id: str) -> Optional[bool]:
+        '''
+        `task_id`: returned by `new_concurrent_iter`.
+        '''
         try:
             iter_info = self._concurrent_iter_info_file(task_id).read_json()
         except FileNotFoundError:

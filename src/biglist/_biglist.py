@@ -12,14 +12,14 @@ import os.path
 import queue
 import string
 import tempfile
+import time
 import threading
 import uuid
-from collections.abc import Sequence, Iterable
 from concurrent.futures import ThreadPoolExecutor, Future
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator, Union, List, Dict, Optional, Tuple, Type, Callable
+from typing import Iterable, Iterator, Union, Sequence, List, Dict, Optional, Tuple, Type, Callable, TypeVar
 from uuid import uuid4
 
 from upathlib import LocalUpath, Upath  # type: ignore
@@ -89,7 +89,10 @@ class Dumper:
         self._task_file_data = {}
 
 
-class Biglist(Sequence):
+T = TypeVar('T')
+
+
+class Biglist(Sequence[T]):
     '''
     Data access is optimized for iteration, whereas random access
     (via index or slice) is less efficient, and assumed to be rare.
@@ -128,7 +131,7 @@ class Biglist(Sequence):
         path.write_bytes(serializer.serialize(data))
 
     @classmethod
-    def load_data_file(cls, path: Upath):
+    def load_data_file(cls, path: Upath) -> List[T]:
         deserializer = cls.registered_storage_formats[path.suffix.lstrip('.').replace('_', '-')]
         data = path.read_bytes()
         z = deserializer.deserialize(data)
@@ -145,7 +148,7 @@ class Biglist(Sequence):
             yield
 
     @classmethod
-    def pre_serialize(cls, x):
+    def pre_serialize(cls, x: T):
         '''When the data element is an instance of a custom type,
         it is preferred to convert it to a native type, such as dict,
         before persisting it to files, especially for long-term storage.
@@ -159,7 +162,7 @@ class Biglist(Sequence):
         return x
 
     @classmethod
-    def post_deserialize(cls, x):
+    def post_deserialize(cls, x) -> T:
         '''The reverse of `pre_serialize`.'''
         return x
 
@@ -235,8 +238,13 @@ class Biglist(Sequence):
             raise ValueError(
                 f"invalid value of `storage_format`: '{storage_format}'")
         obj.info['storage_format'] = storage_format.replace('_', '-')
-        obj.info['storage_version'] = 0
+        obj.info['storage_version'] = 1
+        # `storage_version` is a flag for certain breaking changes in the implementation,
+        # such that certain parts of the code (mainly concerning I/O) need to
+        # branch into different treatments according to the version.
+        # This has little relation to `storage_format`.
         # version 0 designator introduced on 2022/3/8
+        # version 1 designator introduced on 2022/7/25
         obj._info_file.write_json(obj.info, overwrite=False)
 
         return obj
@@ -279,8 +287,8 @@ class Biglist(Sequence):
         return self.path / 'store'
 
     @property
-    def _data_info_file(self) -> Upath:
-        return self.path / 'datafiles_info.json'
+    def datafile_ext(self) -> str:
+        return self.storage_format.replace('-', '_')
 
     @property
     def _info_file(self) -> Upath:
@@ -289,10 +297,6 @@ class Biglist(Sequence):
     @property
     def storage_format(self) -> str:
         return self.info['storage_format'].replace('_', '-')
-
-    @property
-    def datafile_ext(self) -> str:
-        return self.storage_format.replace('-', '_')
 
     @property
     def storage_version(self) -> int:
@@ -307,9 +311,12 @@ class Biglist(Sequence):
         else:
             self.destroy()
 
-    def __getitem__(self, idx: int):  # type: ignore
+    def __getitem__(self, idx: int) -> T:
         '''
         Element access by single index; negative index works as expected.
+
+        This is not optimized for speed. For example, `self.get_data_files`
+        involves an HTTP call. For better speed, use `__iter__`.
 
         This is called in these cases:
 
@@ -330,8 +337,13 @@ class Biglist(Sequence):
         if idx < 0 and (-idx) <= len(self._append_buffer):
             return self._append_buffer[idx]
 
-        datafiles = self.get_data_files(lazy=True)
-        length = self._data_files_length_
+        # TODO: this is reliable only if there is no other "worker node"
+        # changing the object by calling `append` or `extend`.
+        datafiles = self.get_data_files()
+        if self._data_files_cumlength_:
+            length = self._data_files_cumlength_[-1]
+        else:
+            length = 0
         idx = range(length + len(self._append_buffer))[idx]
 
         if idx >= length:
@@ -368,7 +380,7 @@ class Biglist(Sequence):
         self._read_buffer = data
         return data[idx - n]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[T]:
         # Assuming the biglist will not change (not being appended to)
         # during iteration.
         self.flush()
@@ -411,11 +423,13 @@ class Biglist(Sequence):
         # that may be appending to the biglist.
         # In other words, if the current object is one of
         # of a number of workers that are concurrently using
-        # the biglist, then the biglist is not being changed.
-        self.get_data_files(lazy=True)
-        return self._data_files_length_ + len(self._append_buffer)
+        # the biglist, then all the other workers are reading only.
+        self.get_data_files()
+        if self._data_files_cumlength_:
+            return self._data_files_cumlength_[-1] + len(self._append_buffer)
+        return len(self._append_buffer)
 
-    def _append(self, x, concurrent: bool) -> None:
+    def append(self, x: T) -> None:
         '''
         Append a single element to the in-memory buffer.
         Once the buffer size reaches `self.batch_size`, the buffer's content
@@ -428,10 +442,7 @@ class Biglist(Sequence):
         '''
         self._append_buffer.append(x)
         if len(self._append_buffer) >= self.batch_size:
-            self._flush(concurrent=concurrent)
-
-    def append(self, x) -> None:
-        self._append(x, concurrent=False)
+            self._flush()
 
     def destroy(self) -> None:
         '''
@@ -448,13 +459,13 @@ class Biglist(Sequence):
         self._append_buffer = []
         self.path.rmrf()
 
-    def extend(self, x: Iterable) -> None:
+    def extend(self, x: Iterable[T]) -> None:
         for v in x:
             self.append(v)
 
     def file_view(self, file: Union[Upath, int]) -> FileView:
         if isinstance(file, int):
-            datafiles = self.get_data_files(lazy=True)
+            datafiles = self.get_data_files()
             file = self._data_dir / datafiles[file][0]
         return FileView(file, self.load_data_file)  # type: ignore
 
@@ -468,7 +479,7 @@ class Biglist(Sequence):
             for f, _ in datafiles
         ]
 
-    def _flush(self, *, wait: bool = False, concurrent: bool = True):
+    def _flush(self, *, wait: bool = False):
         '''
         Persist the content of the in-memory buffer to a file,
         reset the buffer, and update relevant book-keeping variables.
@@ -483,28 +494,12 @@ class Biglist(Sequence):
         buffer_len = len(buffer)
         self._append_buffer = []
 
-        def _append_data_file():
-            data_files = self.get_data_files(lazy=not concurrent)
-
-            while True:
-                data_file = f"{uuid4()}.{self.datafile_ext}"
-                # TODO: this could be inefficient if there are many files.
-                if not any((data_file == v[0] for v in data_files)):
-                    break
-
-            data_files.append((data_file, buffer_len))
-            self._data_info_file.write_json(data_files, overwrite=True)
-            self._data_files = data_files
-            return data_file
-
-        if concurrent:
-            with self._lockfile(self._data_info_file.with_suffix('.json.lock')):
-                filename = _append_data_file()
-        else:
-            filename = _append_data_file()
-
-        self._data_files_length_ = self._data_files_length_ + buffer_len
-        self._data_files_cumlength_.append(self._data_files_length_)
+        filename = f"{time.time()}_{uuid4()}_{buffer_len}.{self.datafile_ext}"
+        # File name pattern introduced on 7/25/2022.
+        # this should almost guarantee the file name is unique, hence
+        # we do not need to verify this file name does not exist in `data_files`.
+        # Also include timestamp and item count in the file name, in case
+        # later we decide to use these pieces of info.
 
         data_file = self._data_dir / filename
         if wait:
@@ -519,8 +514,17 @@ class Biglist(Sequence):
             # data to be accessed property.
 
             # TODO:
-            # what if dump fails later? the index file will be updated
+            # what if dump fails later? The 'n_data_files' file is updated
             # already assuming everything will be fine.
+
+        with self._lockfile(self.path / '_n_datafiles_.txt.lock'):
+            try:
+                n = (self.path / '_n_datafiles_.txt').read_text()
+            except FileNotFoundError:
+                n = 0
+            else:
+                n = int(n)
+            (self.path / '_n_datafiles_.txt').write_text(str(n + 1), overwrite=True)
 
     def flush(self):
         '''
@@ -537,23 +541,63 @@ class Biglist(Sequence):
         '''
         self._flush(wait=True)
 
-    def get_data_files(self, lazy: bool = False) -> list:
-        if lazy and self._data_files is not None:
-            return self._data_files
+    def get_data_files(self) -> list:
+        if self.storage_version < 1:
+            # This may not be totally reliable in every scenario.
+            # The older version had a parameter `lazy`, which is gone now.
+            # After some time we may stop supporting this storage version. (7/27/2022)
+            # However, as long as older datasets are in a "read-only" status,
+            # this is fine.
+            if self._data_files is None:
+                try:
+                    data_info_file = self.path / 'datafiles_info.json'
+                    self._data_files = data_info_file.read_json()
+                except FileNotFoundError:
+                    self._data_files = []
+        else:
+            try:
+                nfiles = (self.path / '_n_datafiles_.txt').read_text()
+            except FileNotFoundError:
+                nfiles = 0
+            else:
+                nfiles = int(nfiles)
 
-        try:
-            self._data_files = self._data_info_file.read_json()
+            if self._data_files is None or len(self._data_files) != nfiles:
+                files = []
+                if nfiles > 0:
+                    for _ in range(5):
+                        # Starting with storage_version 1, data file name is
+                        #   <timestamp>_<uuid>_<itemcount>.<ext>
+                        # <timestamp> contains a '.', no '_';
+                        # <uuid> contains '-', no '_';
+                        # <itemcount> contains no '-' nor '_';
+                        # <ext> may contain '_'.
+                        files0 = (v.name for v in self._data_dir.iterdir())
+                        files1 = (v.split('_') + [v] for v in files0)
+                        files2 = ((float(v[0]), v[-1], int(v[2].partition('.')[0])) for v in files1)
+                        files = sorted(files2)
+                        if len(files) == nfiles:
+                            break
+                        time.sleep(0.2)
+
+                    if len(files) != nfiles:
+                        raise RuntimeError(f"{nfiles} data files are expected, yet only {len(files)} are found")
+
+                if files:
+                    self._data_files = [(v[1], v[2]) for v in files]   # file name, item count
+                else:
+                    self._data_files = []
+
+        if self._data_files:
             self._data_files_cumlength_ = list(itertools.accumulate(
                 v[1] for v in self._data_files
             ))
-            self._data_files_length_ = self._data_files_cumlength_[-1]
-        except FileNotFoundError:
-            self._data_files = []
-            self._data_files_length_ = 0
+        else:
             self._data_files_cumlength_ = []
+
         return self._data_files  # type: ignore
 
-    def view(self) -> ListView:
+    def view(self) -> ListView[T]:
         # During the use of this view, the underlying Biglist should not change.
         # Multiple views may be used to view diff parts
         # of the Biglist; they open and read files independent of
@@ -564,13 +608,6 @@ class Biglist(Sequence):
     def _concurrent_iter_info_file(self, task_id: str) -> Upath:
         return self.path / 'concurrent_iter' / task_id / 'iter_info.json'
 
-    def concurrent_append(self, x) -> None:
-        self._append(x, concurrent=True)
-
-    def concurrent_extend(self, x: Iterable) -> None:
-        for v in x:
-            self.concurrent_append(v)
-
     def new_concurrent_iter(self) -> str:
         '''
         One worker, such as a "coordinator", calls this method once.
@@ -579,13 +616,19 @@ class Biglist(Sequence):
         this method. The content of the Biglist is
         split between the workers because each data file will be obtained
         by exactly one worker.
+
+        During this iteration, the Biglist object should stay unchanged---no
+        calls to `append` and `extend`.
         '''
         task_id = datetime.utcnow().isoformat()
         self._concurrent_iter_info_file(task_id).write_json(
             {'n_files_claimed': 0}, overwrite=True)
         return task_id
 
-    def concurrent_iter(self, task_id: str, *, reader_id: str = None) -> Iterator:
+    def concurrent_iter(self, task_id: str, *, reader_id: str = None) -> Iterator[T]:
+        '''
+        `task_id`: returned by `new_concurrent_iter`.
+        '''
         if not reader_id and isinstance(self.path, LocalUpath):
             reader_id = multiprocessing.current_process().name
         datafiles = self.get_data_files()
@@ -608,20 +651,22 @@ class Biglist(Sequence):
             logger.debug('yielding data of file "%s"', file_name)
             yield from fv.data  # this is the data list contained in the data file
 
-    def concurrent_iter_done(self, task_id: str, lazy: bool = True) -> Optional[bool]:
+    def concurrent_iter_done(self, task_id: str) -> Optional[bool]:
+        '''
+        `task_id`: returned by `new_concurrent_iter`.
+        '''
         try:
             iter_info = self._concurrent_iter_info_file(task_id).read_json()
         except FileNotFoundError:
             return None
-        datafiles = self.get_data_files(lazy=lazy)
+        datafiles = self.get_data_files()
         # Usually, this method is called by a "controller" node to
         # check the status of iteration of the biglist by multiple worker nodes.
-        # In the meantime, the biglist remain unchanged, hence
-        # `get_data_files` can use the lazy mode.
+        # In the meantime, the biglist remain unchanged.
         return iter_info['n_files_claimed'] >= len(datafiles)
 
 
-class FileView(Sequence):
+class FileView(Sequence[T]):
     def __init__(self, file: Upath, loader: Callable):
         # TODO: make `Upath` safe to pass across processes.
         self._file = file
@@ -629,23 +674,23 @@ class FileView(Sequence):
         self._data = None
 
     @property
-    def data(self):
+    def data(self) -> List[T]:
         if self._data is None:
             self._data = self._loader(self._file)
         return self._data
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.data)
 
-    def __getitem__(self, idx: Union[int, slice]):
+    def __getitem__(self, idx: Union[int, slice]) -> T:
         return self.data[idx]
 
     def __iter__(self):
         return iter(self.data)
 
 
-class ListView(Sequence):
-    def __init__(self, list_: Sequence, range_: range = None):
+class ListView(Sequence[T]):
+    def __init__(self, list_: Sequence[T], range_: range = None):
         '''
         This provides a "window" into the sequence `list_`,
         which is often a `Biglist` or another `ListView`.
@@ -670,7 +715,7 @@ class ListView(Sequence):
     def __bool__(self) -> bool:
         return len(self) > 0
 
-    def __getitem__(self, idx: Union[int, slice]):
+    def __getitem__(self, idx: Union[int, slice]) -> T:
         '''
         Element access by a single index or by slice.
         Negative index and standard slice syntax both work as expected.
@@ -700,7 +745,7 @@ class ListView(Sequence):
                 yield self._list[i]
 
     @property
-    def raw(self):
+    def raw(self) -> Sequence[T]:
         return self._list
 
 

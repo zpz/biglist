@@ -12,11 +12,14 @@ from biglist._biglist import Biglist, ListView
 
 
 def test_numbers():
+    class MyBiglist(Biglist[int]):
+        pass
+
     PATH = os.path.join(os.environ.get('TMPDIR', '/tmp'), 'test', 'biglist')
     if os.path.isdir(PATH):
         rmtree(PATH)
 
-    mylist = Biglist.new(PATH, batch_size=5)
+    mylist = MyBiglist.new(PATH, batch_size=5)
     for i in range(21):
         mylist.append(i)
 
@@ -127,7 +130,7 @@ def add_to_biglist(path, prefix, length):
     try:
         bl = Biglist(path)
         for i in range(length):
-            bl.concurrent_append(f'{prefix}-{i}')
+            bl.append(f'{prefix}-{i}')
         bl.flush()
         return prefix, length
     except Exception as e:

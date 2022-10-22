@@ -606,13 +606,16 @@ class Biglist(Sequence[T]):
         return ListView(self.__class__(self.path))
 
     def _concurrent_iter_info_file(self, task_id: str) -> Upath:
-        return self.path / 'concurrent_iter' / task_id / 'iter_info.json'
+        '''
+        `task_id`: returned by `new_concurrent_iter`.
+        '''
+        return self.path / '.concurrent_iter' / task_id / 'info.json'
 
     def new_concurrent_iter(self) -> str:
         '''
         One worker, such as a "coordinator", calls this method once.
         After that, one or more workers independently call `concurrent_iter`
-        to iterate over the Biglist, providing the iter-ID returned by
+        to iterate over the Biglist. `concurrent_iter` takes the task-ID returned by
         this method. The content of the Biglist is
         split between the workers because each data file will be obtained
         by exactly one worker.
@@ -625,12 +628,10 @@ class Biglist(Sequence[T]):
             {'n_files_claimed': 0}, overwrite=True)
         return task_id
 
-    def concurrent_iter(self, task_id: str, *, reader_id: str = None) -> Iterator[T]:
+    def concurrent_iter(self, task_id: str) -> Iterator[T]:
         '''
         `task_id`: returned by `new_concurrent_iter`.
         '''
-        if not reader_id and isinstance(self.path, LocalUpath):
-            reader_id = multiprocessing.current_process().name
         datafiles = self.get_data_files()
         while True:
             ff = self._concurrent_iter_info_file(task_id)
@@ -651,19 +652,86 @@ class Biglist(Sequence[T]):
             logger.debug('yielding data of file "%s"', file_name)
             yield from fv.data  # this is the data list contained in the data file
 
-    def concurrent_iter_done(self, task_id: str) -> Optional[bool]:
+    def concurrent_iter_stat(self, task_id: str) -> dict:
+        info = self._concurrent_iter_info_file(task_id).read_json()
+        return {**info, 'n_files': len(self.get_data_files())}
+
+    def concurrent_iter_done(self, task_id: str) -> bool:
+        zz = self.concurrent_iter_stat(task_id)
+        return zz['n_files_claimed'] >= zz['n_files']
+
+    def _multiplex_info_file(self, task_id: str) -> Upath:
         '''
-        `task_id`: returned by `new_concurrent_iter`.
+        `task_id`: returned by `new_multiplexer`.
         '''
-        try:
-            iter_info = self._concurrent_iter_info_file(task_id).read_json()
-        except FileNotFoundError:
-            return None
-        datafiles = self.get_data_files()
-        # Usually, this method is called by a "controller" node to
-        # check the status of iteration of the biglist by multiple worker nodes.
-        # In the meantime, the biglist remain unchanged.
-        return iter_info['n_files_claimed'] >= len(datafiles)
+        return self.path / '.multiplexer' / task_id / 'info.json'
+
+    def new_multiplexer(self) -> str:
+        '''
+        One worker, such as a "coordinator", calls this method once.
+        After that, one or more workers independently call `multiplex_iter`
+        to iterate over the Biglist. `multiplex_iter` takes the task-ID returned by
+        this method. The content of the Biglist is
+        split between the workers because each data item will be obtained
+        by exactly one worker.
+
+        During this iteration, the Biglist object should stay unchanged---no
+        calls to `append` and `extend`.
+
+        Difference between `concurrent_iter` and `multiplex_iter`: the former
+        distributes files to workers, whereas the latter distributes individual
+        data elements to workers.
+
+        Use case of multiplexer: each data element represents considerable amounts
+        of work--it is a "hyper-parameter" or the like; `multiplex_iter` facilitates
+        splitting the work represented by different values of the "hyper-parameter"
+        between multiple workers.
+        '''
+        assert not self._append_buffer
+        task_id = datetime.utcnow().isoformat()
+        self._multiplex_info_file(task_id).write_json(
+            {
+                "total": len(self),
+                'next': 0,
+                "time": datetime.utcnow().isoformat(),
+            },
+            overwrite=False,
+            )
+        return task_id
+
+    def multiplex_iter(self, task_id: str, *, worker_id: str = None) -> Iterator[T]:
+        '''
+        `task_id`: returned by `new_multiplexer`.
+        '''
+        if not worker_id:
+            worker_id = "{} {}".format(
+                multiprocessing.current_process().name,
+                threading.current_thread().name,
+            )
+        while True:
+            with (self._multiplex_info_file(task_id) / "lock").lock():
+                ss = self._multiplex_info_file(task_id).read_json()
+                n = ss['next']
+                if n == ss['total']:
+                    raise StopIteration
+                self._multiplex_info_file(task_id).write_json(
+                    {
+                        "next": n + 1,
+                        "worker_id": worker_id,
+                        "time": datetime.utcnow().isoformat(),
+                        "total": ss['total'],
+                    },
+                    overwrite=True,
+                )
+            yield self[n]
+
+    def multiplex_stat(self, task_id: str) -> dict:
+
+        return self._multiplex_info_file(task_id).read_json()
+
+    def multiplex_done(self, task_id: str) -> bool:
+        ss = self.multiplex_stat(task_id)
+        return ss['next'] == ss['total']
 
 
 class FileView(Sequence[T]):

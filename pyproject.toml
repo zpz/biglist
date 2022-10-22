@@ -19,7 +19,8 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dynamic = ['version', 'description']
+dynamic = ['version']
+description = 'description'
 
 
 [project.urls]

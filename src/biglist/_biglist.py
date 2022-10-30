@@ -262,7 +262,12 @@ class Biglist(Sequence[T]):
 
         return obj
 
-    def __init__(self, path: Union[str, Path, Upath], thread_pool_executor: ThreadPoolExecutor = None, require_exists: bool = True):
+    def __init__(
+        self,
+        path: Union[str, Path, Upath],
+        thread_pool_executor: ThreadPoolExecutor = None,
+        require_exists: bool = True,
+    ):
         if isinstance(path, str):
             path = Path(path)
         if isinstance(path, Path):
@@ -292,7 +297,9 @@ class Biglist(Sequence[T]):
             self.info = self._info_file.read_json()
         except FileNotFoundError:
             if require_exists:
-                raise RuntimeError(f"Cat not find {self.__class__.__name__} at path '{self.path}'")
+                raise RuntimeError(
+                    f"Cat not find {self.__class__.__name__} at path '{self.path}'"
+                )
             self.info = {}
 
     @property

@@ -2,6 +2,8 @@ Release 0.6.9 (forthcoming)
 =============
 
 - Add `multiplexer` methods.
+- Add parameter `require_exists` to `__init__`.
+- Add parameter `thread_pool_executor` to `__init__`, hence allowing user to control the number of threads created by this class. This is useful when a large number of `Biglist` instances are active at the same time.
 
 
 Release 0.6.8

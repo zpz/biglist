@@ -5,6 +5,7 @@ import multiprocessing
 import random
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed, wait
 from shutil import rmtree
+from time import sleep
 
 import pytest
 from boltons import iterutils
@@ -279,3 +280,45 @@ async def test_async():
     results = await asyncio.gather(*tasks)
     assert sum(results) == sum(v*v for v in biglist)
     biglist.destroy()
+
+
+def mult_worker(path, task_id, q):
+    mux = Biglist(path)
+    worker_id = multiprocessing.current_process().name
+    total = 0
+    for x in mux.multiplex_iter(task_id, worker_id):
+        print(worker_id, 'got', x)
+        total += x * x
+        sleep(0.1)
+    print(worker_id, 'finishing with total', total)
+    q.put(total)
+
+    
+def test_multiplex():
+    N = 30
+    mux = Biglist.new(batch_size=4)
+    mux.extend(range(1, 1 + N))
+    mux.flush()
+    task_id = mux.new_multiplexer()
+
+    ctx = multiprocessing.get_context('spawn')
+    q = ctx.Queue()
+    workers = [
+        ctx.Process(target=mult_worker, args=(mux.path, task_id, q))
+        for _ in range(5)
+    ]
+    for w in workers:
+        w.start()
+    for w in workers:
+        w.join()
+
+    total = 0
+    while not q.empty():
+        total += q.get()
+    assert total == sum(x*x for x in range(1, 1 + N))
+
+    s = mux.multiplex_stat(task_id)
+    print(s)
+    assert mux.multiplex_done(task_id)
+
+

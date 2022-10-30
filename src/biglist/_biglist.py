@@ -19,6 +19,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor, Future
 from contextlib import contextmanager
 from datetime import datetime
+from multiprocessing.util import Finalize
 from pathlib import Path
 from typing import (
     Iterable,
@@ -54,19 +55,10 @@ logger = logging.getLogger(__name__)
 
 
 class Dumper:
-    def __init__(self, max_workers: int = 8):
-        assert 0 < max_workers < 20
-        self._max_workers = max_workers
-        self._executor: ThreadPoolExecutor = None  # type: ignore
+    def __init__(self, executor: ThreadPoolExecutor):
+        self._executor: executor = executor
         self._sem: threading.Semaphore = None  # type: ignore
-        # Do not instantiate these now.
-        # They would cause trouble when `Biglist`
-        # file-views are sent to other processes.
-
         self._task_file_data: Dict[Future, tuple] = {}
-
-    def __del__(self):
-        self.cancel()
 
     def _callback(self, t):
         self._sem.release()
@@ -77,9 +69,8 @@ class Dumper:
     def dump_file(
         self, file_dumper: Callable[[Upath, list], None], data_file: Upath, data: list
     ):
-        if self._executor is None:
-            self._executor = ThreadPoolExecutor(self._max_workers)
-            self._sem = threading.Semaphore(self._max_workers)
+        if self._sem is None:
+            self._sem = threading.Semaphore(min(5, self._executor._max_workers))
         self._sem.acquire()  # Wait here if the executor is busy at capacity.
         task = self._executor.submit(file_dumper, data_file, data)
         self._task_file_data[task] = (data_file.name, data)
@@ -101,9 +92,6 @@ class Dumper:
         concurrent.futures.wait(list(self._task_file_data.keys()))
 
     def cancel(self):
-        if self._executor is not None:
-            self._executor.shutdown()
-            self._executor = None
         self._task_file_data = {}
 
 
@@ -201,7 +189,7 @@ class Biglist(Sequence[T]):
         storage_format: str = None,
         **kwargs,
     ):
-        # A Biglist object constrution is in either of the two modes
+        # A Biglist object construction is in either of the two modes
         # below:
         #    a) create a new Biglist to store new data.
         #    b) create a Biglist object pointing to storage of
@@ -220,7 +208,7 @@ class Biglist(Sequence[T]):
         # both a barebone object that is created in this `new`, and a
         # fleshed out object that already has data.
         #
-        # Some settings may be applicale to an existing Biglist object,
+        # Some settings may be applicable to an existing Biglist object,
         # i.e. they control ways to use the object, and are not an intrinsic
         # property of the object. Hence they can be set to diff values while
         # using an existing Biglist object. Such settings should be
@@ -244,7 +232,7 @@ class Biglist(Sequence[T]):
         elif path.is_file():
             raise FileExistsError(path)
 
-        obj = cls(path, **kwargs)  # type: ignore
+        obj = cls(path, require_exists=False, **kwargs)  # type: ignore
 
         obj.keep_files = keep_files
 
@@ -274,7 +262,12 @@ class Biglist(Sequence[T]):
 
         return obj
 
-    def __init__(self, path: Union[str, Path, Upath]):
+    def __init__(
+        self,
+        path: Union[str, Path, Upath],
+        thread_pool_executor: ThreadPoolExecutor = None,
+        require_exists: bool = True,
+    ):
         if isinstance(path, str):
             path = Path(path)
         if isinstance(path, Path):
@@ -294,13 +287,19 @@ class Biglist(Sequence[T]):
         self._append_buffer: List = []
 
         self.keep_files = True
-        self._file_dumper = Dumper()
+        self._file_dumper = None
+
+        self._thread_pool_ = thread_pool_executor
 
         try:
             # Instantiate a Biglist object pointing to
             # existing data.
             self.info = self._info_file.read_json()
         except FileNotFoundError:
+            if require_exists:
+                raise RuntimeError(
+                    f"Cat not find {self.__class__.__name__} at path '{self.path}'"
+                )
             self.info = {}
 
     @property
@@ -326,6 +325,15 @@ class Biglist(Sequence[T]):
     @property
     def storage_version(self) -> int:
         return self.info.get("storage_version", 0)
+
+    @property
+    def _thread_pool(self):
+        if self._thread_pool_ is None:
+            executor = ThreadPoolExecutor(8)
+            self._thread_pool_ = executor
+            Finalize(self, executor.shutdown)
+
+        return self._thread_pool_
 
     def __bool__(self) -> bool:
         return len(self) > 0
@@ -404,7 +412,10 @@ class Biglist(Sequence[T]):
             n = self._data_files_cumlength_[ifile - 1]
         self._read_buffer_item_range = (n, self._data_files_cumlength_[ifile])
         file = self._data_dir / datafiles[ifile][0]
-        data = self._file_dumper.get_file_data(file)
+        if self._file_dumper is None:
+            data = None
+        else:
+            data = self._file_dumper.get_file_data(file)
         if data is None:
             data = self.load_data_file(file)
         self._read_buffer_file = file
@@ -424,26 +435,27 @@ class Biglist(Sequence[T]):
         elif ndatafiles > 1:
             max_workers = min(3, ndatafiles)
             tasks = queue.Queue(max_workers)
-            with ThreadPoolExecutor(max_workers) as executor:
-                for i in range(max_workers):
+            executor = self._thread_pool
+
+            for i in range(max_workers):
+                t = executor.submit(
+                    self.load_data_file, self._data_dir / datafiles[i][0]
+                )
+                tasks.put(t)
+            nfiles_queued = max_workers
+
+            for _ in range(ndatafiles):
+                t = tasks.get()
+                data = t.result()
+
+                if nfiles_queued < ndatafiles:
                     t = executor.submit(
-                        self.load_data_file, self._data_dir / datafiles[i][0]
+                        self.load_data_file,
+                        self._data_dir / datafiles[nfiles_queued][0],
                     )
                     tasks.put(t)
-                nfiles_queued = max_workers
-
-                for _ in range(ndatafiles):
-                    t = tasks.get()
-                    data = t.result()
-
-                    if nfiles_queued < ndatafiles:
-                        t = executor.submit(
-                            self.load_data_file,
-                            self._data_dir / datafiles[nfiles_queued][0],
-                        )
-                        tasks.put(t)
-                        nfiles_queued += 1
-                    yield from data
+                    nfiles_queued += 1
+                yield from data
 
         # I don't think this is necessary.
         if self._append_buffer:
@@ -483,7 +495,8 @@ class Biglist(Sequence[T]):
 
         After this method is called, this object is no longer usable.
         """
-        self._file_dumper.cancel()
+        if self._file_dumper is not None:
+            self._file_dumper.cancel()
         self._read_buffer = None
         self._read_buffer_file = None
         self._read_buffer_item_range = None
@@ -498,7 +511,7 @@ class Biglist(Sequence[T]):
         if isinstance(file, int):
             datafiles = self.get_data_files()
             file = self._data_dir / datafiles[file][0]
-        return FileView(file, self.load_data_file)  # type: ignore
+        return FileView(file, self.__class__.load_data_file)  # type: ignore
 
     def file_views(self) -> List[FileView]:
         # This is intended to facilitate parallel processing,
@@ -530,6 +543,8 @@ class Biglist(Sequence[T]):
         # later we decide to use these pieces of info.
 
         data_file = self._data_dir / filename
+        if self._file_dumper is None:
+            self._file_dumper = Dumper(self._thread_pool)
         if wait:
             self._file_dumper.wait()
             self.dump_data_file(data_file, buffer)
@@ -735,7 +750,7 @@ class Biglist(Sequence[T]):
         )
         return task_id
 
-    def multiplex_iter(self, task_id: str, *, worker_id: str = None) -> Iterator[T]:
+    def multiplex_iter(self, task_id: str, worker_id: str = None) -> Iterator[T]:
         """
         `task_id`: returned by `new_multiplexer`.
         """
@@ -745,11 +760,12 @@ class Biglist(Sequence[T]):
                 threading.current_thread().name,
             )
         while True:
-            with (self._multiplex_info_file(task_id) / "lock").lock():
+            f = self._multiplex_info_file(task_id)
+            with f.with_suffix(f.suffix + ".lock").lock():
                 ss = self._multiplex_info_file(task_id).read_json()
                 n = ss["next"]
                 if n == ss["total"]:
-                    raise StopIteration
+                    return
                 self._multiplex_info_file(task_id).write_json(
                     {
                         "next": n + 1,

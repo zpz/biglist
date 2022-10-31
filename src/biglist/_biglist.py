@@ -329,7 +329,7 @@ class Biglist(Sequence[T]):
     @property
     def _thread_pool(self):
         if self._thread_pool_ is None:
-            executor = ThreadPoolExecutor(8)
+            executor = ThreadPoolExecutor(5)
             self._thread_pool_ = executor
             Finalize(self, executor.shutdown)
 

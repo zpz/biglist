@@ -98,9 +98,7 @@ class Dumper:
 T = TypeVar("T")
 
 
-
 class BiglistBase(Sequence[T]):
-
     @classmethod
     def get_temp_path(cls) -> Upath:
         """Subclass needs to customize this if it prefers to use
@@ -328,9 +326,10 @@ class BiglistBase(Sequence[T]):
         # e.g. send views on diff files to diff `multiprocessing.Process`es.
         # However, `iter_files` may be a better way to do that.
         datafiles = self.get_data_files()
-        return [self.file_view(self.get_data_file(datafiles, i))
-                for i in range(len(datafiles))
-                ]
+        return [
+            self.file_view(self.get_data_file(datafiles, i))
+            for i in range(len(datafiles))
+        ]
 
     def get_data_files(self) -> list:
         raise NotImplementedError
@@ -404,7 +403,6 @@ class BiglistBase(Sequence[T]):
     def concurrent_iter_done(self, task_id: str) -> bool:
         zz = self.concurrent_iter_stat(task_id)
         return zz["n_files_claimed"] >= zz["n_files"]
-
 
 
 class Biglist(BiglistBase):
@@ -827,9 +825,10 @@ class Biglist(BiglistBase):
         # e.g. send views on diff files to diff `multiprocessing.Process`es.
         # However, `iter_files` may be a better way to do that.
         datafiles = self.get_data_files()
-        return [self.file_view(self.get_data_file(datafiles, i))
-                for i in range(len(datafiles))
-                ]
+        return [
+            self.file_view(self.get_data_file(datafiles, i))
+            for i in range(len(datafiles))
+        ]
 
     def _flush(self, *, wait: bool = False):
         """

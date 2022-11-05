@@ -1,4 +1,5 @@
 from ._biglist import Biglist, ListView, FileView
+
 try:
     from ._parquet import ParquetList
 except ImportError:
@@ -15,4 +16,4 @@ __all__ = [
 ]
 
 if ParquetList is not None:
-    __all__.append('ParquetList')
+    __all__.append("ParquetList")

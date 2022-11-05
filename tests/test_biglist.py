@@ -9,7 +9,7 @@ from time import sleep
 
 import pytest
 from boltons import iterutils
-from biglist._biglist import Biglist, ListView
+from biglist import Biglist, ListView
 
 
 def test_numbers():

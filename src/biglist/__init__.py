@@ -1,4 +1,5 @@
-from ._biglist import Biglist, ListView, FileView
+from ._biglist import Biglist
+from ._view import ListView, FileView
 
 try:
     from ._parquet import ParquetList

@@ -96,11 +96,11 @@ class ParquetBiglist(BiglistBase):
         for p in data_path:
             if p.is_file():
                 if suffix == "*" or p.name.endswith(suffix):
-                    pool.submit(get_file_meta, p)
+                    tasks.append(pool.submit(get_file_meta, p))
             else:
                 for q in p.riterdir():
                     if suffix == "*" or q.name.endswith(suffix):
-                        pool.submit(get_file_meta, q)
+                        tasks.append(pool.submit(get_file_meta, q))
         assert tasks
         if thread_pool_executor is None:
             pool.shutdown()

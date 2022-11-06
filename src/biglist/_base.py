@@ -38,6 +38,9 @@ class FileLoaderMode:
 class BiglistBase(Sequence[T]):
     """
     This base class contains code mainly concerning *read* only.
+    The subclass `Biglist` adds functionalities for writing,
+    whereas other subclasses, such as `ParquetBiglist`, are read-only,
+    essentially defining a kind of "external Biglist".
     """
 
     @classmethod
@@ -102,6 +105,35 @@ class BiglistBase(Sequence[T]):
 
         self._n_read_threads = 5
         self._n_write_threads = 5
+        self.keep_files = True
+
+    def __del__(self) -> None:
+        if self.keep_files:
+            self.flush()
+        else:
+            self.destroy()
+
+    def destroy(self) -> None:
+        """
+        Clears all the files and releases all in-memory data held by this object,
+        so that the object is as if upon `__init__` with an empty directory pointed to
+        by `self.path`.
+
+        After this method is called, this object is no longer usable.
+        """
+        if self._file_dumper is not None:
+            self._file_dumper.cancel()
+        self._read_buffer = None
+        self._read_buffer_file_idx = None
+        self._read_buffer_item_range = None
+        self._append_buffer = []
+        self.path.rmrf()
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data files>"
+
+    def __str__(self):
+        return self.__repr__()
 
     @property
     def _info_file(self) -> Upath:
@@ -153,6 +185,8 @@ class BiglistBase(Sequence[T]):
         This is not optimized for speed. For example, `self.get_data_files`
         could be expensive involving directory crawl, maybe even in the cloud.
         For better speed, use `__iter__`.
+
+        This does not support slicing. For slicing, see method `view`.
 
         This is called in these cases:
 
@@ -358,6 +392,18 @@ class BiglistBase(Sequence[T]):
         ]
 
     def view(self) -> ListView[T]:
+        '''
+        By convention, "slicing" should return an object of the same class
+        as the original object. This is not possible for the `Biglist` class,
+        hence its `__getitem__` does not support slicing. Slicing is supported
+        by this "view" method---the object returned by this method can be
+        sliced, e.g.,
+        
+            biglist = Biglist(...)
+            v = biglist.view()
+            print(v[2:8])
+            print(v[3::2])
+        '''
         # During the use of this view, the underlying Biglist should not change.
         # Multiple views may be used to view diff parts
         # of the Biglist; they open and read files independent of
@@ -365,12 +411,25 @@ class BiglistBase(Sequence[T]):
         self.flush()
         return ListView(self.__class__(self.path))
 
+    @property
+    def num_datafiles(self) -> int:
+        return len(self.get_data_files()[0])
+
+    def read_datafile(self, file: Union[Upath, int]):
+        return self.file_view(file).data
+
 
 class FileView(Sequence[T]):
     def __init__(self, file: Upath, loader: Callable):
         self._file = file
         self._loader = loader
         self._data = None
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} into '{self._file}', with loader {self._loader}>"
+    
+    def __str__(self):
+        return self.__repr__()
 
     @property
     def data(self) -> Sequence[T]:
@@ -405,6 +464,14 @@ class ListView(Sequence[T]):
         """
         self._list = list_
         self._range = range_
+
+    def __repr__(self):
+        if self._range is None:
+            return f"<{self.__class__.__name__} into {self._list}>"
+        return f"<{self.__class__.__name__} into {self._list}[{self._range}]>"
+
+    def __str__(self):
+        return self.__repr__()
 
     def __len__(self) -> int:
         if self._range is None:

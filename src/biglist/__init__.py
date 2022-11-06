@@ -2,9 +2,9 @@ from ._base import FileView, ListView
 from ._biglist import Biglist
 
 try:
-    from ._parquet import BigParquetList
+    from ._parquet import ParquetBiglist
 except ImportError:
-    BigParquetList = None
+    ParquetBiglist = None
 
 
 __version__ = "0.7.0b1"
@@ -16,5 +16,5 @@ __all__ = [
     "FileView",
 ]
 
-if BigParquetList is not None:
-    __all__.append("BigParquetList")
+if ParquetBiglist is not None:
+    __all__.append("ParquetBiglist")

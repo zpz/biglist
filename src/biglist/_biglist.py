@@ -251,12 +251,6 @@ class Biglist(BiglistBase[T]):
     def storage_version(self) -> int:
         return self.info.get("storage_version", 0)
 
-    def __del__(self) -> None:
-        if self.keep_files:
-            self.flush()
-        else:
-            self.destroy()
-
     def append(self, x: T) -> None:
         """
         Append a single element to the in-memory buffer.
@@ -271,22 +265,6 @@ class Biglist(BiglistBase[T]):
         self._append_buffer.append(x)
         if len(self._append_buffer) >= self.batch_size:
             self._flush()
-
-    def destroy(self) -> None:
-        """
-        Clears all the files and releases all in-memory data held by this object,
-        so that the object is as if upon `__init__` with an empty directory pointed to
-        by `self.path`.
-
-        After this method is called, this object is no longer usable.
-        """
-        if self._file_dumper is not None:
-            self._file_dumper.cancel()
-        self._read_buffer = None
-        self._read_buffer_file_idx = None
-        self._read_buffer_item_range = None
-        self._append_buffer = []
-        self.path.rmrf()
 
     def extend(self, x: Iterable[T]) -> None:
         for v in x:

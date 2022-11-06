@@ -10,7 +10,21 @@ from upathlib.util import PathType, resolve_path, is_path
 from ._base import BiglistBase, FileLoaderMode
 
 
-class BigParquetList(BiglistBase):
+class ParquetBiglist(BiglistBase):
+    '''
+    `ParquetBiglist` defines a kind of "external Biglist", that is,
+    it points to pre-existing Parquet files (produced by other code)
+    and provides facilities to read the data.
+    
+    Data files are read in arbitrary order determined by this class,
+    that is, the data sequence produced will most likely differ from
+    what is read out by other Parquet utilities. However, if you use
+    a saved `ParquetBiglist` object again for reading, it will read
+    in the same order.
+    
+    As long as you use a `ParquetBiglist` object to read, it is assumed
+    the dataset has not changed since the creation of the object.
+    '''
     @classmethod
     def new(
         cls,
@@ -22,6 +36,21 @@ class BigParquetList(BiglistBase):
         shuffle: bool = False,
         **kwargs,
     ):
+        '''
+        `data_path`: Parquet file(s) for folder(s) containing Parquet files;
+            folders are traversed recursively. The data files can represent a mix
+            of locations, including a mix of local and cloud locations, as long
+            as they don't change. However, if any data file is on the local disk,
+            you're tied to the particular machine for the use of the `ParquetBiglist`
+            object.
+            
+        This classmethod gathers info of the data files and saves it to facilitate
+        reading the data.
+        
+        If the number of data files is small, it's entirely feasible to create a temporary
+        object of this class (by leaving `path` at the default `None`) "on-the-fly"
+        for one-time use.
+        '''
         if is_path(data_path):
             data_path = [resolve_path(data_path)]
         else:
@@ -56,7 +85,7 @@ class BigParquetList(BiglistBase):
             meta = parquet.read_metadata(str(f))
             datafiles.append(
                 {
-                    "path": f,
+                    "path": str(f),  # because Upath object does not support JSON
                     "num_rows": meta.num_rows,
                     "row_groups_num_rows": [
                         meta.row_group(k).num_rows for k in range(meta.num_row_groups)
@@ -72,18 +101,22 @@ class BigParquetList(BiglistBase):
         )
 
         obj = cls(path, require_exists=False, **kwargs)  # type: ignore
+        obj.keep_files = keep_files
         obj.info["datafiles"] = datafiles
         obj.info["datafiles_cumlength"] = datafiles_cumlength
-        if keep_files:
-            for v in obj.info["datafiles"]:
-                v["path"] = str(v["path"])  # because Upath object does not support JSON
-            obj._info_file.write_json(obj.info)
+        obj._info_file.write_json(obj.info)
 
         return obj
 
+    def __del__(self) -> None:
+        if self.keep_files:
+            self.flush()
+        else:
+            self.destroy()
+
     @classmethod
     def load_data_file(cls, path: Upath, mode: int):
-        return ParquetData(path, mode)
+        return ParquetFileData(path, mode)
 
     def get_data_files(self):
         return self.info["datafiles"], self.info["datafiles_cumlength"]
@@ -91,8 +124,16 @@ class BigParquetList(BiglistBase):
     def get_data_file(self, datafiles, idx):
         return resolve_path(datafiles[idx]["path"])
 
+    def iter_batches(self, batch_size=10000):
+        # Yield native Apache Arrow objects for experiments.
+        datafiles, _ = self.get_data_files()
+        for ifile in range(len(datafiles)):
+            filedata = self.load_data_file(
+                self.get_data_file(datafiles, ifile), FileLoaderMode.RAND)
+            yield from filedata.file.iter_batches(batch_size)
 
-class ParquetData(collections.abc.Sequence):
+
+class ParquetFileData(collections.abc.Sequence):
     # Represents data of a single Parquet file,
     # with facilities to make it conform to our required APIs.
     #
@@ -110,29 +151,31 @@ class ParquetData(collections.abc.Sequence):
         self._row_groups_num_rows = None
         self._row_groups_num_rows_cumsum = None
         self._row_groups = [None] * self.num_row_groups
+        self._data = None
         if mode == FileLoaderMode.ITER:
-            self.table = self.file.read()
-        else:
-            self.table = None
+            _ = self.data
         self._batch_size = 10000
+
+    @property
+    def data(self):
+        if self._data is None:
+            self._data = self.file.read()
+        return self._data
 
     def __len__(self):
         return self.num_rows
 
-    def __getitem__(self, idx: Union[int, slice]):
-        if isinstance(idx, slice):
-            raise NotImplementedError
-
+    def __getitem__(self, idx: int):
         if idx < 0:
             idx = self.num_rows + idx
-        if idx >= self.num_rows:
+        if idx < 0 or idx >= self.num_rows:
             raise IndexError(idx)
 
-        if self.table is not None:
-            if self._table.num_columns == 1:
-                return self.table.column(0).take([idx])[0]
+        if self._data is not None:
+            if self._data.num_columns == 1:
+                return self._data.column(0).take([idx])[0]
             else:
-                return self.table.take([idx]).to_pylist()[0]  # dict
+                return self._data.take([idx]).to_pylist()[0]  # dict
 
         if self._row_groups_num_rows is None:
             meta = self.file.metadata
@@ -157,14 +200,14 @@ class ParquetData(collections.abc.Sequence):
             return row_group.take([idx_in_row_group]).to_pylist()[0]  # dict
 
     def __iter__(self):
-        if self.table is None:
+        if self._data is None:
             for batch in self.file.iter_batches(self._batch_size):
                 if batch.num_columns == 1:
                     yield from batch.column(0)
                 else:
                     yield from batch.to_pylist()
         else:
-            if self.table.num_columns == 1:
-                yield from self.table.column(0)
+            if self._data.num_columns == 1:
+                yield from self._data.column(0)
             else:
-                yield from self.table.to_pylist()
+                yield from self._data.to_pylist()

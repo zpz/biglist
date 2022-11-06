@@ -11,20 +11,21 @@ from ._base import BiglistBase, FileLoaderMode
 
 
 class ParquetBiglist(BiglistBase):
-    '''
+    """
     `ParquetBiglist` defines a kind of "external Biglist", that is,
     it points to pre-existing Parquet files (produced by other code)
     and provides facilities to read the data.
-    
+
     Data files are read in arbitrary order determined by this class,
     that is, the data sequence produced will most likely differ from
     what is read out by other Parquet utilities. However, if you use
     a saved `ParquetBiglist` object again for reading, it will read
     in the same order.
-    
+
     As long as you use a `ParquetBiglist` object to read, it is assumed
     the dataset has not changed since the creation of the object.
-    '''
+    """
+
     @classmethod
     def new(
         cls,
@@ -36,21 +37,21 @@ class ParquetBiglist(BiglistBase):
         shuffle: bool = False,
         **kwargs,
     ):
-        '''
+        """
         `data_path`: Parquet file(s) for folder(s) containing Parquet files;
             folders are traversed recursively. The data files can represent a mix
             of locations, including a mix of local and cloud locations, as long
             as they don't change. However, if any data file is on the local disk,
             you're tied to the particular machine for the use of the `ParquetBiglist`
             object.
-            
+
         This classmethod gathers info of the data files and saves it to facilitate
         reading the data.
-        
+
         If the number of data files is small, it's entirely feasible to create a temporary
         object of this class (by leaving `path` at the default `None`) "on-the-fly"
         for one-time use.
-        '''
+        """
         if is_path(data_path):
             data_path = [resolve_path(data_path)]
         else:
@@ -129,7 +130,8 @@ class ParquetBiglist(BiglistBase):
         datafiles, _ = self.get_data_files()
         for ifile in range(len(datafiles)):
             filedata = self.load_data_file(
-                self.get_data_file(datafiles, ifile), FileLoaderMode.RAND)
+                self.get_data_file(datafiles, ifile), FileLoaderMode.RAND
+            )
             yield from filedata.file.iter_batches(batch_size)
 
 

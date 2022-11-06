@@ -392,18 +392,18 @@ class BiglistBase(Sequence[T]):
         ]
 
     def view(self) -> ListView[T]:
-        '''
+        """
         By convention, "slicing" should return an object of the same class
         as the original object. This is not possible for the `Biglist` class,
         hence its `__getitem__` does not support slicing. Slicing is supported
         by this "view" method---the object returned by this method can be
         sliced, e.g.,
-        
+
             biglist = Biglist(...)
             v = biglist.view()
             print(v[2:8])
             print(v[3::2])
-        '''
+        """
         # During the use of this view, the underlying Biglist should not change.
         # Multiple views may be used to view diff parts
         # of the Biglist; they open and read files independent of
@@ -427,7 +427,7 @@ class FileView(Sequence[T]):
 
     def __repr__(self):
         return f"<{self.__class__.__name__} into '{self._file}', with loader {self._loader}>"
-    
+
     def __str__(self):
         return self.__repr__()
 

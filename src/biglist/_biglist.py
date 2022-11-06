@@ -8,7 +8,6 @@ import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, Future
 from datetime import datetime
-from pathlib import Path
 from typing import (
     Iterable,
     Iterator,

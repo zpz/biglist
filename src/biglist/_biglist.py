@@ -1,35 +1,27 @@
-# from __future__ import annotations
-
-# Will no longer be needed at Python 3.10.
-
 import concurrent.futures
 import itertools
 import json
 import logging
 import multiprocessing
-import os
-import os.path
 import string
-import tempfile
 import time
 import threading
-import uuid
 from concurrent.futures import ThreadPoolExecutor, Future
 from datetime import datetime
 from pathlib import Path
 from typing import (
     Iterable,
     Iterator,
-    Union,
     List,
     Dict,
     Type,
     Callable,
+    Optional,
     TypeVar,
 )
 from uuid import uuid4
 
-from upathlib import LocalUpath, Upath  # type: ignore
+from upathlib import Upath  # type: ignore
 from upathlib.serializer import (
     ByteSerializer,
     _loads,
@@ -43,7 +35,7 @@ from upathlib.serializer import (
     ZstdOrjsonSerializer,
 )
 
-from ._base import BiglistBase
+from ._base import BiglistBase, PathType, resolve_path
 
 
 logger = logging.getLogger(__name__)
@@ -52,8 +44,9 @@ T = TypeVar("T")
 
 
 class Dumper:
-    def __init__(self, executor: ThreadPoolExecutor):
+    def __init__(self, executor: ThreadPoolExecutor, n_threads: int):
         self._executor: executor = executor
+        self._n_threads = n_threads
         self._sem: threading.Semaphore = None  # type: ignore
         self._task_file_data: Dict[Future, tuple] = {}
 
@@ -67,7 +60,7 @@ class Dumper:
         self, file_dumper: Callable[[Upath, list], None], data_file: Upath, data: list
     ):
         if self._sem is None:
-            self._sem = threading.Semaphore(min(5, self._executor._max_workers))
+            self._sem = threading.Semaphore(min(self._n_threads, self._executor._max_workers))
         self._sem.acquire()  # Wait here if the executor is busy at capacity.
         task = self._executor.submit(file_dumper, data_file, data)
         self._task_file_data[task] = (data_file.name, data)
@@ -126,7 +119,8 @@ class Biglist(BiglistBase[T]):
         path.write_bytes(serializer.serialize(data))
 
     @classmethod
-    def load_data_file(cls, path: Upath) -> List[T]:
+    def load_data_file(cls, path: Upath, mode: int) -> List[T]:
+        # `mode` is ignored.
         deserializer = cls.registered_storage_formats[
             path.suffix.lstrip(".").replace("_", "-")
         ]
@@ -154,19 +148,9 @@ class Biglist(BiglistBase[T]):
         return x
 
     @classmethod
-    def get_temp_path(cls) -> Upath:
-        """Subclass needs to customize this if it prefers to use
-        a remote blobstore for temp Biglist.
-        """
-        path = LocalUpath(
-            os.path.abspath(tempfile.gettempdir()), str(uuid.uuid4())
-        )  # type: ignore
-        return path  # type: ignore
-
-    @classmethod
     def new(
         cls,
-        path: Union[str, Path, Upath] = None,
+        path: PathType = None,
         *,
         batch_size: int = None,
         keep_files: bool = None,
@@ -205,10 +189,7 @@ class Biglist(BiglistBase[T]):
             if keep_files is None:
                 keep_files = False
         else:
-            if isinstance(path, str):
-                path = Path(path)
-            if isinstance(path, Path):
-                path = LocalUpath(str(path.absolute()))
+            path = resolve_path(path)
             if keep_files is None:
                 keep_files = True
         if path.is_dir():
@@ -250,6 +231,8 @@ class Biglist(BiglistBase[T]):
         super().__init__(*args, **kwargs)
         self.keep_files = True
         self._file_dumper = None
+        self._data_files: Optional[list] = None
+        self._data_files_cumlength_ = []
 
     @property
     def batch_size(self) -> int:
@@ -299,7 +282,7 @@ class Biglist(BiglistBase[T]):
         if self._file_dumper is not None:
             self._file_dumper.cancel()
         self._read_buffer = None
-        self._read_buffer_file = None
+        self._read_buffer_file_idx = None
         self._read_buffer_item_range = None
         self._append_buffer = []
         self.path.rmrf()
@@ -333,7 +316,7 @@ class Biglist(BiglistBase[T]):
 
         data_file = self._data_dir / filename
         if self._file_dumper is None:
-            self._file_dumper = Dumper(self._thread_pool)
+            self._file_dumper = Dumper(self._thread_pool, self._n_write_threads)
         if wait:
             self._file_dumper.wait()
             self.dump_data_file(data_file, buffer)
@@ -434,7 +417,7 @@ class Biglist(BiglistBase[T]):
         else:
             self._data_files_cumlength_ = []
 
-        return self._data_files  # type: ignore
+        return self._data_files, self._data_files_cumlength_  # type: ignore
 
     def get_data_file(self, datafiles, idx):
         # `datafiles` is the return of `get_datafiles`.

@@ -1,16 +1,18 @@
-# from __future__ import annotations
-
-# Will no longer be needed at Python 3.10.
+from __future__ import annotations  # will no longer needed in >= 3.10
 
 import bisect
 import logging
+import os
 import queue
+import tempfile
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime
 from multiprocessing.util import Finalize
 from pathlib import Path
 from typing import (
+    Callable,
     Iterator,
     Union,
     Sequence,
@@ -21,22 +23,56 @@ from typing import (
 )
 
 from upathlib import LocalUpath, Upath  # type: ignore
-from ._view import ListView, FileView
-
+from upathlib.gcp import GcpBlobUpath
 
 logger = logging.getLogger(__name__)
 
 
-
 T = TypeVar("T")
+
+PathType = Union[str, Path, Upath]
+
+
+def is_path(p):
+    return isinstance(p, str) or isinstance(p, Path) or isinstance(p, Upath)
+
+
+def resolve_path(p: PathType) -> Upath:
+    if isinstance(p, str):
+        if p.startswith('gs://'):
+            return GcpBlobUpath(p)
+        p = Path(p)
+    if isinstance(p, Path):
+        return LocalUpath(str(p.absolute()))
+    assert isinstance(p, Upath)
+    return p
+
+
+class FileLoaderMode:
+    ITER = 0
+    RAND = 1
 
 
 class BiglistBase(Sequence[T]):
     '''
-    This base class contains code concerning *read* only.
+    This base class contains code mainly concerning *read* only.
     '''
+
     @classmethod
-    def load_data_file(cls, path: Upath) -> Sequence[T]:
+    def get_temp_path(cls) -> Upath:
+        """Subclass needs to customize this if it prefers to use
+        a remote blobstore for temp Biglist.
+        """
+        path = LocalUpath(
+            os.path.abspath(tempfile.gettempdir()), str(uuid.uuid4())
+        )  # type: ignore
+        return path  # type: ignore
+
+    @classmethod
+    def load_data_file(cls, path: Upath, mode: int) -> Sequence[T]:
+        '''
+        `mode`: take values defined in `FileLoaderMode`.
+        '''
         raise NotImplementedError
 
     @classmethod
@@ -51,30 +87,23 @@ class BiglistBase(Sequence[T]):
 
     def __init__(
         self,
-        path: Union[str, Path, Upath],
+        path: PathType,
         thread_pool_executor: ThreadPoolExecutor = None,
         require_exists: bool = True,
     ):
-        if isinstance(path, str):
-            path = Path(path)
-        if isinstance(path, Path):
-            path = LocalUpath(str(path.absolute()))
-        # Else it's something that already satisfies the
-        # `Upath` protocol.
-        self.path = path
+        self.path = resolve_path(path)
 
-        self._data_files: Optional[list] = None
-
-        self._read_buffer: Optional[list] = None
-        self._read_buffer_file: Optional[int] = None
-        self._read_buffer_item_range: Optional[Tuple] = None
+        self._read_buffer: Optional[Sequence[T]] = None
+        self._read_buffer_file_idx = None
+        self._read_buffer_item_range: Optional[Tuple[int, int]] = None
         # `self._read_buffer` contains the content of the file
-        # indicated by `self._read_buffer_file`.
+        # indicated by `self._read_buffer_file_idx`.
 
         self._append_buffer: List = []
-        # This is for appending, butt is needed in some code for readinng.
-        # For a read-only subclass, this stays empty and behaves correctly
-        # where it is used.
+        self._file_dumper = None
+        # These are for writing, but are needed in some code for reading.
+        # In a read-only subclass, they remain these default values and
+        # behave correctly.
 
         self._thread_pool_ = thread_pool_executor
 
@@ -89,6 +118,9 @@ class BiglistBase(Sequence[T]):
                 )
             self.info = {}
 
+        self._n_read_threads = 5
+        self._n_write_threads = 5
+
     @property
     def _info_file(self) -> Upath:
         return self.path / "info.json"
@@ -96,7 +128,7 @@ class BiglistBase(Sequence[T]):
     @property
     def _thread_pool(self):
         if self._thread_pool_ is None:
-            executor = ThreadPoolExecutor(5)
+            executor = ThreadPoolExecutor(max(self._n_read_threads, self._n_write_threads))
             self._thread_pool_ = executor
             Finalize(self, executor.shutdown)
 
@@ -105,12 +137,38 @@ class BiglistBase(Sequence[T]):
     def __bool__(self) -> bool:
         return len(self) > 0
 
+    def get_data_files(self) -> tuple:
+        # Return "data_files" and "data_files_cumlength".
+        # Subclass may choose to cache these results in instance attributes.
+        raise NotImplementedError
+
+    def get_data_file(self, datafiles, idx):
+        # `datafiles` is the return of `get_datafiles`.
+        # `idx` is the index of the file of interest in `datafiles`.
+        raise NotImplementedError
+
+    def flush(self):
+        # Persist element changes. To be defined by read-write subclasses.
+        pass
+
+    def __len__(self) -> int:
+        # This assumes the current object is the only one
+        # that may be appending to the biglist (hence it has `append_buffer`).
+        # In other words, if the current object is one of
+        # of a number of workers that are concurrently using
+        # the biglist, then all the other workers are reading only.
+        _, data_files_cumlength = self.get_data_files()
+        if data_files_cumlength:
+            return data_files_cumlength[-1] + len(self._append_buffer)
+        return len(self._append_buffer)
+
     def __getitem__(self, idx: int) -> T:
         """
         Element access by single index; negative index works as expected.
 
         This is not optimized for speed. For example, `self.get_data_files`
-        involves an HTTP call. For better speed, use `__iter__`.
+        could be expensive involving directory crawl, maybe even in the cloud.
+        For better speed, use `__iter__`.
 
         This is called in these cases:
 
@@ -124,7 +182,7 @@ class BiglistBase(Sequence[T]):
                 f"{self.__class__.__name__} indices must be integers, not {type(idx).__name__}"
             )
 
-        if idx >= 0 and self._read_buffer_file is not None:
+        if idx >= 0 and self._read_buffer_file_idx is not None:
             n1, n2 = self._read_buffer_item_range  # type: ignore
             if n1 <= idx < n2:
                 return self._read_buffer[idx - n1]  # type: ignore
@@ -133,74 +191,85 @@ class BiglistBase(Sequence[T]):
             return self._append_buffer[idx]
 
         # TODO: this is reliable only if there is no other "worker node"
-        # changing the object by calling `append` or `extend`.
-        datafiles = self.get_data_files()
-        if self._data_files_cumlength_:
-            length = self._data_files_cumlength_[-1]
+        # appending elements to this object.
+        datafiles, data_files_cumlength = self.get_data_files()
+        if data_files_cumlength:
+            length = data_files_cumlength[-1]
         else:
             length = 0
         idx = range(length + len(self._append_buffer))[idx]
 
         if idx >= length:
-            self._read_buffer_file = None
+            if idx - length >= len(self._append_buffer):
+                raise IndexError(idx)
             return self._append_buffer[idx - length]  # type: ignore
 
         ifile0 = 0
         ifile1 = len(datafiles)
-        if self._read_buffer_file is not None:
+        if self._read_buffer_file_idx is not None:
             n1, n2 = self._read_buffer_item_range  # type: ignore
             if idx < n1:
                 ifile1 = (
-                    self._read_buffer_file_idx_
+                    self._read_buffer_file_idx
                 )  # pylint: disable=access-member-before-definition
             elif idx < n2:
                 return self._read_buffer[idx - n1]  # type: ignore
             else:
                 ifile0 = (
-                    self._read_buffer_file_idx_ + 1
+                    self._read_buffer_file_idx + 1
                 )  # pylint: disable=access-member-before-definition
 
         # Now find the data file that contains the target item.
-
         ifile = bisect.bisect_right(
-            self._data_files_cumlength_, idx, lo=ifile0, hi=ifile1
+            data_files_cumlength, idx, lo=ifile0, hi=ifile1
         )
         # `ifile`: index of data file that contains the target element.
         # `n`: total length before `ifile`.
         if ifile == 0:
             n = 0
         else:
-            n = self._data_files_cumlength_[ifile - 1]
-        self._read_buffer_item_range = (n, self._data_files_cumlength_[ifile])
+            n = data_files_cumlength[ifile - 1]
+        self._read_buffer_item_range = (n, data_files_cumlength[ifile])
+
         file = self.get_data_file(datafiles, ifile)
+
+        # If the file is in a writing queue and has not finished writing yet:
         if self._file_dumper is None:
             data = None
         else:
             data = self._file_dumper.get_file_data(file)
         if data is None:
-            data = self.load_data_file(file)
-        self._read_buffer_file = file
-        self._read_buffer_file_idx_ = ifile
+            data = self.load_data_file(file, FileLoaderMode.RAND)
+
+        self._read_buffer_file_idx = ifile
         self._read_buffer = data
         return data[idx - n]
 
     def __iter__(self) -> Iterator[T]:
+        for f in self.iter_files():
+            yield from f
+
+        if self._append_buffer:
+            yield from self._append_buffer
+
+    def iter_files(self) -> Iterator[Sequence[T]]:
+        self.flush()
         # Assuming the biglist will not change (not being appended to)
         # during iteration.
-        self.flush()
-        datafiles = self.get_data_files()
+
+        datafiles, _ = self.get_data_files()
         ndatafiles = len(datafiles)
 
         if ndatafiles == 1:
-            yield from self.load_data_file(self.get_data_file(datafiles, 0))
+            yield self.load_data_file(self.get_data_file(datafiles, 0), FileLoaderMode.ITER)
         elif ndatafiles > 1:
-            max_workers = min(3, ndatafiles)
+            max_workers = min(self._n_read_threads, ndatafiles)
             tasks = queue.Queue(max_workers)
             executor = self._thread_pool
 
             for i in range(max_workers):
                 t = executor.submit(
-                    self.load_data_file, self.get_data_file(datafiles, i)
+                    self.load_data_file, self.get_data_file(datafiles, i), FileLoaderMode.ITER
                 )
                 tasks.put(t)
             nfiles_queued = max_workers
@@ -216,90 +285,42 @@ class BiglistBase(Sequence[T]):
                     t = executor.submit(
                         self.load_data_file,
                         self.get_data_file(datafiles, nfiles_queued),
+                        FileLoaderMode.ITER,
                     )
                     tasks.put(t)
                     nfiles_queued += 1
 
-                yield from data
+                yield data
 
-        # I don't think this is necessary.
-        if self._append_buffer:
-            yield from self._append_buffer
-
-    def __len__(self) -> int:
-        # This assumes the current object is the only one
-        # that may be appending to the biglist.
-        # In other words, if the current object is one of
-        # of a number of workers that are concurrently using
-        # the biglist, then all the other workers are reading only.
-        self.get_data_files()
-        if self._data_files_cumlength_:
-            return self._data_files_cumlength_[-1] + len(self._append_buffer)
-        return len(self._append_buffer)
-
-    def file_view(self, file: Union[Upath, int]) -> FileView:
-        if isinstance(file, int):
-            datafiles = self.get_data_files()
-            file = self.get_data_file(datafiles, file)
-        return FileView(file, self.__class__.load_data_file)  # type: ignore
-
-    def file_views(self) -> List[FileView]:
-        # This is intended to facilitate parallel processing,
-        # e.g. send views on diff files to diff `multiprocessing.Process`es.
-        # However, `iter_files` may be a better way to do that.
-        datafiles = self.get_data_files()
-        return [
-            self.file_view(self.get_data_file(datafiles, i))
-            for i in range(len(datafiles))
-        ]
-
-    def get_data_files(self) -> list:
-        raise NotImplementedError
-
-    def get_data_file(self, datafiles, idx):
-        # `datafiles` is the return of `get_datafiles`.
-        # `idx` is the index of the file of interest in `datafiles`.
-        raise NotImplementedError
-
-    def view(self) -> ListView[T]:
-        # During the use of this view, the underlying Biglist should not change.
-        # Multiple views may be used to view diff parts
-        # of the Biglist; they open and read files independent of
-        # other views.
-        self.flush()
-        return ListView(self.__class__(self.path))
-
-    def _concurrent_iter_info_file(self, task_id: str) -> Upath:
+    def _concurrent_file_iter_info_file(self, task_id: str) -> Upath:
         """
-        `task_id`: returned by `new_concurrent_iter`.
+        `task_id`: returned by `new_concurrent_file_iter`.
         """
-        return self.path / ".concurrent_iter" / task_id / "info.json"
+        return self.path / ".concurrent_file_iter" / task_id / "info.json"
 
-    def new_concurrent_iter(self) -> str:
+    def new_concurrent_file_iter(self) -> str:
         """
         One worker, such as a "coordinator", calls this method once.
-        After that, one or more workers independently call `concurrent_iter`
-        to iterate over the Biglist. `concurrent_iter` takes the task-ID returned by
-        this method. The content of the Biglist is
-        split between the workers because each data file will be obtained
-        by exactly one worker.
+        After that, one or more workers independently call `concurrent_iter_files`,
+        providing the task-ID returned by this method.
+        The content of the Biglist is split between the workers because
+        each data file will be obtained by exactly one worker.
 
-        During this iteration, the Biglist object should stay unchanged---no
-        calls to `append` and `extend`.
+        During this iteration, the Biglist object should stay unchanged.
         """
         task_id = datetime.utcnow().isoformat()
-        self._concurrent_iter_info_file(task_id).write_json(
-            {"n_files_claimed": 0}, overwrite=True
+        self._concurrent_file_iter_info_file(task_id).write_json(
+            {"n_files_claimed": 0}, overwrite=False
         )
         return task_id
 
-    def concurrent_iter(self, task_id: str) -> Iterator[T]:
+    def concurrent_iter_files(self, task_id: str) -> Iterator[Sequence[T]]:
         """
-        `task_id`: returned by `new_concurrent_iter`.
+        `task_id`: returned by `new_concurrent_file_iter`.
         """
-        datafiles = self.get_data_files()
+        datafiles, _ = self.get_data_files()
         while True:
-            ff = self._concurrent_iter_info_file(task_id)
+            ff = self._concurrent_file_iter_info_file(task_id)
             with self.lockfile(ff.with_suffix(".json.lock")):
                 iter_info = ff.read_json()
                 n_files_claimed = iter_info["n_files_claimed"]
@@ -309,19 +330,134 @@ class BiglistBase(Sequence[T]):
 
                 iter_info["n_files_claimed"] = n_files_claimed + 1
                 ff.write_json(iter_info, overwrite=True)
-                file = self.get_data_file(datafiles, n_files_claimed)
 
-                fv = self.file_view(file)
-                # This does not actually read the file.
-                # TODO: make this read the file here?
-
+            file = self.get_data_file(datafiles, n_files_claimed)
             logger.debug('yielding data of file "%s"', file)
-            yield from fv.data  # this is the data list contained in the data file
+            yield self.load_data_file(file, FileLoaderMode.ITER)
+
+    def concurrent_file_iter_stat(self, task_id: str) -> dict:
+        info = self._concurrent_file_iter_info_file(task_id).read_json()
+        return {**info, "n_files": len(self.get_data_files()[0])}
+
+    def concurrent_file_iter_done(self, task_id: str) -> bool:
+        zz = self.concurrent_file_iter_stat(task_id)
+        return zz["n_files_claimed"] >= zz["n_files"]
+
+    def new_concurrent_iter(self) -> str:
+        return self.new_concurrent_file_iter()
+
+    def concurrent_iter(self, task_id: str) -> Iterator[T]:
+        for f in self.concurrent_iter_files(task_id):
+            yield from f
 
     def concurrent_iter_stat(self, task_id: str) -> dict:
-        info = self._concurrent_iter_info_file(task_id).read_json()
-        return {**info, "n_files": len(self.get_data_files())}
+        return self.concurrent_file_iter_stat()
 
     def concurrent_iter_done(self, task_id: str) -> bool:
-        zz = self.concurrent_iter_stat(task_id)
-        return zz["n_files_claimed"] >= zz["n_files"]
+        return self.concurrent_file_iter_done(task_id)
+
+    def file_view(self, file: Union[Upath, int]) -> FileView:
+        if isinstance(file, int):
+            datafiles, _ = self.get_data_files()
+            file = self.get_data_file(datafiles, file)
+        return FileView(file, self.__class__.load_data_file)  # type: ignore
+
+    def file_views(self) -> List[FileView]:
+        # This is intended to facilitate parallel processing,
+        # e.g. send views on diff files to diff processes.
+        datafiles, _ = self.get_data_files()
+        return [
+            self.file_view(self.get_data_file(datafiles, i))
+            for i in range(len(datafiles))
+        ]
+
+    def view(self) -> ListView[T]:
+        # During the use of this view, the underlying Biglist should not change.
+        # Multiple views may be used to view diff parts
+        # of the Biglist; they open and read files independent of
+        # other views.
+        self.flush()
+        return ListView(self.__class__(self.path))
+
+
+class FileView(Sequence[T]):
+    def __init__(self, file: Upath, loader: Callable):
+        self._file = file
+        self._loader = loader
+        self._data = None
+
+    @property
+    def data(self) -> Sequence[T]:
+        if self._data is None:
+            self._data = self._loader(self._file, FileLoaderMode.RAND)
+        return self._data
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __getitem__(self, idx: Union[int, slice]) -> T:
+        return self.data[idx]
+
+    def __iter__(self):
+        return iter(self.data)
+
+
+class ListView(Sequence[T]):
+    def __init__(self, list_: Sequence[T], range_: range = None):
+        """
+        This provides a "window" into the sequence `list_`,
+        which is often a `Biglist` or another `ListView`.
+
+        An object of `ListView` is created by `Biglist.view()` or
+        by slicing a `ListView`.
+        User should not attempt to create an object of this class directly.
+
+        The main purpose of this class is to provide slicing over `Biglist`.
+
+        During the use of this object, it is assumed that the underlying
+        `list_` is not changing. Otherwise the results may be incorrect.
+        """
+        self._list = list_
+        self._range = range_
+
+    def __len__(self) -> int:
+        if self._range is None:
+            return len(self._list)
+        return len(self._range)
+
+    def __bool__(self) -> bool:
+        return len(self) > 0
+
+    def __getitem__(self, idx: Union[int, slice]) -> T:
+        """
+        Element access by a single index or by slice.
+        Negative index and standard slice syntax both work as expected.
+
+        Sliced access returns a new `ListView` object.
+        """                                                                                                                                                
+        if isinstance(idx, int):
+            if self._range is None:
+                return self._list[idx]
+            return self._list[self._range[idx]]
+
+        if isinstance(idx, slice):
+            if self._range is None:
+                range_ = range(len(self._list))[idx]
+            else:
+                range_ = self._range[idx]
+            return self.__class__(self._list, range_)
+
+        raise TypeError(
+            f"{self.__class__.__name__} indices must be integers or slices, not {type(idx).__name__}"
+        )
+
+    def __iter__(self):
+        if self._range is None:
+            yield from self._list
+        else:
+            for i in self._range:
+                yield self._list[i]
+
+    @property
+    def raw(self) -> Sequence[T]:
+        return self._list

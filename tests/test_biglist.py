@@ -9,7 +9,7 @@ from time import sleep
 
 import pytest
 from boltons import iterutils
-from biglist._biglist import Biglist, ListView
+from biglist import Biglist, ListView
 
 
 def test_numbers():
@@ -103,7 +103,7 @@ def test_fileview():
     bl = Biglist.new(batch_size=4, storage_format='pickle')
     bl.extend(range(22))
     bl.flush()
-    assert len(bl.get_data_files()) == 6
+    assert len(bl.get_data_files()[0]) == 6
 
     assert list(bl.file_views()[1]) == [4, 5, 6, 7]
 
@@ -218,7 +218,7 @@ def test_mp1():
     biglist.flush()
 
     print('')
-    assert len(biglist.get_data_files()) == len(data) // biglist.batch_size + 1
+    assert len(biglist.get_data_files()[0]) == len(data) // biglist.batch_size + 1
 
     results = []
     for batch in iterutils.chunked_iter(biglist, biglist.batch_size):

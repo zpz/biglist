@@ -34,12 +34,13 @@ class FileLoaderMode:
 
 
 class FileView(Sequence[T]):
-    '''
+    """
     A main use case of FileView is to pass these around in
     `multiprocessing` code for concurrent data processing.
     A `FileView` does not load data upon creation, and lends
     itself to pickling.
-    '''
+    """
+
     def __init__(self, file: Upath, loader: Callable):
         self._file = file
         self._loader = loader
@@ -68,10 +69,11 @@ class FileView(Sequence[T]):
 
 
 class ListView(Sequence[T]):
-    '''
+    """
     A main use case of `ListView` is to provide slicing capabilities
     to `Biglist` via a call to `Biglist.view()`.
-    '''
+    """
+
     def __init__(self, list_: Sequence[T], range_: range = None):
         """
         This provides a "window" into the sequence `list_`,

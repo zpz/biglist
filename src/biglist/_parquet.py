@@ -76,7 +76,7 @@ class ParquetBiglist(BiglistBase):
 
         datafiles = []
 
-        def get_file_meta(f): 
+        def get_file_meta(f):
             meta = parquet.read_metadata(str(f))
             datafiles.append(
                 {

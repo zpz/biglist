@@ -1,7 +1,10 @@
 import bisect
 import collections.abc
+import concurrent.futures
 import itertools
+import os
 import random
+from concurrent.futures import ThreadPoolExecutor
 from typing import Union, Sequence
 
 from pyarrow import parquet
@@ -35,6 +38,7 @@ class ParquetBiglist(BiglistBase):
         suffix: str = ".parquet",
         keep_files: bool = None,
         shuffle: bool = False,
+        thread_pool_executor: ThreadPoolExecutor = None,
         **kwargs,
     ):
         """
@@ -70,19 +74,9 @@ class ParquetBiglist(BiglistBase):
         elif path.is_file():
             raise FileExistsError(path)
 
-        # TODO: threading
-        files = []
-        for p in data_path:
-            if p.is_file():
-                if suffix == "*" or p.name.endswith(suffix):
-                    files.append(p)
-            else:
-                for pp in p.riterdir():
-                    if suffix == "*" or pp.name.endswith(suffix):
-                        files.append(pp)
-        assert files
         datafiles = []
-        for f in files:
+
+        def get_file_meta(f): 
             meta = parquet.read_metadata(str(f))
             datafiles.append(
                 {
@@ -94,6 +88,25 @@ class ParquetBiglist(BiglistBase):
                 }
             )
 
+        if thread_pool_executor is not None:
+            pool = thread_pool_executor
+        else:
+            pool = ThreadPoolExecutor(min(32, (os.cpu_count() or 1) + 4))
+        tasks = []
+        for p in data_path:
+            if p.is_file():
+                if suffix == "*" or p.name.endswith(suffix):
+                    pool.submit(get_file_meta, p)
+            else:
+                for q in p.riterdir():
+                    if suffix == "*" or q.name.endswith(suffix):
+                        pool.submit(get_file_meta, q)
+        assert tasks
+        if thread_pool_executor is None:
+            pool.shutdown()
+        else:
+            concurrent.futures.wait(tasks)
+
         if shuffle:
             random.shuffle(datafiles)
 
@@ -101,7 +114,7 @@ class ParquetBiglist(BiglistBase):
             itertools.accumulate(v["num_rows"] for v in datafiles)
         )
 
-        obj = cls(path, require_exists=False, **kwargs)  # type: ignore
+        obj = cls(path, require_exists=False, thread_pool_executor=thread_pool_executor, **kwargs)  # type: ignore
         obj.keep_files = keep_files
         obj.info["datafiles"] = datafiles
         obj.info["datafiles_cumlength"] = datafiles_cumlength

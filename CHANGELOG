@@ -1,6 +1,6 @@
 == in progress ==
 
-- Added read-only Biglist variant backed by Parquet data; class `BigParquetList`.
+- Added read-only Biglist variant backed by Parquet data; class `ParquetBiglist`.
 
 
 Release 0.6.9

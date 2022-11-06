@@ -7,7 +7,7 @@ except ImportError:
     ParquetBiglist = None
 
 
-__version__ = "0.7.0b1"
+__version__ = "0.7.0b2"
 
 
 __all__ = [

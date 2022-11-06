@@ -1,5 +1,3 @@
-from __future__ import annotations  # will no longer needed in >= 3.10
-
 import bisect
 import logging
 import os
@@ -33,6 +31,113 @@ T = TypeVar("T")
 class FileLoaderMode:
     ITER = 0
     RAND = 1
+
+
+class FileView(Sequence[T]):
+    '''
+    A main use case of FileView is to pass these around in
+    `multiprocessing` code for concurrent data processing.
+    A `FileView` does not load data upon creation, and lends
+    itself to pickling.
+    '''
+    def __init__(self, file: Upath, loader: Callable):
+        self._file = file
+        self._loader = loader
+        self._data = None
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} into '{self._file}', with loader {self._loader}>"
+
+    def __str__(self):
+        return self.__repr__()
+
+    @property
+    def data(self) -> Sequence[T]:
+        if self._data is None:
+            self._data = self._loader(self._file, FileLoaderMode.RAND)
+        return self._data
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __getitem__(self, idx: Union[int, slice]) -> T:
+        return self.data[idx]
+
+    def __iter__(self):
+        return iter(self.data)
+
+
+class ListView(Sequence[T]):
+    '''
+    A main use case of `ListView` is to provide slicing capabilities
+    to `Biglist` via a call to `Biglist.view()`.
+    '''
+    def __init__(self, list_: Sequence[T], range_: range = None):
+        """
+        This provides a "window" into the sequence `list_`,
+        which is often a `Biglist` or another `ListView`.
+
+        An object of `ListView` is created by `Biglist.view()` or
+        by slicing a `ListView`.
+        User should not attempt to create an object of this class directly.
+
+        The main purpose of this class is to provide slicing over `Biglist`.
+
+        During the use of this object, it is assumed that the underlying
+        `list_` is not changing. Otherwise the results may be incorrect.
+        """
+        self._list = list_
+        self._range = range_
+
+    def __repr__(self):
+        if self._range is None:
+            return f"<{self.__class__.__name__} into {self._list}>"
+        return f"<{self.__class__.__name__} into {self._list}[{self._range}]>"
+
+    def __str__(self):
+        return self.__repr__()
+
+    def __len__(self) -> int:
+        if self._range is None:
+            return len(self._list)
+        return len(self._range)
+
+    def __bool__(self) -> bool:
+        return len(self) > 0
+
+    def __getitem__(self, idx: Union[int, slice]) -> T:
+        """
+        Element access by a single index or by slice.
+        Negative index and standard slice syntax both work as expected.
+
+        Sliced access returns a new `ListView` object.
+        """
+        if isinstance(idx, int):
+            if self._range is None:
+                return self._list[idx]
+            return self._list[self._range[idx]]
+
+        if isinstance(idx, slice):
+            if self._range is None:
+                range_ = range(len(self._list))[idx]
+            else:
+                range_ = self._range[idx]
+            return self.__class__(self._list, range_)
+
+        raise TypeError(
+            f"{self.__class__.__name__} indices must be integers or slices, not {type(idx).__name__}"
+        )
+
+    def __iter__(self):
+        if self._range is None:
+            yield from self._list
+        else:
+            for i in self._range:
+                yield self._list[i]
+
+    @property
+    def raw(self) -> Sequence[T]:
+        return self._list
 
 
 class BiglistBase(Sequence[T]):
@@ -417,100 +522,3 @@ class BiglistBase(Sequence[T]):
 
     def read_datafile(self, file: Union[Upath, int]):
         return self.file_view(file).data
-
-
-class FileView(Sequence[T]):
-    def __init__(self, file: Upath, loader: Callable):
-        self._file = file
-        self._loader = loader
-        self._data = None
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} into '{self._file}', with loader {self._loader}>"
-
-    def __str__(self):
-        return self.__repr__()
-
-    @property
-    def data(self) -> Sequence[T]:
-        if self._data is None:
-            self._data = self._loader(self._file, FileLoaderMode.RAND)
-        return self._data
-
-    def __len__(self) -> int:
-        return len(self.data)
-
-    def __getitem__(self, idx: Union[int, slice]) -> T:
-        return self.data[idx]
-
-    def __iter__(self):
-        return iter(self.data)
-
-
-class ListView(Sequence[T]):
-    def __init__(self, list_: Sequence[T], range_: range = None):
-        """
-        This provides a "window" into the sequence `list_`,
-        which is often a `Biglist` or another `ListView`.
-
-        An object of `ListView` is created by `Biglist.view()` or
-        by slicing a `ListView`.
-        User should not attempt to create an object of this class directly.
-
-        The main purpose of this class is to provide slicing over `Biglist`.
-
-        During the use of this object, it is assumed that the underlying
-        `list_` is not changing. Otherwise the results may be incorrect.
-        """
-        self._list = list_
-        self._range = range_
-
-    def __repr__(self):
-        if self._range is None:
-            return f"<{self.__class__.__name__} into {self._list}>"
-        return f"<{self.__class__.__name__} into {self._list}[{self._range}]>"
-
-    def __str__(self):
-        return self.__repr__()
-
-    def __len__(self) -> int:
-        if self._range is None:
-            return len(self._list)
-        return len(self._range)
-
-    def __bool__(self) -> bool:
-        return len(self) > 0
-
-    def __getitem__(self, idx: Union[int, slice]) -> T:
-        """
-        Element access by a single index or by slice.
-        Negative index and standard slice syntax both work as expected.
-
-        Sliced access returns a new `ListView` object.
-        """
-        if isinstance(idx, int):
-            if self._range is None:
-                return self._list[idx]
-            return self._list[self._range[idx]]
-
-        if isinstance(idx, slice):
-            if self._range is None:
-                range_ = range(len(self._list))[idx]
-            else:
-                range_ = self._range[idx]
-            return self.__class__(self._list, range_)
-
-        raise TypeError(
-            f"{self.__class__.__name__} indices must be integers or slices, not {type(idx).__name__}"
-        )
-
-    def __iter__(self):
-        if self._range is None:
-            yield from self._list
-        else:
-            for i in self._range:
-                yield self._list[i]
-
-    @property
-    def raw(self) -> Sequence[T]:
-        return self._list

@@ -6,7 +6,8 @@ from typing import Union, Sequence
 
 from pyarrow import parquet
 from upathlib import Upath
-from ._base import BiglistBase, PathType, resolve_path, is_path, FileLoaderMode
+from upathlib.util import PathType, resolve_path, is_path
+from ._base import BiglistBase, FileLoaderMode
 
 
 class BigParquetList(BiglistBase):

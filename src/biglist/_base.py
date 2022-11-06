@@ -10,7 +10,6 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime
 from multiprocessing.util import Finalize
-from pathlib import Path
 from typing import (
     Callable,
     Iterator,
@@ -23,29 +22,12 @@ from typing import (
 )
 
 from upathlib import LocalUpath, Upath  # type: ignore
-from upathlib.gcp import GcpBlobUpath
+from upathlib.util import PathType, resolve_path
 
 logger = logging.getLogger(__name__)
 
 
 T = TypeVar("T")
-
-PathType = Union[str, Path, Upath]
-
-
-def is_path(p):
-    return isinstance(p, str) or isinstance(p, Path) or isinstance(p, Upath)
-
-
-def resolve_path(p: PathType) -> Upath:
-    if isinstance(p, str):
-        if p.startswith("gs://"):
-            return GcpBlobUpath(p)
-        p = Path(p)
-    if isinstance(p, Path):
-        return LocalUpath(str(p.absolute()))
-    assert isinstance(p, Upath)
-    return p
 
 
 class FileLoaderMode:

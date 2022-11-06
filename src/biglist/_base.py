@@ -39,7 +39,7 @@ def is_path(p):
 
 def resolve_path(p: PathType) -> Upath:
     if isinstance(p, str):
-        if p.startswith('gs://'):
+        if p.startswith("gs://"):
             return GcpBlobUpath(p)
         p = Path(p)
     if isinstance(p, Path):
@@ -54,9 +54,9 @@ class FileLoaderMode:
 
 
 class BiglistBase(Sequence[T]):
-    '''
+    """
     This base class contains code mainly concerning *read* only.
-    '''
+    """
 
     @classmethod
     def get_temp_path(cls) -> Upath:
@@ -70,9 +70,9 @@ class BiglistBase(Sequence[T]):
 
     @classmethod
     def load_data_file(cls, path: Upath, mode: int) -> Sequence[T]:
-        '''
+        """
         `mode`: take values defined in `FileLoaderMode`.
-        '''
+        """
         raise NotImplementedError
 
     @classmethod
@@ -128,7 +128,9 @@ class BiglistBase(Sequence[T]):
     @property
     def _thread_pool(self):
         if self._thread_pool_ is None:
-            executor = ThreadPoolExecutor(max(self._n_read_threads, self._n_write_threads))
+            executor = ThreadPoolExecutor(
+                max(self._n_read_threads, self._n_write_threads)
+            )
             self._thread_pool_ = executor
             Finalize(self, executor.shutdown)
 
@@ -220,9 +222,7 @@ class BiglistBase(Sequence[T]):
                 )  # pylint: disable=access-member-before-definition
 
         # Now find the data file that contains the target item.
-        ifile = bisect.bisect_right(
-            data_files_cumlength, idx, lo=ifile0, hi=ifile1
-        )
+        ifile = bisect.bisect_right(data_files_cumlength, idx, lo=ifile0, hi=ifile1)
         # `ifile`: index of data file that contains the target element.
         # `n`: total length before `ifile`.
         if ifile == 0:
@@ -261,7 +261,9 @@ class BiglistBase(Sequence[T]):
         ndatafiles = len(datafiles)
 
         if ndatafiles == 1:
-            yield self.load_data_file(self.get_data_file(datafiles, 0), FileLoaderMode.ITER)
+            yield self.load_data_file(
+                self.get_data_file(datafiles, 0), FileLoaderMode.ITER
+            )
         elif ndatafiles > 1:
             max_workers = min(self._n_read_threads, ndatafiles)
             tasks = queue.Queue(max_workers)
@@ -269,7 +271,9 @@ class BiglistBase(Sequence[T]):
 
             for i in range(max_workers):
                 t = executor.submit(
-                    self.load_data_file, self.get_data_file(datafiles, i), FileLoaderMode.ITER
+                    self.load_data_file,
+                    self.get_data_file(datafiles, i),
+                    FileLoaderMode.ITER,
                 )
                 tasks.put(t)
             nfiles_queued = max_workers
@@ -434,7 +438,7 @@ class ListView(Sequence[T]):
         Negative index and standard slice syntax both work as expected.
 
         Sliced access returns a new `ListView` object.
-        """                                                                                                                                                
+        """
         if isinstance(idx, int):
             if self._range is None:
                 return self._list[idx]

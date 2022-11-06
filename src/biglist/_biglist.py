@@ -60,7 +60,9 @@ class Dumper:
         self, file_dumper: Callable[[Upath, list], None], data_file: Upath, data: list
     ):
         if self._sem is None:
-            self._sem = threading.Semaphore(min(self._n_threads, self._executor._max_workers))
+            self._sem = threading.Semaphore(
+                min(self._n_threads, self._executor._max_workers)
+            )
         self._sem.acquire()  # Wait here if the executor is busy at capacity.
         task = self._executor.submit(file_dumper, data_file, data)
         self._task_file_data[task] = (data_file.name, data)
@@ -496,7 +498,6 @@ class Biglist(BiglistBase[T]):
     def multiplex_done(self, task_id: str) -> bool:
         ss = self.multiplex_stat(task_id)
         return ss["next"] == ss["total"]
-
 
 
 class JsonByteSerializer(ByteSerializer):

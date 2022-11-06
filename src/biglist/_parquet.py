@@ -10,17 +10,17 @@ from ._base import BiglistBase, PathType, resolve_path, is_path, FileLoaderMode
 
 
 class BigParquetList(BiglistBase):
-
     @classmethod
-    def new(cls,
-            data_path: Union[PathType, Sequence[PathType]],
-            path: PathType = None,
-            *,
-            suffix: str = '.parquet',
-            keep_files: bool = None,
-            shuffle: bool = False,
-            **kwargs,
-            ):
+    def new(
+        cls,
+        data_path: Union[PathType, Sequence[PathType]],
+        path: PathType = None,
+        *,
+        suffix: str = ".parquet",
+        keep_files: bool = None,
+        shuffle: bool = False,
+        **kwargs,
+    ):
         if is_path(data_path):
             data_path = [resolve_path(data_path)]
         else:
@@ -43,11 +43,11 @@ class BigParquetList(BiglistBase):
         files = []
         for p in data_path:
             if p.is_file():
-                if suffix == '*' or p.name.endswith(suffix):
+                if suffix == "*" or p.name.endswith(suffix):
                     files.append(p)
             else:
                 for pp in p.riterdir():
-                    if suffix == '*' or pp.name.endswith(suffix):
+                    if suffix == "*" or pp.name.endswith(suffix):
                         files.append(pp)
         assert files
         datafiles = []
@@ -55,30 +55,29 @@ class BigParquetList(BiglistBase):
             meta = parquet.read_metadata(str(f))
             datafiles.append(
                 {
-                    'path': f,
-                    'num_rows': meta.num_rows,
-                    'row_groups_num_rows': [
-                        meta.row_group(k).num_rows
-                        for k in range(meta.num_row_groups)
+                    "path": f,
+                    "num_rows": meta.num_rows,
+                    "row_groups_num_rows": [
+                        meta.row_group(k).num_rows for k in range(meta.num_row_groups)
                     ],
                 }
             )
 
         if shuffle:
             random.shuffle(datafiles)
-            
+
         datafiles_cumlength = list(
-            itertools.accumulate(v['num_rows'] for v in datafiles)
+            itertools.accumulate(v["num_rows"] for v in datafiles)
         )
 
         obj = cls(path, require_exists=False, **kwargs)  # type: ignore
-        obj.info['datafiles'] = datafiles
-        obj.info['datafiles_cumlength'] = datafiles_cumlength
+        obj.info["datafiles"] = datafiles
+        obj.info["datafiles_cumlength"] = datafiles_cumlength
         if keep_files:
-            for v in obj.info['datafiles']:
-                v['path'] = str(v['path'])  # because Upath object does not support JSON
+            for v in obj.info["datafiles"]:
+                v["path"] = str(v["path"])  # because Upath object does not support JSON
             obj._info_file.write_json(obj.info)
- 
+
         return obj
 
     @classmethod
@@ -86,10 +85,10 @@ class BigParquetList(BiglistBase):
         return ParquetData(path, mode)
 
     def get_data_files(self):
-        return self.info['datafiles'], self.info['datafiles_cumlength']
+        return self.info["datafiles"], self.info["datafiles_cumlength"]
 
     def get_data_file(self, datafiles, idx):
-        return resolve_path(datafiles[idx]['path'])
+        return resolve_path(datafiles[idx]["path"])
 
 
 class ParquetData(collections.abc.Sequence):
@@ -98,7 +97,7 @@ class ParquetData(collections.abc.Sequence):
     #
     # If you want to use the  `arrow.parquet` methods directly,
     # use it via `self.file`, or `self.table` if not None.
-    
+
     # TODO: allow selecting columns.
 
     def __init__(self, path: Upath, mode: int):
@@ -118,7 +117,7 @@ class ParquetData(collections.abc.Sequence):
 
     def __len__(self):
         return self.num_rows
-    
+
     def __getitem__(self, idx: Union[int, slice]):
         if isinstance(idx, slice):
             raise NotImplementedError
@@ -137,8 +136,7 @@ class ParquetData(collections.abc.Sequence):
         if self._row_groups_num_rows is None:
             meta = self.file.metadata
             self._row_groups_num_rows = [
-                meta.row_group(i).num_rows
-                for i in range(meta.num_row_groups)
+                meta.row_group(i).num_rows for i in range(meta.num_row_groups)
             ]
             self._row_groups_num_rows_cumsum = list(
                 itertools.accumulate(self._row_groups_num_rows)
@@ -156,7 +154,7 @@ class ParquetData(collections.abc.Sequence):
             return row_group.column(0).take([idx_in_row_group])[0]
         else:
             return row_group.take([idx_in_row_group]).to_pylist()[0]  # dict
-    
+
     def __iter__(self):
         if self.table is None:
             for batch in self.file.iter_batches(self._batch_size):
@@ -169,5 +167,3 @@ class ParquetData(collections.abc.Sequence):
                 yield from self.table.column(0)
             else:
                 yield from self.table.to_pylist()
-    
-        

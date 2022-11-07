@@ -118,7 +118,7 @@ class ParquetBiglist(BiglistBase):
         obj.keep_files = keep_files
         obj.info["datafiles"] = datafiles
         obj.info["datafiles_cumlength"] = datafiles_cumlength
-        obj.info["storage_format"] = 'parquet'
+        obj.info["storage_format"] = "parquet"
         obj._info_file.write_json(obj.info)
 
         return obj

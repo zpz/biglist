@@ -118,15 +118,10 @@ class ParquetBiglist(BiglistBase):
         obj.keep_files = keep_files
         obj.info["datafiles"] = datafiles
         obj.info["datafiles_cumlength"] = datafiles_cumlength
+        obj.info["storage_format"] = 'parquet'
         obj._info_file.write_json(obj.info)
 
         return obj
-
-    def __del__(self) -> None:
-        if self.keep_files:
-            self.flush()
-        else:
-            self.destroy()
 
     @classmethod
     def load_data_file(cls, path: Upath, mode: int):

@@ -8,7 +8,7 @@ from biglist import ParquetBiglist
 
 def test_big_parquet_list():
     path = LocalUpath('/tmp/test-biglist/parquet')
-    path.rmrf()
+    path.rmrf(quiet=True)
     path.localpath.mkdir(parents=True)
     
     N = 10000

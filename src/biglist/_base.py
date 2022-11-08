@@ -210,8 +210,8 @@ class BiglistBase(Sequence[T]):
                 )
             self.info = {}
 
-        self._n_read_threads = 5
-        self._n_write_threads = 5
+        self._n_read_threads = 3
+        self._n_write_threads = 3
         self.keep_files = True
 
     def __del__(self) -> None:
@@ -234,7 +234,7 @@ class BiglistBase(Sequence[T]):
         self._read_buffer_file_idx = None
         self._read_buffer_item_range = None
         self._append_buffer = []
-        self.path.rmrf()
+        self.path.rmrf(quiet=True)
 
     def __repr__(self):
         return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data files>"

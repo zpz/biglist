@@ -110,7 +110,7 @@ class ParquetBiglist(BiglistBase):
         for k, t in enumerate(tasks):
             _ = t.result()
             if (k + 1) % 1000 == 0:
-                logger.info('processed %d files', k + 1)
+                logger.info("processed %d files", k + 1)
 
         if thread_pool_executor is None:
             pool.shutdown()

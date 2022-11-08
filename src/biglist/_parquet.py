@@ -1,16 +1,21 @@
 import bisect
 import collections.abc
-import concurrent.futures
 import itertools
+import logging
 import os
+import queue
 import random
 from concurrent.futures import ThreadPoolExecutor
 from typing import Union, Sequence
 
-from pyarrow import parquet
-from upathlib import Upath
+from pyarrow.parquet import ParquetFile, read_metadata
+from pyarrow.fs import FileSystem
+from upathlib import Upath, LocalUpath
 from upathlib.util import PathType, resolve_path, is_path
 from ._base import BiglistBase, FileLoaderMode
+
+
+logger = logging.getLogger(__name__)
 
 
 class ParquetBiglist(BiglistBase):
@@ -74,11 +79,11 @@ class ParquetBiglist(BiglistBase):
         elif path.is_file():
             raise FileExistsError(path)
 
-        datafiles = []
+        q_datafiles = queue.Queue()
 
-        def get_file_meta(f):
-            meta = parquet.read_metadata(str(f))
-            datafiles.append(
+        def get_file_meta(f, q):
+            meta = read_metadata(str(f))
+            q.put(
                 {
                     "path": str(f),  # because Upath object does not support JSON
                     "num_rows": meta.num_rows,
@@ -96,17 +101,23 @@ class ParquetBiglist(BiglistBase):
         for p in data_path:
             if p.is_file():
                 if suffix == "*" or p.name.endswith(suffix):
-                    tasks.append(pool.submit(get_file_meta, p))
+                    tasks.append(pool.submit(get_file_meta, p, q_datafiles))
             else:
                 for q in p.riterdir():
                     if suffix == "*" or q.name.endswith(suffix):
-                        tasks.append(pool.submit(get_file_meta, q))
+                        tasks.append(pool.submit(get_file_meta, q, q_datafiles))
         assert tasks
+        for k, t in enumerate(tasks):
+            _ = t.result()
+            if (k + 1) % 1000 == 0:
+                logger.info("processed %d files", k + 1)
+
         if thread_pool_executor is None:
             pool.shutdown()
-        else:
-            concurrent.futures.wait(tasks)
 
+        datafiles = []
+        for _ in range(q_datafiles.qsize()):
+            datafiles.append(q_datafiles.get())
         if shuffle:
             random.shuffle(datafiles)
 
@@ -118,15 +129,10 @@ class ParquetBiglist(BiglistBase):
         obj.keep_files = keep_files
         obj.info["datafiles"] = datafiles
         obj.info["datafiles_cumlength"] = datafiles_cumlength
+        obj.info["storage_format"] = "parquet"
         obj._info_file.write_json(obj.info)
 
         return obj
-
-    def __del__(self) -> None:
-        if self.keep_files:
-            self.flush()
-        else:
-            self.destroy()
 
     @classmethod
     def load_data_file(cls, path: Upath, mode: int):
@@ -159,7 +165,15 @@ class ParquetFileData(collections.abc.Sequence):
 
     def __init__(self, path: Upath, mode: int):
         self.path = path
-        self.file = parquet.ParquetFile(str(path))
+
+        if isinstance(path, LocalUpath):
+            self.file = ParquetFile(str(path))
+        else:
+            # Work around a pyarrow 10.0.0 bug:
+            #   ParquetFile does not recognize str cloud path
+            ff, pp = FileSystem.from_uri(str(path))
+            self.file = ParquetFile(ff.open_input_file(pp))
+
         self.num_columns = self.file.metadata.num_columns
         self.num_rows = self.file.metadata.num_rows
         self.num_row_groups = self.file.metadata.num_row_groups

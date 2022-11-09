@@ -77,7 +77,11 @@ class ParquetBiglist(BiglistBase):
         object of this class (by leaving `path` at the default `None`) "on-the-fly"
         for one-time use.
         """
-        if isinstance(data_path, str) or isinstance(data_path, Path) or isinstance(data_path, Upath):
+        if (
+            isinstance(data_path, str)
+            or isinstance(data_path, Path)
+            or isinstance(data_path, Upath)
+        ):
             #  TODO: in py 3.10, we will be able to do `isinstance(data_path, PathType)`
             data_path = [resolve_path(data_path)]
         else:
@@ -144,7 +148,7 @@ class ParquetBiglist(BiglistBase):
 
         obj = cls(path, require_exists=False, thread_pool_executor=thread_pool_executor, **kwargs)  # type: ignore
         obj.keep_files = keep_files
-        obj.info['datapath'] = [str(p) for p in data_path]
+        obj.info["datapath"] = [str(p) for p in data_path]
         obj.info["datafiles"] = datafiles
         obj.info["datafiles_cumlength"] = datafiles_cumlength
         obj.info["storage_format"] = "parquet"

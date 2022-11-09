@@ -20,7 +20,7 @@ from typing import (
 )
 from uuid import uuid4
 
-from upathlib import Upath  # type: ignore
+from upathlib import Upath, PathType, resolve_path  # type: ignore
 from upathlib.serializer import (
     ByteSerializer,
     _loads,
@@ -33,7 +33,6 @@ from upathlib.serializer import (
     ZOrjsonSerializer,
     ZstdOrjsonSerializer,
 )
-from upathlib.util import PathType, resolve_path
 from ._base import BiglistBase
 
 
@@ -230,8 +229,6 @@ class Biglist(BiglistBase[T]):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.keep_files = True
-        self._file_dumper = None
         self._data_files: Optional[list] = None
         self._data_files_cumlength_ = []
 

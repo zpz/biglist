@@ -6,13 +6,29 @@ import os
 import queue
 import random
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Union, Sequence
 
-from pyarrow.parquet import ParquetFile, read_metadata
+from pyarrow.parquet import ParquetFile
 from pyarrow.fs import FileSystem
-from upathlib import Upath, LocalUpath
-from upathlib.util import PathType, resolve_path, is_path
+from upathlib import Upath, LocalUpath, PathType, resolve_path
 from ._base import BiglistBase, FileLoaderMode
+
+# If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
+# and "credential_token_expiration". These can be obtained via
+# a "google.oauth2.service_account.Credentials" object, e.g.
+#
+#   cred = google.oauth2.service_account.Credentials.from_service_info(
+#       info_json, scopes=['https://www.googleapis.com/auth/cloud-platform'])
+# or
+#   cred = google.auth.default(scopes=['https://www.googleapis.com/auth/cloud-platform'])
+#
+#   auth_req = google.auth.transport.requests.Request()
+#   cred.refresh(auth_req)
+#   # now `cred` has `token` and `expiry`; expiration appears to be in a few hours
+#
+#   gcs = pyarrow.fs.GcsFileSystem(access_token=cred.token, credential_token_expiration=cred.expiry)
+#   pfile = pyarrow.parquet.ParquetFile(gcs.open_input_file('bucket-name/path/to/file.parquet'))
 
 
 logger = logging.getLogger(__name__)
@@ -61,7 +77,12 @@ class ParquetBiglist(BiglistBase):
         object of this class (by leaving `path` at the default `None`) "on-the-fly"
         for one-time use.
         """
-        if is_path(data_path):
+        if (
+            isinstance(data_path, str)
+            or isinstance(data_path, Path)
+            or isinstance(data_path, Upath)
+        ):
+            #  TODO: in py 3.10, we will be able to do `isinstance(data_path, PathType)`
             data_path = [resolve_path(data_path)]
         else:
             data_path = [resolve_path(p) for p in data_path]
@@ -81,11 +102,11 @@ class ParquetBiglist(BiglistBase):
 
         q_datafiles = queue.Queue()
 
-        def get_file_meta(f, q):
-            meta = read_metadata(str(f))
+        def get_file_meta(f, p, q):
+            meta = f(p).metadata
             q.put(
                 {
-                    "path": str(f),  # because Upath object does not support JSON
+                    "path": str(p),  # because Upath object does not support JSON
                     "num_rows": meta.num_rows,
                     "row_groups_num_rows": [
                         meta.row_group(k).num_rows for k in range(meta.num_row_groups)
@@ -98,14 +119,19 @@ class ParquetBiglist(BiglistBase):
         else:
             pool = ThreadPoolExecutor(min(32, (os.cpu_count() or 1) + 4))
         tasks = []
+        read_parquet = cls.read_parquet_file
         for p in data_path:
             if p.is_file():
                 if suffix == "*" or p.name.endswith(suffix):
-                    tasks.append(pool.submit(get_file_meta, p, q_datafiles))
+                    tasks.append(
+                        pool.submit(get_file_meta, read_parquet, p, q_datafiles)
+                    )
             else:
                 for q in p.riterdir():
                     if suffix == "*" or q.name.endswith(suffix):
-                        tasks.append(pool.submit(get_file_meta, q, q_datafiles))
+                        tasks.append(
+                            pool.submit(get_file_meta, read_parquet, q, q_datafiles)
+                        )
         assert tasks
         for k, t in enumerate(tasks):
             _ = t.result()
@@ -127,6 +153,7 @@ class ParquetBiglist(BiglistBase):
 
         obj = cls(path, require_exists=False, thread_pool_executor=thread_pool_executor, **kwargs)  # type: ignore
         obj.keep_files = keep_files
+        obj.info["datapath"] = [str(p) for p in data_path]
         obj.info["datafiles"] = datafiles
         obj.info["datafiles_cumlength"] = datafiles_cumlength
         obj.info["storage_format"] = "parquet"
@@ -134,9 +161,27 @@ class ParquetBiglist(BiglistBase):
 
         return obj
 
+    def __repr__(self):
+        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data file(s) stored at {self.info['datapath']}>"
+
+    @classmethod
+    def read_parquet_file(cls, path: Upath):
+        if isinstance(path, LocalUpath):
+            return ParquetFile(str(path))
+        else:
+            # Work around a pyarrow 10.0.0 bug:
+            #   ParquetFile does not recognize str cloud path
+            # Use may customize this function to pass in cloud
+            # credentials to `FileSystem` so that it does not
+            # fall back to default ways of finding credentials.
+            ff, pp = FileSystem.from_uri(str(path))
+            return ParquetFile(ff.open_input_file(pp))
+
     @classmethod
     def load_data_file(cls, path: Upath, mode: int):
-        return ParquetFileData(path, mode)
+        # This method could be useful by itself. User may want
+        # to make a free-standing function as a trivial wrapper of this.
+        return ParquetFileData(cls.read_parquet_file(path), mode=mode)
 
     def get_data_files(self):
         return self.info["datafiles"], self.info["datafiles_cumlength"]
@@ -161,40 +206,48 @@ class ParquetFileData(collections.abc.Sequence):
     # If you want to use the  `arrow.parquet` methods directly,
     # use it via `self.file`, or `self.table` if not None.
 
-    # TODO: allow selecting columns.
+    def __init__(
+        self,
+        file: ParquetFile,
+        *,
+        mode: int = FileLoaderMode.RAND,
+        columns: Sequence[str] = None,
+    ):
+        """
+        `columns`: if not None, only these columns will be read from the file.
+        """
+        self.file = file
+        meta = file.metadata
+        self.metadata = meta
 
-    def __init__(self, path: Upath, mode: int):
-        self.path = path
+        self._columns = columns
 
-        if isinstance(path, LocalUpath):
-            self.file = ParquetFile(str(path))
-        else:
-            # Work around a pyarrow 10.0.0 bug:
-            #   ParquetFile does not recognize str cloud path
-            ff, pp = FileSystem.from_uri(str(path))
-            self.file = ParquetFile(ff.open_input_file(pp))
-
-        self.num_columns = self.file.metadata.num_columns
-        self.num_rows = self.file.metadata.num_rows
-        self.num_row_groups = self.file.metadata.num_row_groups
+        self.num_columns = meta.num_columns if columns is None else len(columns)
+        self.num_rows = meta.num_rows
+        self.num_row_groups = meta.num_row_groups
         self._row_groups_num_rows = None
         self._row_groups_num_rows_cumsum = None
-        self._row_groups = [None] * self.num_row_groups
+        self._row_groups = None
         self._data = None
         if mode == FileLoaderMode.ITER:
             _ = self.data
-        self._batch_size = 10000
+        self._batch_size = 10_000
 
     @property
     def data(self):
         if self._data is None:
-            self._data = self.file.read()
+            self._data = self.file.read(columns=self._columns)
         return self._data
 
     def __len__(self):
         return self.num_rows
 
     def __getitem__(self, idx: int):
+        # Get one row.
+        # If data has a single column, return the value on the specified row.
+        # The return is an "arrow scalar" type such as `pyarrow.lib.StringScalar`.
+        # If data has multiple columns, return a dict with keys being column names
+        # and values being "arrow scalar" types.
         if idx < 0:
             idx = self.num_rows + idx
         if idx < 0 or idx >= self.num_rows:
@@ -202,41 +255,65 @@ class ParquetFileData(collections.abc.Sequence):
 
         if self._data is not None:
             if self._data.num_columns == 1:
-                return self._data.column(0).take([idx])[0]
+                return self._data.column(0)[idx]
             else:
-                return self._data.take([idx]).to_pylist()[0]  # dict
+                return {
+                    col: self._data.column(col)[idx] for col in self._data.column_names
+                }
 
         if self._row_groups_num_rows is None:
-            meta = self.file.metadata
+            meta = self.metadata
             self._row_groups_num_rows = [
-                meta.row_group(i).num_rows for i in range(meta.num_row_groups)
+                meta.row_group(i).num_rows for i in range(self.num_row_groups)
             ]
             self._row_groups_num_rows_cumsum = list(
                 itertools.accumulate(self._row_groups_num_rows)
             )
 
+        if self._row_groups is None:
+            self._row_groups = [None] * self.num_row_groups
+
         igrp = bisect.bisect_right(self._row_groups_num_rows_cumsum, idx)
         if self._row_groups[igrp] is None:
-            self._row_groups[igrp] = self.file.read_row_group(igrp)
+            self._row_groups[igrp] = self.file.read_row_group(
+                igrp, columns=self._columns
+            )
         if igrp == 0:
             idx_in_row_group = idx
         else:
             idx_in_row_group = idx - self._row_groups_num_rows_cumsum[igrp - 1]
         row_group = self._row_groups[igrp]
         if self.num_columns == 1:
-            return row_group.column(0).take([idx_in_row_group])[0]
+            return row_group.column(0)[idx_in_row_group]
+
         else:
-            return row_group.take([idx_in_row_group]).to_pylist()[0]  # dict
+            return {
+                col: row_group.column(col)[idx_in_row_group]
+                for col in row_group.column_names
+            }
 
     def __iter__(self):
         if self._data is None:
-            for batch in self.file.iter_batches(self._batch_size):
+            for batch in self.file.iter_batches(
+                batch_size=self._batch_size, columns=self._columns
+            ):
                 if batch.num_columns == 1:
                     yield from batch.column(0)
                 else:
-                    yield from batch.to_pylist()
+                    names = batch.schema.names
+                    for row in zip(*batch.columns):
+                        yield dict(zip(names, row))
         else:
             if self._data.num_columns == 1:
                 yield from self._data.column(0)
             else:
-                yield from self._data.to_pylist()
+                names = self._data.column_names
+                for row in zip(*self._data.columns):
+                    yield dict(zip(names, row))
+
+    def iter_batches(self, *, batch_size=None):
+        bs = batch_size or self._batch_size
+        if self._data is None:
+            yield from self.file.iter_batches(batch_size=bs, columns=self._columns)
+        else:
+            yield from self._data.to_batches(bs)

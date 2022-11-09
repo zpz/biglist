@@ -19,8 +19,7 @@ from typing import (
     TypeVar,
 )
 
-from upathlib import LocalUpath, Upath  # type: ignore
-from upathlib.util import PathType, resolve_path
+from upathlib import LocalUpath, Upath, PathType, resolve_path  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +36,19 @@ class FileView(Sequence[T]):
     """
     A main use case of FileView is to pass these around in
     `multiprocessing` code for concurrent data processing.
-    A `FileView` does not load data upon creation, and lends
-    itself to pickling.
+    A `FileView` object lends itself to pickling, and loads data
+    "lazily", meaning it does not load data upon creation, but
+    rather loads data only when need to.
     """
 
     def __init__(self, file: Upath, loader: Callable):
+        """
+        `loader`: a function that will load the data file and return
+            a Sequence. This could be a classmethod, static method,
+            and standing alone function, but can't be a lambda
+            function, because a `FileView` object often undergoes
+            pickling when it is passed between processes.
+        """
         self._file = file
         self._loader = loader
         self._data = None
@@ -83,10 +90,11 @@ class ListView(Sequence[T]):
         by slicing a `ListView`.
         User should not attempt to create an object of this class directly.
 
-        The main purpose of this class is to provide slicing over `Biglist`.
-
         During the use of this object, it is assumed that the underlying
         `list_` is not changing. Otherwise the results may be incorrect.
+
+        `list_` must support random access by index. It does not need
+        to support slicing.
         """
         self._list = list_
         self._range = range_
@@ -134,6 +142,8 @@ class ListView(Sequence[T]):
         if self._range is None:
             yield from self._list
         else:
+            # This could be inefficient, depending on
+            # the random-access performance of `self._list`.
             for i in self._range:
                 yield self._list[i]
 
@@ -146,14 +156,17 @@ class BiglistBase(Sequence[T]):
     """
     This base class contains code mainly concerning *read* only.
     The subclass `Biglist` adds functionalities for writing,
-    whereas other subclasses, such as `ParquetBiglist`, are read-only,
-    essentially defining a kind of "external Biglist".
+    whereas other subclasses, such as `ParquetBiglist`, may be read-only.
     """
 
     @classmethod
     def get_temp_path(cls) -> Upath:
-        """Subclass needs to customize this if it prefers to use
-        a remote blobstore for temp Biglist.
+        """
+        Return a temporary directory to host a new Biglist object,
+        if user does not specify a location for it.
+        Subclass may want to customize this if they prefer other ways
+        to find temporary locations. For example, they may want
+        to use a temporary location in a cloud storage.
         """
         path = LocalUpath(
             os.path.abspath(tempfile.gettempdir()), str(uuid.uuid4())
@@ -172,8 +185,10 @@ class BiglistBase(Sequence[T]):
     def lockfile(cls, file: Upath):
         # Although by default this uses `file.lock()`, it doesn't have to be.
         # All this method needs is to guarantee that the code block identified
-        # by `file` (essentially the name) is NOT excecuted concurrently
+        # by `file` (essentially the name) is NOT executed concurrently
         # by two "workers". It by no means has to be "locking that file".
+        #
+        # Refer to `Upath.lock`.
         with file.lock():
             yield
 
@@ -228,8 +243,9 @@ class BiglistBase(Sequence[T]):
 
         After this method is called, this object is no longer usable.
         """
-        if self._file_dumper is not None:
-            self._file_dumper.cancel()
+        # if self._file_dumper is not None:
+        #     self._file_dumper.cancel()
+        self._file_dumper = None
         self._read_buffer = None
         self._read_buffer_file_idx = None
         self._read_buffer_item_range = None
@@ -237,7 +253,7 @@ class BiglistBase(Sequence[T]):
         self.path.rmrf(quiet=True)
 
     def __repr__(self):
-        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data files>"
+        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data file(s)>"
 
     def __str__(self):
         return self.__repr__()
@@ -355,7 +371,6 @@ class BiglistBase(Sequence[T]):
         self._read_buffer_item_range = (n, data_files_cumlength[ifile])
 
         file = self.get_data_file(datafiles, ifile)
-
         # If the file is in a writing queue and has not finished writing yet:
         if self._file_dumper is None:
             data = None
@@ -460,7 +475,9 @@ class BiglistBase(Sequence[T]):
 
             file = self.get_data_file(datafiles, n_files_claimed)
             logger.debug('yielding data of file "%s"', file)
-            yield self.load_data_file(file, FileLoaderMode.ITER)
+            yield self.load_data_file(file, FileLoaderMode.RAND)
+            # Here, using `FileLoaderMode.ITER` is "eager" loading.
+            # `RAND` is "lazy" loading, giving user more choices.
 
     def concurrent_file_iter_stat(self, task_id: str) -> dict:
         info = self._concurrent_file_iter_info_file(task_id).read_json()
@@ -521,6 +538,3 @@ class BiglistBase(Sequence[T]):
     @property
     def num_datafiles(self) -> int:
         return len(self.get_data_files()[0])
-
-    def read_datafile(self, file: Union[Upath, int]):
-        return self.file_view(file).data

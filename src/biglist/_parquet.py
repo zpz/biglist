@@ -211,27 +211,52 @@ class ParquetFileData(collections.abc.Sequence):
         file: ParquetFile,
         *,
         mode: int = FileLoaderMode.RAND,
-        columns: Sequence[str] = None,
     ):
-        """
-        `columns`: if not None, only these columns will be read from the file.
-        """
         self.file = file
+
         meta = file.metadata
         self.metadata = meta
-
-        self._columns = columns
-
-        self.num_columns = meta.num_columns if columns is None else len(columns)
+        self.num_columns = meta.num_columns
         self.num_rows = meta.num_rows
         self.num_row_groups = meta.num_row_groups
         self._row_groups_num_rows = None
         self._row_groups_num_rows_cumsum = None
         self._row_groups = None
+
+        self._columns = None
+
         self._data = None
         if mode == FileLoaderMode.ITER:
             _ = self.data
-        self._batch_size = 10_000
+
+    def select_columns(self, cols: Union[str, Sequence[str]]):
+        # TODO: use `None` to re-select all?
+        if isinstance(cols, str):
+            cols = [cols]
+        assert len(set(cols)) == len(cols)  # no repeat values
+
+        if self._columns:
+            if all(col in self._columns for col in cols):
+                if len(cols) == len(self._columns):
+                    return self
+                if self._data is not None:
+                    self._data = self._data.select(cols)
+                if self._row_groups is not None:
+                    self._row_groups = [None if v is None else v.select(cols) for v in self._row_groups]
+            else:
+                # Usually you should not get it in this situation.
+                # Warn?
+                self._data = None
+                self._row_groups = None
+        else:
+            if self._data is not None:
+                self._data = self._data.select(cols)
+            if self._row_groups is not None:
+                self._row_groups = [None if v is None else v.select(cols) for v in self._row_groups]
+
+        self._columns = cols
+        self.num_columns = len(cols)
+        return self
 
     @property
     def data(self):
@@ -294,9 +319,7 @@ class ParquetFileData(collections.abc.Sequence):
 
     def __iter__(self):
         if self._data is None:
-            for batch in self.file.iter_batches(
-                batch_size=self._batch_size, columns=self._columns
-            ):
+            for batch in self.file.iter_batches(columns=self._columns):
                 if batch.num_columns == 1:
                     yield from batch.column(0)
                 else:
@@ -312,8 +335,7 @@ class ParquetFileData(collections.abc.Sequence):
                     yield dict(zip(names, row))
 
     def iter_batches(self, *, batch_size=None):
-        bs = batch_size or self._batch_size
         if self._data is None:
-            yield from self.file.iter_batches(batch_size=bs, columns=self._columns)
+            yield from self.file.iter_batches(batch_size=batch_size, columns=self._columns)
         else:
-            yield from self._data.to_batches(bs)
+            yield from self._data.to_batches(batch_size)

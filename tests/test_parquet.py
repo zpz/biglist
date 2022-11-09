@@ -62,7 +62,7 @@ def test_big_parquet_list():
     # specify columns
     print('')
     p = biglist.get_data_files()[0][0]['path']
-    d = ParquetFileData(biglist.read_parquet_file(p), columns=['value'])
+    d = ParquetFileData(biglist.read_parquet_file(p)).select_columns('value')
     assert isinstance(d[2], pyarrow.lib.StringScalar)
     print(d[2])
     print(list(ListView(d)[:7]))

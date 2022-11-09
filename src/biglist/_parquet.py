@@ -242,7 +242,9 @@ class ParquetFileData(collections.abc.Sequence):
                 if self._data is not None:
                     self._data = self._data.select(cols)
                 if self._row_groups is not None:
-                    self._row_groups = [None if v is None else v.select(cols) for v in self._row_groups]
+                    self._row_groups = [
+                        None if v is None else v.select(cols) for v in self._row_groups
+                    ]
             else:
                 # Usually you should not get it in this situation.
                 # Warn?
@@ -252,7 +254,9 @@ class ParquetFileData(collections.abc.Sequence):
             if self._data is not None:
                 self._data = self._data.select(cols)
             if self._row_groups is not None:
-                self._row_groups = [None if v is None else v.select(cols) for v in self._row_groups]
+                self._row_groups = [
+                    None if v is None else v.select(cols) for v in self._row_groups
+                ]
 
         self._columns = cols
         self.num_columns = len(cols)
@@ -336,6 +340,8 @@ class ParquetFileData(collections.abc.Sequence):
 
     def iter_batches(self, *, batch_size=None):
         if self._data is None:
-            yield from self.file.iter_batches(batch_size=batch_size, columns=self._columns)
+            yield from self.file.iter_batches(
+                batch_size=batch_size, columns=self._columns
+            )
         else:
             yield from self._data.to_batches(batch_size)

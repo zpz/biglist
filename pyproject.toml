@@ -9,7 +9,7 @@ authors = [
     {name = "Zepu Zhang", email = "zepu.zhang@gmail.com"},
 ]
 dependencies = [
-    "upathlib[gcs] >= 0.6.8b2",
+    "upathlib[gcs] >= 0.6.8b4",
 ]
 requires-python = ">=3.8"
 readme = "README.md"

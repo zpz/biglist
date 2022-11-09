@@ -19,8 +19,7 @@ from typing import (
     TypeVar,
 )
 
-from upathlib import LocalUpath, Upath  # type: ignore
-from upathlib.util import PathType, resolve_path
+from upathlib import LocalUpath, Upath, PathType, resolve_path  # type: ignore
 
 logger = logging.getLogger(__name__)
 

@@ -6,13 +6,29 @@ import os
 import queue
 import random
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Union, Sequence
 
 from pyarrow.parquet import ParquetFile, read_metadata
 from pyarrow.fs import FileSystem
-from upathlib import Upath, LocalUpath
-from upathlib.util import PathType, resolve_path, is_path
+from upathlib import Upath, LocalUpath, PathType, resolve_path
 from ._base import BiglistBase, FileLoaderMode
+
+# If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
+# and "credential_token_expiration". These can be obtained via
+# a "google.oauth2.service_account.Credentials" object, e.g.
+#
+#   cred = google.oauth2.service_account.Credentials.from_service_info(
+#       info_json, scopes=['https://www.googleapis.com/auth/cloud-platform'])
+# or
+#   cred = google.auth.default(scopes=['https://www.googleapis.com/auth/cloud-platform'])
+#
+#   auth_req = google.auth.transport.requests.Request()
+#   cred.refresh(auth_req)
+#   # now `cred` has `token` and `expiry`; expiration appears to be in a few hours
+#
+#   gcs = pyarrow.fs.GcsFileSystem(access_token=cred.token, credential_token_expiration=cred.expiry)
+#   pfile = pyarrow.parquet.ParquetFile(gcs.open_input_file('bucket-name/path/to/file.parquet'))
 
 
 logger = logging.getLogger(__name__)
@@ -61,7 +77,8 @@ class ParquetBiglist(BiglistBase):
         object of this class (by leaving `path` at the default `None`) "on-the-fly"
         for one-time use.
         """
-        if is_path(data_path):
+        if isinstance(data_path, str) or isinstance(data_path, Path) or isinstance(data_path, Upath):
+            #  TODO: in py 3.10, we will be able to do `isinstance(data_path, PathType)`
             data_path = [resolve_path(data_path)]
         else:
             data_path = [resolve_path(p) for p in data_path]
@@ -127,12 +144,16 @@ class ParquetBiglist(BiglistBase):
 
         obj = cls(path, require_exists=False, thread_pool_executor=thread_pool_executor, **kwargs)  # type: ignore
         obj.keep_files = keep_files
+        obj.info['datapath'] = [str(p) for p in data_path]
         obj.info["datafiles"] = datafiles
         obj.info["datafiles_cumlength"] = datafiles_cumlength
         obj.info["storage_format"] = "parquet"
         obj._info_file.write_json(obj.info)
 
         return obj
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data file(s) stored at {self.info['datapath']}>"
 
     @classmethod
     def load_data_file(cls, path: Upath, mode: int):

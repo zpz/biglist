@@ -236,7 +236,7 @@ class BiglistBase(Sequence[T]):
         self.path.rmrf(quiet=True)
 
     def __repr__(self):
-        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data files>"
+        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data file(s)>"
 
     def __str__(self):
         return self.__repr__()

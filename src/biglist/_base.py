@@ -42,13 +42,13 @@ class FileView(Sequence[T]):
     """
 
     def __init__(self, file: Upath, loader: Callable):
-        '''
+        """
         `loader`: a function that will load the data file and return
             a Sequence. This could be a classmethod, static method,
             and standing alone function, but can't be a lambda
             function, because a `FileView` object often undergoes
             pickling when it is passed between processes.
-        '''
+        """
         self._file = file
         self._loader = loader
         self._data = None
@@ -92,7 +92,7 @@ class ListView(Sequence[T]):
 
         During the use of this object, it is assumed that the underlying
         `list_` is not changing. Otherwise the results may be incorrect.
-        
+
         `list_` must support random access by index. It does not need
         to support slicing.
         """
@@ -161,13 +161,13 @@ class BiglistBase(Sequence[T]):
 
     @classmethod
     def get_temp_path(cls) -> Upath:
-        '''
+        """
         Return a temporary directory to host a new Biglist object,
         if user does not specify a location for it.
         Subclass may want to customize this if they prefer other ways
         to find temporary locations. For example, they may want
         to use a temporary location in a cloud storage.
-        '''
+        """
         path = LocalUpath(
             os.path.abspath(tempfile.gettempdir()), str(uuid.uuid4())
         )  # type: ignore

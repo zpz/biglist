@@ -123,11 +123,15 @@ class ParquetBiglist(BiglistBase):
         for p in data_path:
             if p.is_file():
                 if suffix == "*" or p.name.endswith(suffix):
-                    tasks.append(pool.submit(get_file_meta, read_parquet, p, q_datafiles))
+                    tasks.append(
+                        pool.submit(get_file_meta, read_parquet, p, q_datafiles)
+                    )
             else:
                 for q in p.riterdir():
                     if suffix == "*" or q.name.endswith(suffix):
-                        tasks.append(pool.submit(get_file_meta, read_parquet, q, q_datafiles))
+                        tasks.append(
+                            pool.submit(get_file_meta, read_parquet, q, q_datafiles)
+                        )
         assert tasks
         for k, t in enumerate(tasks):
             _ = t.result()
@@ -202,15 +206,16 @@ class ParquetFileData(collections.abc.Sequence):
     # If you want to use the  `arrow.parquet` methods directly,
     # use it via `self.file`, or `self.table` if not None.
 
-    def __init__(self,
-                 file: ParquetFile,
-                 *,
-                 mode: int = FileLoaderMode.RAND,
-                 columns: Sequence[str] = None,
-                 ):
-        '''
+    def __init__(
+        self,
+        file: ParquetFile,
+        *,
+        mode: int = FileLoaderMode.RAND,
+        columns: Sequence[str] = None,
+    ):
+        """
         `columns`: if not None, only these columns will be read from the file.
-        '''
+        """
         self.file = file
         meta = file.metadata
         self.metadata = meta
@@ -253,8 +258,7 @@ class ParquetFileData(collections.abc.Sequence):
                 return self._data.column(0)[idx]
             else:
                 return {
-                    col: self._data.column(col)[idx]
-                    for col in self._data.column_names
+                    col: self._data.column(col)[idx] for col in self._data.column_names
                 }
 
         if self._row_groups_num_rows is None:
@@ -271,7 +275,9 @@ class ParquetFileData(collections.abc.Sequence):
 
         igrp = bisect.bisect_right(self._row_groups_num_rows_cumsum, idx)
         if self._row_groups[igrp] is None:
-            self._row_groups[igrp] = self.file.read_row_group(igrp, columns=self._columns)
+            self._row_groups[igrp] = self.file.read_row_group(
+                igrp, columns=self._columns
+            )
         if igrp == 0:
             idx_in_row_group = idx
         else:
@@ -279,7 +285,7 @@ class ParquetFileData(collections.abc.Sequence):
         row_group = self._row_groups[igrp]
         if self.num_columns == 1:
             return row_group.column(0)[idx_in_row_group]
-        
+
         else:
             return {
                 col: row_group.column(col)[idx_in_row_group]
@@ -288,7 +294,9 @@ class ParquetFileData(collections.abc.Sequence):
 
     def __iter__(self):
         if self._data is None:
-            for batch in self.file.iter_batches(batch_size=self._batch_size, columns=self._columns):
+            for batch in self.file.iter_batches(
+                batch_size=self._batch_size, columns=self._columns
+            ):
                 if batch.num_columns == 1:
                     yield from batch.column(0)
                 else:

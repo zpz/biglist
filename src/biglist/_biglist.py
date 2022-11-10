@@ -397,10 +397,8 @@ class Biglist(BiglistBase[T]):
 
     @property
     def datafiles(self):
-        # TODO: I think the files are relative to the root folder
-        # and may not be very useful. Should we return full paths?
-        z = self.get_data_files()[0]
-        return [v[0] for v in z]
+        df, _ = self.get_data_files()
+        return [str(self.get_data_file(df, i)) for i in range(len(df))]
 
     def get_data_file(self, datafiles, idx):
         # `datafiles` is the return of `get_datafiles`.

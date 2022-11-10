@@ -79,10 +79,10 @@ class ListView(Sequence[T]):
     """
     This class wraps a sequence and gives it capabilities of
     element access by slice or index array.
-     
+
     One use case is to provide slicing capabilities
     to `Biglist` via a call to `Biglist.view()`.
-    
+
     A `ListView` object does "zero-copy"---it keeps track of
     indices of elements in the window as well as a reference to
     the underlying sequence. One may slice a `ListView` object,
@@ -113,7 +113,7 @@ class ListView(Sequence[T]):
             return f"<{self.__class__.__name__} into {self._list}[{self._range}]>"
         if len(self._range) <= 5:
             return f"<{self.__class__.__name__} into {self._list}[{self._range}]>"
-        idx = ', '.join(map(str, self._range[:5]))
+        idx = ", ".join(map(str, self._range[:5]))
         return f"<{self.__class__.__name__} into {self._list}[{idx}, ...]>"
 
     def __str__(self):
@@ -407,11 +407,11 @@ class BiglistBase(Sequence[T]):
             yield from self._append_buffer
 
     def iter_files(self) -> Iterator[Sequence[T]]:
-        '''
+        """
         This is "eager", and not distributed, that is,
         it consumes the entire data. To distribute the iteration
         to multiple workers, use `concurrent_iter` or `concurrent_iter_files`.
-        '''
+        """
         self.flush()
         # Assuming the biglist will not change (not being appended to)
         # during iteration.

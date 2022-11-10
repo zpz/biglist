@@ -182,8 +182,9 @@ class ParquetBiglist(BiglistBase):
     def load_data_file(cls, path: Upath, mode: int):
         # This method could be useful by itself. User may want
         # to make a free-standing function as a trivial wrapper of this.
-        return ParquetFileData(cls.read_parquet_file(path),
-                               eager_load=(mode == FileLoaderMode.ITER))
+        return ParquetFileData(
+            cls.read_parquet_file(path), eager_load=(mode == FileLoaderMode.ITER)
+        )
 
     def get_data_files(self):
         return self.info["datafiles"], self.info["datafiles_cumlength"]
@@ -197,7 +198,7 @@ class ParquetBiglist(BiglistBase):
 
     @property
     def datafiles(self):
-        return [f['path'] for f in self.info['datafiles']]
+        return [f["path"] for f in self.info["datafiles"]]
 
 
 class ParquetFileData(collections.abc.Sequence):
@@ -244,7 +245,7 @@ class ParquetFileData(collections.abc.Sequence):
         return self.metadata.schema.names
 
     def select_columns(self, cols: Union[str, Sequence[str]]):
-        '''
+        """
         Specify the columns to downnload. Usually this is called only once,
         and early on in the life of the object; or narrow a previous selection.
         Expanding a previous selection is supported, but that may trigger
@@ -259,7 +260,7 @@ class ParquetFileData(collections.abc.Sequence):
             obj.select_columns('b')
             for v in obj:
                 print(v)
-        '''
+        """
         # TODO: use `None` to re-select all?
         if isinstance(cols, str):
             cols = [cols]
@@ -293,7 +294,7 @@ class ParquetFileData(collections.abc.Sequence):
 
     @property
     def data(self) -> pyarrow.Table:
-        '''Eagerly read in the whole file as a table.'''
+        """Eagerly read in the whole file as a table."""
         if self._data is None:
             self._data = self.file.read(columns=self._column_names)
         return self._data
@@ -399,10 +400,10 @@ class ParquetFileData(collections.abc.Sequence):
                         yield dict(zip(names, row))
 
     def iter_batches(self, batch_size=None) -> Iterator[pyarrow.RecordBatch]:
-        '''
+        """
         User often wants to specify `batch_size` b/c the default
         may be too large.
-        '''
+        """
         if self._data is None:
             yield from self.file.iter_batches(
                 batch_size=batch_size, columns=self._column_names

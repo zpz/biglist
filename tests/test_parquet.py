@@ -17,7 +17,7 @@ def test_big_parquet_list():
     val = pyarrow.array([str(uuid4()) for _ in range(N)])
     tab = pyarrow.Table.from_arrays([key, val], names=['key', 'value'])
     parquet.write_table(tab, str(path / 'data_1.parquet'))
-    
+
     key = pyarrow.array([random.randint(0, 10000) for _ in range(N)])
     val = pyarrow.array([str(uuid4()) for _ in range(N)])
     tab = pyarrow.Table.from_arrays([key, val], names=['key', 'value'])
@@ -27,6 +27,14 @@ def test_big_parquet_list():
     biglist = ParquetBiglist.new(path)
     assert len(biglist) == N + N
     assert biglist.num_datafiles == 2
+    
+    print('')
+    print('datafiles')
+    z = biglist.datafiles
+    print(z)
+    assert isinstance(z, list)
+    assert all(isinstance(v, str) for v in z)
+    print('')
 
     print(biglist[0])
     print(biglist[999])
@@ -62,25 +70,50 @@ def test_big_parquet_list():
     # specify columns
     print('')
     p = biglist.get_data_files()[0][0]['path']
-    d = ParquetFileData(biglist.read_parquet_file(p)).select_columns('value')
-    assert isinstance(d[2], pyarrow.lib.StringScalar)
+    d = ParquetFileData(biglist.read_parquet_file(p)).select_columns(['key', 'value'])
+    print(d[3])
+    d.select_columns('value')
+    assert isinstance(d[2], str)
     print(d[2])
     print(list(ListView(d)[:7]))
 
     #
     print('')
-    d = ParquetFileData(biglist.read_parquet_file(p))
-    print(d[3])
+    d = ParquetFileData(biglist.read_parquet_file(p), scalar_as_py=False)
+    assert d.num_columns == 2
+    assert d.column_names == ['key', 'value']
+    z = d[3]
+    print(z)
+    assert isinstance(z['key'], pyarrow.Int64Scalar)
+    assert isinstance(z['value'], pyarrow.StringScalar)
+    
+    # The `pyarrow.Scalar` types compare unequal to Python native types
+    assert z['key'] != z['key'].as_py()
+    assert z['value'] != z['value'].as_py()
 
     print('')
-    d = ParquetFileData(biglist.read_parquet_file(p),mode=FileLoaderMode.RAND)
+    d = ParquetFileData(biglist.read_parquet_file(p))
+    z = d[3]
+    print(z)
+    assert isinstance(z['key'], int)
+    assert isinstance(z['value'], str)
+
+    print('')
+    d = ParquetFileData(biglist.read_parquet_file(p), eager_load=False)
     for k, row in enumerate(d):
         print(row)
         if k > 3:
             break
 
     print('')
-    d = ParquetFileData(biglist.read_parquet_file(p),mode=FileLoaderMode.ITER)
+    d = ParquetFileData(biglist.read_parquet_file(p), eager_load=True)
+    for k, row in enumerate(d):
+        print(row)
+        if k > 3:
+            break
+
+    print('')
+    d = ParquetFileData(biglist.read_parquet_file(p), eager_load=True, scalar_as_py=False)
     for k, row in enumerate(d):
         print(row)
         if k > 3:

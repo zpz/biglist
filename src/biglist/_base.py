@@ -77,24 +77,31 @@ class FileView(Sequence[T]):
 
 class ListView(Sequence[T]):
     """
-    A main use case of `ListView` is to provide slicing capabilities
+    This class wraps a sequence and gives it capabilities of
+    element access by slice or index array.
+     
+    One use case is to provide slicing capabilities
     to `Biglist` via a call to `Biglist.view()`.
+    
+    A `ListView` object does "zero-copy"---it keeps track of
+    indices of elements in the window as well as a reference to
+    the underlying sequence. One may slice a `ListView` object,
+    and this index-tracking continues. Only when a single-element
+    access or an iteration is performed, the relevant elements
+    are retrieved from the underlying sequence.
     """
 
-    def __init__(self, list_: Sequence[T], range_: range = None):
+    def __init__(self, list_: Sequence[T], range_: Union[range, Sequence[int]] = None):
         """
         This provides a "window" into the sequence `list_`,
-        which is often a `Biglist` or another `ListView`.
-
-        An object of `ListView` is created by `Biglist.view()` or
-        by slicing a `ListView`.
-        User should not attempt to create an object of this class directly.
+        which may be another `ListView` (which *is* a sequence, hence
+        no special treatment).
 
         During the use of this object, it is assumed that the underlying
         `list_` is not changing. Otherwise the results may be incorrect.
 
-        `list_` must support random access by index. It does not need
-        to support slicing.
+        As a sequence, `list_` must support random access by index.
+        It does not need to support slicing.
         """
         self._list = list_
         self._range = range_
@@ -102,7 +109,12 @@ class ListView(Sequence[T]):
     def __repr__(self):
         if self._range is None:
             return f"<{self.__class__.__name__} into {self._list}>"
-        return f"<{self.__class__.__name__} into {self._list}[{self._range}]>"
+        if isinstance(self._range, range):
+            return f"<{self.__class__.__name__} into {self._list}[{self._range}]>"
+        if len(self._range) <= 5:
+            return f"<{self.__class__.__name__} into {self._list}[{self._range}]>"
+        idx = ', '.join(map(str, self._range[:5]))
+        return f"<{self.__class__.__name__} into {self._list}[{idx}, ...]>"
 
     def __str__(self):
         return self.__repr__()
@@ -115,17 +127,20 @@ class ListView(Sequence[T]):
     def __bool__(self) -> bool:
         return len(self) > 0
 
-    def __getitem__(self, idx: Union[int, slice]) -> T:
+    def __getitem__(self, idx: Union[int, slice, Sequence[int]]):
         """
-        Element access by a single index or by slice.
+        Element access by a single index, slice, or an index array.
         Negative index and standard slice syntax both work as expected.
 
-        Sliced access returns a new `ListView` object.
+        Slice and index-array access returns a new `ListView` object.
         """
         if isinstance(idx, int):
+            # Return a single element.
             if self._range is None:
                 return self._list[idx]
             return self._list[self._range[idx]]
+
+        # Return a new `ListView` object below.
 
         if isinstance(idx, slice):
             if self._range is None:
@@ -134,9 +149,10 @@ class ListView(Sequence[T]):
                 range_ = self._range[idx]
             return self.__class__(self._list, range_)
 
-        raise TypeError(
-            f"{self.__class__.__name__} indices must be integers or slices, not {type(idx).__name__}"
-        )
+        # `idx` is a list of indices.
+        if self._range is None:
+            return self.__class__(self._list, idx)
+        return self.__class__(self._list, [self._range[i] for i in idx])
 
     def __iter__(self):
         if self._range is None:
@@ -391,6 +407,11 @@ class BiglistBase(Sequence[T]):
             yield from self._append_buffer
 
     def iter_files(self) -> Iterator[Sequence[T]]:
+        '''
+        This is "eager", and not distributed, that is,
+        it consumes the entire data. To distribute the iteration
+        to multiple workers, use `concurrent_iter` or `concurrent_iter_files`.
+        '''
         self.flush()
         # Assuming the biglist will not change (not being appended to)
         # during iteration.
@@ -509,6 +530,7 @@ class BiglistBase(Sequence[T]):
     def file_views(self) -> List[FileView]:
         # This is intended to facilitate parallel processing,
         # e.g. send views on diff files to diff processes.
+        # `concurrent_iter_files` can achieve the same goal.
         datafiles, _ = self.get_data_files()
         return [
             self.file_view(self.get_data_file(datafiles, i))
@@ -538,3 +560,7 @@ class BiglistBase(Sequence[T]):
     @property
     def num_datafiles(self) -> int:
         return len(self.get_data_files()[0])
+
+    @property
+    def datafiles(self) -> List[str]:
+        raise NotImplementedError

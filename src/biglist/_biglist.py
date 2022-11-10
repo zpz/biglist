@@ -395,6 +395,13 @@ class Biglist(BiglistBase[T]):
 
         return self._data_files, self._data_files_cumlength_  # type: ignore
 
+    @property
+    def datafiles(self):
+        # TODO: I think the files are relative to the root folder
+        # and may not be very useful. Should we return full paths?
+        z = self.get_data_files()[0]
+        return [v[0] for v in z]
+
     def get_data_file(self, datafiles, idx):
         # `datafiles` is the return of `get_datafiles`.
         return self._data_dir / datafiles[idx][0]

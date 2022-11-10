@@ -9,7 +9,7 @@ from time import sleep
 
 import pytest
 from boltons import iterutils
-from biglist import Biglist, ListView
+from biglist import Biglist
 
 
 def test_numbers():
@@ -27,6 +27,17 @@ def test_numbers():
     mylist.extend([21, 22, 23, 24, 25])
     mylist.extend([26, 27, 28])
     mylist.flush()
+
+    n = mylist.num_datafiles
+    z = mylist.datafiles
+    print('')
+    print('num datafiles:', n)
+    print('datafiles:')
+    print(z)
+    assert isinstance(z, list)
+    assert len(z) == n
+    assert all(isinstance(v, str) for v in z)
+    print('')
 
     data = list(range(len(mylist)))
     n = 0
@@ -55,48 +66,6 @@ def test_existing_numbers():
     assert list(mylist) == data
 
     rmtree(PATH)
-
-
-def _test_view(datalv):
-    data = list(range(20))
-    assert list(datalv) == data
-
-    assert datalv[8] == data[8]
-    assert datalv[17] == data[17]
-
-    lv = datalv[:9]
-    assert isinstance(lv, ListView)
-    assert list(lv) == data[:9]
-    assert lv[-1] == data[8]
-    assert lv[3] == data[3]
-
-    lv = lv[:2:-2]
-    assert list(lv) == data[8:2:-2]
-
-    lv = datalv[10:17]
-    assert lv[3] == data[13]
-    assert list(lv[3:6]) == data[13:16]
-    assert list(lv[-3:]) == data[14:17]
-    assert list(lv[::2]) == data[10:17:2]
-    assert list(lv) == data[10:17]
-
-    lv = datalv[::-2]
-    assert list(lv) == data[::-2]
-    assert list(lv[:3]) == [data[-1], data[-3], data[-5]]
-    assert lv[2] == data[-5]
-    assert list(lv[::-3]) == data[1::6]
-
-
-def test_listview():
-    _test_view(ListView(list(range(20))))
-
-
-def test_biglistview():
-    bl = Biglist.new(storage_format='json')
-    bl.extend(range(20))
-    bl.flush()
-    datalv = bl.view()
-    _test_view(datalv)
 
 
 def test_fileview():

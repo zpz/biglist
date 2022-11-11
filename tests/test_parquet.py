@@ -69,7 +69,7 @@ def test_big_parquet_list():
 
     # specify columns
     print('')
-    p = biglist.get_data_files()[0][0]['path']
+    p = biglist._get_data_files()[0][0]['path']
     d = ParquetFileData(biglist.read_parquet_file(p)).select_columns(['key', 'value'])
     print(d[3])
     d.select_columns('value')

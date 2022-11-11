@@ -8,7 +8,6 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime
 from multiprocessing.util import Finalize
-from pathlib import Path
 from typing import (
     Callable,
     Iterator,

@@ -12,8 +12,8 @@ from typing import Union, Sequence, Iterator, List
 import pyarrow
 from pyarrow.parquet import ParquetFile
 from pyarrow.fs import FileSystem
-from upathlib import Upath, LocalUpath, PathType, resolve_path
-from ._base import BiglistBase, FileLoaderMode
+from upathlib import Upath
+from ._base import BiglistBase, FileLoaderMode, PathType
 
 # If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
 # and "credential_token_expiration". These can be obtained via
@@ -84,16 +84,16 @@ class ParquetBiglist(BiglistBase):
             or isinstance(data_path, Upath)
         ):
             #  TODO: in py 3.10, we will be able to do `isinstance(data_path, PathType)`
-            data_path = [resolve_path(data_path)]
+            data_path = [cls.resolve_path(data_path)]
         else:
-            data_path = [resolve_path(p) for p in data_path]
+            data_path = [cls.resolve_path(p) for p in data_path]
 
         if not path:
             path = cls.get_temp_path()
             if keep_files is None:
                 keep_files = False
         else:
-            path = resolve_path(path)
+            path = cls.resolve_path(path)
             if keep_files is None:
                 keep_files = True
         if path.is_dir():
@@ -107,7 +107,7 @@ class ParquetBiglist(BiglistBase):
             meta = f(p).metadata
             q.put(
                 {
-                    "path": str(p),  # because Upath object does not support JSON
+                    "path": p,
                     "num_rows": meta.num_rows,
                     "row_groups_num_rows": [
                         meta.row_group(k).num_rows for k in range(meta.num_row_groups)
@@ -125,13 +125,15 @@ class ParquetBiglist(BiglistBase):
             if p.is_file():
                 if suffix == "*" or p.name.endswith(suffix):
                     tasks.append(
-                        pool.submit(get_file_meta, read_parquet, p, q_datafiles)
+                        pool.submit(get_file_meta, read_parquet, str(p), q_datafiles)
                     )
             else:
-                for q in p.riterdir():
-                    if suffix == "*" or q.name.endswith(suffix):
+                for pp in p.riterdir():
+                    if suffix == "*" or pp.name.endswith(suffix):
                         tasks.append(
-                            pool.submit(get_file_meta, read_parquet, q, q_datafiles)
+                            pool.submit(
+                                get_file_meta, read_parquet, str(pp), q_datafiles
+                            )
                         )
         assert tasks
         for k, t in enumerate(tasks):
@@ -166,31 +168,26 @@ class ParquetBiglist(BiglistBase):
         return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data file(s) stored at {self.info['datapath']}>"
 
     @classmethod
-    def read_parquet_file(cls, path: Upath):
-        if isinstance(path, LocalUpath):
-            return ParquetFile(str(path))
-        else:
-            # Work around a pyarrow 10.0.0 bug:
-            #   ParquetFile does not recognize str cloud path
-            # Use may customize this function to pass in cloud
-            # credentials to `FileSystem` so that it does not
-            # fall back to default ways of finding credentials.
-            ff, pp = FileSystem.from_uri(str(path))
-            return ParquetFile(ff.open_input_file(pp))
+    def read_parquet_file(cls, path: str):
+        # User may customize this function to pass in cloud
+        # credentials to `FileSystem` so that it does not
+        # fall back to default ways of finding credentials.
+        ff, pp = FileSystem.from_uri(path)
+        return ParquetFile(ff.open_input_file(pp))
 
     @classmethod
     def load_data_file(cls, path: Upath, mode: int):
         # This method could be useful by itself. User may want
         # to make a free-standing function as a trivial wrapper of this.
         return ParquetFileData(
-            cls.read_parquet_file(path), eager_load=(mode == FileLoaderMode.ITER)
+            cls.read_parquet_file(str(path)), eager_load=(mode == FileLoaderMode.ITER)
         )
 
-    def get_data_files(self):
+    def _get_data_files(self):
         return self.info["datafiles"], self.info["datafiles_cumlength"]
 
-    def get_data_file(self, datafiles, idx):
-        return resolve_path(datafiles[idx]["path"])
+    def _get_data_file(self, datafiles, idx):
+        return self.resolve_path(datafiles[idx]["path"])
 
     def iter_batches(self, batch_size=None):
         for file in self.iter_files():
@@ -231,6 +228,8 @@ class ParquetFileData(collections.abc.Sequence):
         self._data: pyarrow.Table = None
         if eager_load:
             _ = self.data
+
+        self._getitem_last_row_group = None
 
     @property
     def num_columns(self) -> int:
@@ -303,14 +302,19 @@ class ParquetFileData(collections.abc.Sequence):
         return self.num_rows
 
     def __getitem__(self, idx: int):
-        # Get one record or row.
-        # If `self._scalar_as_py` is False,
-        #   If data has a single column, return the value on the specified row.
-        #   The return is a `pyarrow.Scalar`` type such as `pyarrow.lib.StringScalar`.
-        #   If data has multiple columns, return a dict with keys being column names
-        #   and values being `pyarrow.Scalar`` types.
-        # If `self._scalar_as_py` if True,
-        #   the `pyarrow.Scalar` values are converted to Python native types.
+        """
+        Get one record or row.
+
+        `idx`: row index in this file.
+
+        If `self._scalar_as_py` is False,
+          If data has a single column, return the value on the specified row.
+          The return is a `pyarrow.Scalar`` type such as `pyarrow.lib.StringScalar`.
+          If data has multiple columns, return a dict with keys being column names
+          and values being `pyarrow.Scalar`` types.
+        If `self._scalar_as_py` if True,
+          the `pyarrow.Scalar` values are converted to Python native types.
+        """
         if idx < 0:
             idx = self.num_rows + idx
         if idx < 0 or idx >= self.num_rows:
@@ -339,10 +343,31 @@ class ParquetFileData(collections.abc.Sequence):
                 itertools.accumulate(self._row_groups_num_rows)
             )
 
+        # Assuming user is checking neighboring items,
+        # then the requested item may be in the same row-group
+        # as the item requested last time.
+        igrp = None
+        if (last_group := self._getitem_last_row_group) is not None:
+            if last_group[1] <= idx < last_group[2]:
+                igrp = last_group[0]
+        if igrp is None:
+            igrp = bisect.bisect_right(self._row_groups_num_rows_cumsum, idx)
+            if igrp == 0:
+                self._getitem_last_row_group = (
+                    0,  # row-group index
+                    0,  # item index lower bound
+                    self._row_groups_num_rows_cumsum[0],  # item index upper bound
+                )
+            else:
+                self._getitem_last_row_group = (
+                    igrp,
+                    self._row_groups_num_rows_cumsum[igrp - 1],
+                    self._row_groups_num_rows_cumsum[igrp],
+                )
+
         if self._row_groups is None:
             self._row_groups = [None] * self.num_row_groups
 
-        igrp = bisect.bisect_right(self._row_groups_num_rows_cumsum, idx)
         if self._row_groups[igrp] is None:
             self._row_groups[igrp] = self.file.read_row_group(
                 igrp, columns=self._column_names
@@ -410,3 +435,13 @@ class ParquetFileData(collections.abc.Sequence):
             )
         else:
             yield from self._data.to_batches(batch_size)
+
+    def row_group(self, idx: int) -> pyarrow.Table:
+        assert 0 <= idx < self.num_row_groups
+        if self._row_groups is None:
+            self._row_groups = [None] * self.num_row_groups
+        if self._row_groups[idx] is None:
+            self._row_groups[idx] = self.file.read_row_group(
+                idx, columns=self._column_names
+            )
+        return self._row_groups[idx]

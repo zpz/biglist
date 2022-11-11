@@ -1,6 +1,7 @@
 == in progress ==
 
-- Added read-only Biglist variant---class `ParquetBiglist`---backed by Parquet data.
+- Added "external" Biglist variant---class `ParquetBiglist`---backed by Parquet data. To this purpose, there was a code global re-org.
+- Methods `Biglist.pre_serialize` and `Biglist.post_deserialize` are removed. Alternatives to achieve similar effects are documented.
 
 
 Release 0.6.9

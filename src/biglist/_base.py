@@ -175,6 +175,14 @@ class BiglistBase(Sequence[T]):
     whereas other subclasses, such as `ParquetBiglist`, may be read-only.
     """
 
+    @staticmethod
+    def resolve_path(path: PathType):
+        # User may want to customize this method to provide
+        # credentials for cloud storages, if their application involves
+        # them, so that the code does not resort to default credential
+        # retrieval mechanisms, which may be slow.
+        return resolve_path(path)
+
     @classmethod
     def get_temp_path(cls) -> Upath:
         """
@@ -214,7 +222,7 @@ class BiglistBase(Sequence[T]):
         thread_pool_executor: ThreadPoolExecutor = None,
         require_exists: bool = True,
     ):
-        self.path = resolve_path(path)
+        self.path = self.resolve_path(path)
 
         self._read_buffer: Optional[Sequence[T]] = None
         self._read_buffer_file_idx = None
@@ -292,12 +300,12 @@ class BiglistBase(Sequence[T]):
     def __bool__(self) -> bool:
         return len(self) > 0
 
-    def get_data_files(self) -> tuple:
+    def _get_data_files(self) -> tuple:
         # Return "data_files" and "data_files_cumlength".
         # Subclass may choose to cache these results in instance attributes.
         raise NotImplementedError
 
-    def get_data_file(self, datafiles, idx):
+    def _get_data_file(self, datafiles, idx):
         # `datafiles` is the return of `get_datafiles`.
         # `idx` is the index of the file of interest in `datafiles`.
         raise NotImplementedError
@@ -312,7 +320,7 @@ class BiglistBase(Sequence[T]):
         # In other words, if the current object is one of
         # of a number of workers that are concurrently using
         # the biglist, then all the other workers are reading only.
-        _, data_files_cumlength = self.get_data_files()
+        _, data_files_cumlength = self._get_data_files()
         if data_files_cumlength:
             return data_files_cumlength[-1] + len(self._append_buffer)
         return len(self._append_buffer)
@@ -321,7 +329,7 @@ class BiglistBase(Sequence[T]):
         """
         Element access by single index; negative index works as expected.
 
-        This is not optimized for speed. For example, `self.get_data_files`
+        This is not optimized for speed. For example, `self._get_data_files`
         could be expensive involving directory crawl, maybe even in the cloud.
         For better speed, use `__iter__`.
 
@@ -349,7 +357,7 @@ class BiglistBase(Sequence[T]):
 
         # TODO: this is reliable only if there is no other "worker node"
         # appending elements to this object.
-        datafiles, data_files_cumlength = self.get_data_files()
+        datafiles, data_files_cumlength = self._get_data_files()
         if data_files_cumlength:
             length = data_files_cumlength[-1]
         else:
@@ -386,7 +394,7 @@ class BiglistBase(Sequence[T]):
             n = data_files_cumlength[ifile - 1]
         self._read_buffer_item_range = (n, data_files_cumlength[ifile])
 
-        file = self.get_data_file(datafiles, ifile)
+        file = self._get_data_file(datafiles, ifile)
         # If the file is in a writing queue and has not finished writing yet:
         if self._file_dumper is None:
             data = None
@@ -416,12 +424,12 @@ class BiglistBase(Sequence[T]):
         # Assuming the biglist will not change (not being appended to)
         # during iteration.
 
-        datafiles, _ = self.get_data_files()
+        datafiles, _ = self._get_data_files()
         ndatafiles = len(datafiles)
 
         if ndatafiles == 1:
             yield self.load_data_file(
-                self.get_data_file(datafiles, 0), FileLoaderMode.ITER
+                self._get_data_file(datafiles, 0), FileLoaderMode.ITER
             )
         elif ndatafiles > 1:
             max_workers = min(self._n_read_threads, ndatafiles)
@@ -431,7 +439,7 @@ class BiglistBase(Sequence[T]):
             for i in range(max_workers):
                 t = executor.submit(
                     self.load_data_file,
-                    self.get_data_file(datafiles, i),
+                    self._get_data_file(datafiles, i),
                     FileLoaderMode.ITER,
                 )
                 tasks.put(t)
@@ -447,7 +455,7 @@ class BiglistBase(Sequence[T]):
                     # `nfiles_queued` is the index of the next file to download.
                     t = executor.submit(
                         self.load_data_file,
-                        self.get_data_file(datafiles, nfiles_queued),
+                        self._get_data_file(datafiles, nfiles_queued),
                         FileLoaderMode.ITER,
                     )
                     tasks.put(t)
@@ -481,7 +489,7 @@ class BiglistBase(Sequence[T]):
         """
         `task_id`: returned by `new_concurrent_file_iter`.
         """
-        datafiles, _ = self.get_data_files()
+        datafiles, _ = self._get_data_files()
         while True:
             ff = self._concurrent_file_iter_info_file(task_id)
             with self.lockfile(ff.with_suffix(".json.lock")):
@@ -494,7 +502,7 @@ class BiglistBase(Sequence[T]):
                 iter_info["n_files_claimed"] = n_files_claimed + 1
                 ff.write_json(iter_info, overwrite=True)
 
-            file = self.get_data_file(datafiles, n_files_claimed)
+            file = self._get_data_file(datafiles, n_files_claimed)
             logger.debug('yielding data of file "%s"', file)
             yield self.load_data_file(file, FileLoaderMode.RAND)
             # Here, using `FileLoaderMode.ITER` is "eager" loading.
@@ -502,7 +510,7 @@ class BiglistBase(Sequence[T]):
 
     def concurrent_file_iter_stat(self, task_id: str) -> dict:
         info = self._concurrent_file_iter_info_file(task_id).read_json()
-        return {**info, "n_files": len(self.get_data_files()[0])}
+        return {**info, "n_files": len(self._get_data_files()[0])}
 
     def concurrent_file_iter_done(self, task_id: str) -> bool:
         zz = self.concurrent_file_iter_stat(task_id)
@@ -523,17 +531,17 @@ class BiglistBase(Sequence[T]):
 
     def file_view(self, file: Union[Upath, int]) -> FileView:
         if isinstance(file, int):
-            datafiles, _ = self.get_data_files()
-            file = self.get_data_file(datafiles, file)
+            datafiles, _ = self._get_data_files()
+            file = self._get_data_file(datafiles, file)
         return FileView(file, self.__class__.load_data_file)  # type: ignore
 
     def file_views(self) -> List[FileView]:
         # This is intended to facilitate parallel processing,
         # e.g. send views on diff files to diff processes.
         # `concurrent_iter_files` can achieve the same goal.
-        datafiles, _ = self.get_data_files()
+        datafiles, _ = self._get_data_files()
         return [
-            self.file_view(self.get_data_file(datafiles, i))
+            self.file_view(self._get_data_file(datafiles, i))
             for i in range(len(datafiles))
         ]
 
@@ -559,7 +567,7 @@ class BiglistBase(Sequence[T]):
 
     @property
     def num_datafiles(self) -> int:
-        return len(self.get_data_files()[0])
+        return len(self._get_data_files()[0])
 
     @property
     def datafiles(self) -> List[str]:

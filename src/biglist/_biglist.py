@@ -20,7 +20,7 @@ from typing import (
 )
 from uuid import uuid4
 
-from upathlib import Upath, PathType, resolve_path  # type: ignore
+from upathlib import Upath  # type: ignore
 from upathlib.serializer import (
     ByteSerializer,
     _loads,
@@ -33,7 +33,7 @@ from upathlib.serializer import (
     ZOrjsonSerializer,
     ZstdOrjsonSerializer,
 )
-from ._base import BiglistBase
+from ._base import BiglistBase, PathType
 
 
 logger = logging.getLogger(__name__)
@@ -112,40 +112,48 @@ class Biglist(BiglistBase[T]):
 
     @classmethod
     def dump_data_file(cls, path: Upath, data: list):
+        """
+        This method persists a batch of data elements, always a list,
+        to disk or cloud storage.
+
+        If a subclass wants to perform a transformation to each
+        element of the list, e.g. converting an object of a
+        custom class to that of a Python built-in type, it can override
+        this method to do the transformation prior to calling
+        the `super()` version.
+
+        It is recommended to persist objects of Python built-in types only,
+        which is future-proof compared to custom classes.
+        One useful pattern is to dump result of `instance.to_dict()`,
+        and use `cls.from_dict(...)` to transform persisted data
+        to user's custom type upon loading. Such conversions can be
+        achieved by customizing the methods `dump_data_file` and
+        `load_data_file`. It may work just as well to leave these
+        conversions to application code.
+        """
         serializer = cls.registered_storage_formats[
             path.suffix.lstrip(".").replace("_", "-")
         ]
-        data = [cls.pre_serialize(v) for v in data]
         path.write_bytes(serializer.serialize(data))
 
     @classmethod
     def load_data_file(cls, path: Upath, mode: int) -> List[T]:
-        # `mode` is ignored.
+        """
+        This method loads a data file, always producing a list.
+
+        If a subclass wants to perform a transformation to each
+        element of the list, e.g. converting an object of a
+        Python built-in type to that of a custom class, it can override
+        this method to do the transformation on the output of
+        the `super()` version.
+
+        `mode` is ignored.
+        """
         deserializer = cls.registered_storage_formats[
             path.suffix.lstrip(".").replace("_", "-")
         ]
         data = path.read_bytes()
-        z = deserializer.deserialize(data)
-        return [cls.post_deserialize(v) for v in z]
-
-    @classmethod
-    def pre_serialize(cls, x: T):
-        """When the data element is an instance of a custom type,
-        it is preferred to convert it to a native type, such as dict,
-        before persisting it to files, especially for long-term storage.
-
-        When using Biglist to store data of a custom class, it's recommended
-        to create a subclass of Biglist for the particular class, and implement
-        `pre_serialize` and `post_deserialize`. A good pattern is to define
-        instance method `to_dict` and class method `from_dict` on the
-        custom class, and call them in `pre_serialize` and `post_deserialize`.
-        """
-        return x
-
-    @classmethod
-    def post_deserialize(cls, x) -> T:
-        """The reverse of `pre_serialize`."""
-        return x
+        return deserializer.deserialize(data)
 
     @classmethod
     def new(
@@ -189,7 +197,7 @@ class Biglist(BiglistBase[T]):
             if keep_files is None:
                 keep_files = False
         else:
-            path = resolve_path(path)
+            path = cls.resolve_path(path)
             if keep_files is None:
                 keep_files = True
         if path.is_dir():
@@ -332,7 +340,7 @@ class Biglist(BiglistBase[T]):
         """
         self._flush(wait=True)
 
-    def get_data_files(self) -> list:
+    def _get_data_files(self) -> list:
         if self.storage_version < 1:
             # This may not be totally reliable in every scenario.
             # The older version had a parameter `lazy`, which is gone now.
@@ -397,10 +405,10 @@ class Biglist(BiglistBase[T]):
 
     @property
     def datafiles(self):
-        df, _ = self.get_data_files()
-        return [str(self.get_data_file(df, i)) for i in range(len(df))]
+        df, _ = self._get_data_files()
+        return [str(self._get_data_file(df, i)) for i in range(len(df))]
 
-    def get_data_file(self, datafiles, idx):
+    def _get_data_file(self, datafiles, idx):
         # `datafiles` is the return of `get_datafiles`.
         return self._data_dir / datafiles[idx][0]
 

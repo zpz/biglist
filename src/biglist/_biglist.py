@@ -112,7 +112,7 @@ class Biglist(BiglistBase[T]):
 
     @classmethod
     def dump_data_file(cls, path: Upath, data: list):
-        '''
+        """
         This method persists a batch of data elements, always a list,
         to disk or cloud storage.
 
@@ -130,7 +130,7 @@ class Biglist(BiglistBase[T]):
         achieved by customizing the methods `dump_data_file` and
         `load_data_file`. It may work just as well to leave these
         conversions to application code.
-        '''
+        """
         serializer = cls.registered_storage_formats[
             path.suffix.lstrip(".").replace("_", "-")
         ]
@@ -138,17 +138,17 @@ class Biglist(BiglistBase[T]):
 
     @classmethod
     def load_data_file(cls, path: Upath, mode: int) -> List[T]:
-        '''
+        """
         This method loads a data file, always producing a list.
-        
+
         If a subclass wants to perform a transformation to each
         element of the list, e.g. converting an object of a
         Python built-in type to that of a custom class, it can override
         this method to do the transformation on the output of
         the `super()` version.
-        
+
         `mode` is ignored.
-        '''
+        """
         deserializer = cls.registered_storage_formats[
             path.suffix.lstrip(".").replace("_", "-")
         ]

@@ -131,7 +131,9 @@ class ParquetBiglist(BiglistBase):
                 for pp in p.riterdir():
                     if suffix == "*" or pp.name.endswith(suffix):
                         tasks.append(
-                            pool.submit(get_file_meta, read_parquet, str(pp), q_datafiles)
+                            pool.submit(
+                                get_file_meta, read_parquet, str(pp), q_datafiles
+                            )
                         )
         assert tasks
         for k, t in enumerate(tasks):
@@ -300,9 +302,9 @@ class ParquetFileData(collections.abc.Sequence):
         return self.num_rows
 
     def __getitem__(self, idx: int):
-        '''
+        """
         Get one record or row.
-        
+
         `idx`: row index in this file.
 
         If `self._scalar_as_py` is False,
@@ -312,7 +314,7 @@ class ParquetFileData(collections.abc.Sequence):
           and values being `pyarrow.Scalar`` types.
         If `self._scalar_as_py` if True,
           the `pyarrow.Scalar` values are converted to Python native types.
-        '''
+        """
         if idx < 0:
             idx = self.num_rows + idx
         if idx < 0 or idx >= self.num_rows:
@@ -354,7 +356,7 @@ class ParquetFileData(collections.abc.Sequence):
                 self._getitem_last_row_group = (
                     0,  # row-group index
                     0,  # item index lower bound
-                    self._row_groups_num_rows_cumsum[0]  # item index upper bound
+                    self._row_groups_num_rows_cumsum[0],  # item index upper bound
                 )
             else:
                 self._getitem_last_row_group = (

@@ -11,7 +11,7 @@ from typing import Union, Sequence, Iterator, List
 
 import pyarrow
 from pyarrow.parquet import ParquetFile
-from pyarrow.fs import FileSystem
+from pyarrow.fs import FileSystem, GcsFileSystem
 from upathlib import Upath
 from ._base import BiglistBase, FileLoaderMode, PathType
 
@@ -41,15 +41,47 @@ class ParquetBiglist(BiglistBase):
     it points to pre-existing Parquet files (produced by other code)
     and provides facilities to read the data.
 
-    Data files are read in arbitrary order determined by this class,
-    that is, the data sequence produced will most likely differ from
-    what is read out by other Parquet utilities. However, if you use
-    a saved `ParquetBiglist` object again for reading, it will read
-    in the same order.
+    Data files are read in the order of the string value of their paths.
+    This order could be different from what another Parquet reader would use.
+    The parameter `shuffle` (default `False`) controls whether to
+    randomize this file order.
 
     As long as you use a `ParquetBiglist` object to read, it is assumed
     the dataset has not changed since the creation of the object.
     """
+
+    @classmethod
+    def get_gcsfs(cls, *, good_for_hours=1):
+        # Import here b/c user may not be on GCP
+        from datetime import datetime
+        import google.auth
+
+        cred = getattr(cls, '_GCP_CREDENTIALS', None)
+        if cred is None:
+            cred, _ = google.auth.default(
+                scopes=['https://www.googleapis.com/auth/cloud-platform']
+            )
+            cls._GCP_CREDENTIALS = cred
+        if not cred.token or (cred.expiry - datetime.now()).total_seconds() < good_for_hours * 3600:
+            cred.refresh(google.auth.transport.requests.Request())
+        return GcsFileSystem(access_token=cred.token,
+                             credential_token_expiration=cred.expiry)
+
+    @classmethod
+    def read_parquet_file(cls, path: str):
+        ff, pp = FileSystem.from_uri(path)
+        if isinstance(ff, GcsFileSystem):
+            ff = cls.get_gcsfs()
+        return ParquetFile(ff.open_input_file(pp))
+
+    @classmethod
+    def load_data_file(cls, path: Upath, mode: int):
+        # This method or `read_parquet_file` could be useful by themselves.
+        # User may want to make free-standing functions as trivial wrappers of them.
+        return ParquetFileData(
+            cls.read_parquet_file(str(path)),
+            eager_load=(mode == FileLoaderMode.ITER)
+        )
 
     @classmethod
     def new(
@@ -149,6 +181,8 @@ class ParquetBiglist(BiglistBase):
             datafiles.append(q_datafiles.get())
         if shuffle:
             random.shuffle(datafiles)
+        else:
+            datafiles.sort(key=lambda x: x['path'])
 
         datafiles_cumlength = list(
             itertools.accumulate(v["num_rows"] for v in datafiles)
@@ -166,22 +200,6 @@ class ParquetBiglist(BiglistBase):
 
     def __repr__(self):
         return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data file(s) stored at {self.info['datapath']}>"
-
-    @classmethod
-    def read_parquet_file(cls, path: str):
-        # User may customize this function to pass in cloud
-        # credentials to `FileSystem` so that it does not
-        # fall back to default ways of finding credentials.
-        ff, pp = FileSystem.from_uri(path)
-        return ParquetFile(ff.open_input_file(pp))
-
-    @classmethod
-    def load_data_file(cls, path: Upath, mode: int):
-        # This method could be useful by itself. User may want
-        # to make a free-standing function as a trivial wrapper of this.
-        return ParquetFileData(
-            cls.read_parquet_file(str(path)), eager_load=(mode == FileLoaderMode.ITER)
-        )
 
     def _get_data_files(self):
         return self.info["datafiles"], self.info["datafiles_cumlength"]
@@ -230,6 +248,15 @@ class ParquetFileData(collections.abc.Sequence):
             _ = self.data
 
         self._getitem_last_row_group = None
+
+    def __repr__(self):
+        return "<{} with {} rows, {} columns, {} row-groups>".format(
+            self.__class__.__name__, self.num_rows, self.num_columns,
+            self.num_row_groups,
+        )
+        
+    def __str__(self):
+        return self.__repr__()
 
     @property
     def num_columns(self) -> int:

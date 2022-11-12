@@ -152,17 +152,14 @@ class ParquetBiglist(BiglistBase):
         for p in data_path:
             if p.is_file():
                 if suffix == "*" or p.name.endswith(suffix):
-                    tasks.append(
-                        pool.submit(get_file_meta, read_parquet, str(p))
-                    )
+                    tasks.append(pool.submit(get_file_meta, read_parquet, str(p)))
             else:
                 tt = []
                 for pp in p.riterdir():
                     if suffix == "*" or pp.name.endswith(suffix):
-                        tt.append((
-                            str(pp),
-                            pool.submit(get_file_meta, read_parquet, str(pp))
-                        ))
+                        tt.append(
+                            (str(pp), pool.submit(get_file_meta, read_parquet, str(pp)))
+                        )
                 tt.sort()
                 for p, t in tt:
                     tasks.append(t)
@@ -301,7 +298,9 @@ class ParquetFileData(collections.abc.Sequence):
                     ]
             else:
                 cc = [col for col in cols if col not in self._column_names]
-                raise ValueError(f"cannot select the columns {cc} because they are not in existing set of columns")
+                raise ValueError(
+                    f"cannot select the columns {cc} because they are not in existing set of columns"
+                )
         else:
             if self._data is not None:
                 self._data = self._data.select(cols)

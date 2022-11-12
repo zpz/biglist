@@ -56,16 +56,20 @@ class ParquetBiglist(BiglistBase):
         from datetime import datetime
         import google.auth
 
-        cred = getattr(cls, '_GCP_CREDENTIALS', None)
+        cred = getattr(cls, "_GCP_CREDENTIALS", None)
         if cred is None:
             cred, _ = google.auth.default(
-                scopes=['https://www.googleapis.com/auth/cloud-platform']
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
             )
             cls._GCP_CREDENTIALS = cred
-        if not cred.token or (cred.expiry - datetime.now()).total_seconds() < good_for_hours * 3600:
+        if (
+            not cred.token
+            or (cred.expiry - datetime.now()).total_seconds() < good_for_hours * 3600
+        ):
             cred.refresh(google.auth.transport.requests.Request())
-        return GcsFileSystem(access_token=cred.token,
-                             credential_token_expiration=cred.expiry)
+        return GcsFileSystem(
+            access_token=cred.token, credential_token_expiration=cred.expiry
+        )
 
     @classmethod
     def read_parquet_file(cls, path: str):
@@ -79,8 +83,7 @@ class ParquetBiglist(BiglistBase):
         # This method or `read_parquet_file` could be useful by themselves.
         # User may want to make free-standing functions as trivial wrappers of them.
         return ParquetFileData(
-            cls.read_parquet_file(str(path)),
-            eager_load=(mode == FileLoaderMode.ITER)
+            cls.read_parquet_file(str(path)), eager_load=(mode == FileLoaderMode.ITER)
         )
 
     @classmethod
@@ -182,7 +185,7 @@ class ParquetBiglist(BiglistBase):
         if shuffle:
             random.shuffle(datafiles)
         else:
-            datafiles.sort(key=lambda x: x['path'])
+            datafiles.sort(key=lambda x: x["path"])
 
         datafiles_cumlength = list(
             itertools.accumulate(v["num_rows"] for v in datafiles)
@@ -251,10 +254,12 @@ class ParquetFileData(collections.abc.Sequence):
 
     def __repr__(self):
         return "<{} with {} rows, {} columns, {} row-groups>".format(
-            self.__class__.__name__, self.num_rows, self.num_columns,
+            self.__class__.__name__,
+            self.num_rows,
+            self.num_columns,
             self.num_row_groups,
         )
-        
+
     def __str__(self):
         return self.__repr__()
 

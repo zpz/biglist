@@ -1,4 +1,3 @@
-import bisect
 import collections.abc
 import itertools
 import logging

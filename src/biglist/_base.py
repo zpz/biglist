@@ -183,6 +183,14 @@ class ChainedList(Sequence[T]):
         self._len = None
         self._get_item_last_list = None
 
+    def __repr__(self):
+        return "<{} with {} member lists, total length {}>".format(
+            self.__class__.__name__, len(self._lists), self._len,
+        )
+
+    def __str__(self):
+        return self.__repr__()
+
     def __len__(self):
         if self._len is None:
             if self._lists_len is None:
@@ -608,7 +616,7 @@ class BiglistBase(Sequence[T]):
         # of the Biglist; they open and read files independent of
         # other views.
         self.flush()
-        return ListView(self.__class__(self.path))
+        return ListView(self)
 
     @property
     def num_datafiles(self) -> int:

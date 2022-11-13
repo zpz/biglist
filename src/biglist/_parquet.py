@@ -12,6 +12,8 @@ from pyarrow.parquet import ParquetFile
 from pyarrow.fs import FileSystem, GcsFileSystem
 from upathlib import Upath
 from ._base import BiglistBase, FileLoaderMode, PathType, ListView
+from ._util import locate_idx_in_chunked_seq
+
 
 # If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
 # and "credential_token_expiration". These can be obtained via
@@ -211,7 +213,7 @@ class ParquetFileData(collections.abc.Sequence):
     # with facilities to make it conform to our required APIs.
     #
     # If you want to use the  `arrow.parquet` methods directly,
-    # use it via `self.file`, or `self.table` if not None.
+    # use it via `self.file`, or `self.data`.
 
     def __init__(
         self,
@@ -322,6 +324,25 @@ class ParquetFileData(collections.abc.Sequence):
     def __len__(self):
         return self.num_rows
 
+    def _locate_row_group_for_item(self, idx):
+        # Assuming user is checking neighboring items,
+        # then the requested item may be in the same row-group
+        # as the item requested last time.
+        if self._row_groups_num_rows is None:
+            meta = self.metadata
+            self._row_groups_num_rows = [
+                meta.row_group(i).num_rows for i in range(self.num_row_groups)
+            ]
+            self._row_groups_num_rows_cumsum = list(
+                itertools.accumulate(self._row_groups_num_rows)
+            )
+
+        igrp, idx_in_grp, group_info = locate_idx_in_chunked_seq(
+            idx, self._row_groups_num_rows_cumsum, self._getitem_last_row_group
+        )
+        self._getitem_last_row_group = group_info
+        return igrp, idx_in_grp
+    
     def __getitem__(self, idx: int):
         """
         Get one record or row.
@@ -355,49 +376,17 @@ class ParquetFileData(collections.abc.Sequence):
                     return {k: v.as_py() for k, v in z.items()}
                 return z
 
-        if self._row_groups_num_rows is None:
-            meta = self.metadata
-            self._row_groups_num_rows = [
-                meta.row_group(i).num_rows for i in range(self.num_row_groups)
-            ]
-            self._row_groups_num_rows_cumsum = list(
-                itertools.accumulate(self._row_groups_num_rows)
-            )
 
-        # Assuming user is checking neighboring items,
-        # then the requested item may be in the same row-group
-        # as the item requested last time.
-        igrp = None
-        if (last_group := self._getitem_last_row_group) is not None:
-            if last_group[1] <= idx < last_group[2]:
-                igrp = last_group[0]
-        if igrp is None:
-            igrp = bisect.bisect_right(self._row_groups_num_rows_cumsum, idx)
-            if igrp == 0:
-                self._getitem_last_row_group = (
-                    0,  # row-group index
-                    0,  # item index lower bound
-                    self._row_groups_num_rows_cumsum[0],  # item index upper bound
-                )
-            else:
-                self._getitem_last_row_group = (
-                    igrp,
-                    self._row_groups_num_rows_cumsum[igrp - 1],
-                    self._row_groups_num_rows_cumsum[igrp],
-                )
+        igrp, idx_in_row_group = self._locate_row_group_for_item(idx)
 
         if self._row_groups is None:
             self._row_groups = [None] * self.num_row_groups
-
         if self._row_groups[igrp] is None:
             self._row_groups[igrp] = self.file.read_row_group(
                 igrp, columns=self._column_names
             )
         row_group = self._row_groups[igrp]
-        if igrp == 0:
-            idx_in_row_group = idx
-        else:
-            idx_in_row_group = idx - self._row_groups_num_rows_cumsum[igrp - 1]
+
         if row_group.num_columns == 1:
             z = row_group.column(0)[idx_in_row_group]
             if self._scalar_as_py:

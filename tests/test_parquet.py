@@ -1,10 +1,65 @@
 import random
+from types import SimpleNamespace
 from uuid import uuid4
 import pyarrow
 from pyarrow import parquet
 from upathlib import LocalUpath
 from biglist import ParquetBiglist, ParquetFileData, ListView
-from biglist._base import FileLoaderMode
+import pytest
+
+
+def test_idx_locator():
+    def row_group_sizes(i):
+        if i == 0:
+            return SimpleNamespace(num_rows=3)
+        if i == 1:
+            return SimpleNamespace(num_rows=4)
+        if i == 2:
+            return SimpleNamespace(num_rows=5)
+        if i == 3:
+            return SimpleNamespace(num_rows=1)
+        if i == 4:
+            return SimpleNamespace(num_rows=2)
+        raise ValueError(i)
+
+    class My:
+        def __init__(self):
+            self.num_row_groups = 5
+            self.metadata = SimpleNamespace(
+                row_group=row_group_sizes
+            )
+            self._row_groups_num_rows = None
+            self._row_groups_num_rows_cumsum = None
+            self._getitem_last_row_group = None
+
+        def __getitem__(self, idx):
+            return ParquetFileData._locate_row_group_for_item(self, idx)
+        
+    me = My()
+    assert me[0] == (0, 0)
+    assert me[1] == (0, 1)
+    assert me[2] == (0, 2)
+    assert me[3] == (1, 0)
+    assert me[4] == (1, 1)
+    assert me[5] == (1, 2)
+    assert me[6] == (1, 3)
+    assert me[7] == (2, 0)
+    assert me[8] == (2, 1)
+    assert me[9] == (2, 2)
+    assert me[10] == (2, 3)
+    assert me[11] == (2, 4)
+    assert me[12] == (3, 0)
+    assert me[13] == (4, 0)
+    assert me[14] == (4, 1)
+    
+    # jump around
+    assert me[2] == (0, 2)
+    assert me[11] == (2, 4)
+    assert me[3] == (1, 0)
+    assert me[14] == (4, 1)
+    assert me[4] == (1, 1)
+    assert me[0] == (0, 0)
+
 
 def test_big_parquet_list():
     path = LocalUpath('/tmp/test-biglist/parquet')
@@ -70,7 +125,8 @@ def test_big_parquet_list():
     # specify columns
     print('')
     p = biglist._get_data_files()[0][0]['path']
-    d = ParquetFileData(biglist.read_parquet_file(p)).select_columns(['key', 'value'])
+    d = ParquetFileData(biglist.read_parquet_file(p))
+    d.select_columns(['key', 'value'])
     print(d[3])
     d.select_columns('value')
     assert isinstance(d[2], str)

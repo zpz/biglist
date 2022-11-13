@@ -1,4 +1,4 @@
-from biglist import ListView, Biglist
+from biglist import ListView, Biglist, ChainedList
 
 
 def _test_view(datalv):
@@ -55,3 +55,30 @@ def test_listview2():
     print(z)
     assert z[3] == 6
     assert list(z[1:4]) == [3, 5, 6]
+
+
+def test_chainedlist():
+    mylist1 = list(range(0, 8))
+    mylist2 = list(range(8, 18))
+    mylist3 = list(range(18, 32))
+    mylist = ChainedList(mylist1, mylist2, mylist3)
+    data = list(range(32))
+    
+    assert list(mylist) == data
+    assert mylist[12] == data[12]
+    assert mylist[17] == data[17]
+    assert mylist[-8] == data[-8]
+    assert list(mylist.view()[:8]) == data[:8]
+    assert list(mylist.view()[-6:]) == data[-6:]
+    assert list(mylist.view()[2:30:3]) == data[2:30:3]
+    assert list(mylist.view()[::-1]) == data[::-1]
+    assert list(mylist.view()[-2:9:-1]) == data[-2:9:-1]
+    assert list(mylist.view()[::-3]) == data[::-3]
+
+    yourlist = mylist.view()[-2:-30:-3]
+    yourdata = data[-2:-30:-3]
+    
+    assert list(yourlist) == yourdata
+    assert yourlist[3] == yourdata[3]
+    assert list(yourlist[2:20:4]) == yourdata[2:20:4]
+    assert list(yourlist[-2:-20:-3]) == yourdata[-2:-20:-3]

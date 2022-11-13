@@ -9,7 +9,7 @@ authors = [
     {name = "Zepu Zhang", email = "zepu.zhang@gmail.com"},
 ]
 dependencies = [
-    "upathlib[gcs] >= 0.6.8b5",
+    "upathlib >= 0.6.8b5",
 ]
 requires-python = ">=3.8"
 readme = "README.md"
@@ -28,9 +28,12 @@ Source = "https://github.com/zpz/biglist"
 
 
 [project.optional-dependencies]
+gcs = [
+    "upathlib[gcs] >= 0.6.8b5",
+    "goole.auth",
+]
 parquet = [
     "pyarrow >= 10.0.0",
-    "google-auth",
 ]
 test = [
     "bandit",

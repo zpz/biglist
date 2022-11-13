@@ -1,10 +1,7 @@
-import bisect
 import collections.abc
 import itertools
 import logging
 import os
-import queue
-import random
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Union, Sequence, Iterator, List
@@ -13,7 +10,9 @@ import pyarrow
 from pyarrow.parquet import ParquetFile
 from pyarrow.fs import FileSystem, GcsFileSystem
 from upathlib import Upath
-from ._base import BiglistBase, FileLoaderMode, PathType
+from ._base import BiglistBase, FileLoaderMode, PathType, ListView
+from ._util import locate_idx_in_chunked_seq
+
 
 # If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
 # and "credential_token_expiration". These can be obtained via
@@ -41,10 +40,10 @@ class ParquetBiglist(BiglistBase):
     it points to pre-existing Parquet files (produced by other code)
     and provides facilities to read the data.
 
-    Data files are read in the order of the string value of their paths.
-    This order could be different from what another Parquet reader would use.
-    The parameter `shuffle` (default `False`) controls whether to
-    randomize this file order.
+    About the order of file reading: the order of the entries in the input
+    `data_path` to `ParquetBiglist.new` is preserved; if any entry is a
+    directory, the files therein (recursively) are sorted by the string
+    value of each file path.
 
     As long as you use a `ParquetBiglist` object to read, it is assumed
     the dataset has not changed since the creation of the object.
@@ -94,7 +93,6 @@ class ParquetBiglist(BiglistBase):
         *,
         suffix: str = ".parquet",
         keep_files: bool = None,
-        shuffle: bool = False,
         thread_pool_executor: ThreadPoolExecutor = None,
         **kwargs,
     ):
@@ -136,19 +134,15 @@ class ParquetBiglist(BiglistBase):
         elif path.is_file():
             raise FileExistsError(path)
 
-        q_datafiles = queue.Queue()
-
-        def get_file_meta(f, p, q):
+        def get_file_meta(f, p):
             meta = f(p).metadata
-            q.put(
-                {
-                    "path": p,
-                    "num_rows": meta.num_rows,
-                    "row_groups_num_rows": [
-                        meta.row_group(k).num_rows for k in range(meta.num_row_groups)
-                    ],
-                }
-            )
+            return {
+                "path": p,
+                "num_rows": meta.num_rows,
+                "row_groups_num_rows": [
+                    meta.row_group(k).num_rows for k in range(meta.num_row_groups)
+                ],
+            }
 
         if thread_pool_executor is not None:
             pool = thread_pool_executor
@@ -159,33 +153,27 @@ class ParquetBiglist(BiglistBase):
         for p in data_path:
             if p.is_file():
                 if suffix == "*" or p.name.endswith(suffix):
-                    tasks.append(
-                        pool.submit(get_file_meta, read_parquet, str(p), q_datafiles)
-                    )
+                    tasks.append(pool.submit(get_file_meta, read_parquet, str(p)))
             else:
+                tt = []
                 for pp in p.riterdir():
                     if suffix == "*" or pp.name.endswith(suffix):
-                        tasks.append(
-                            pool.submit(
-                                get_file_meta, read_parquet, str(pp), q_datafiles
-                            )
+                        tt.append(
+                            (str(pp), pool.submit(get_file_meta, read_parquet, str(pp)))
                         )
+                tt.sort()
+                for p, t in tt:
+                    tasks.append(t)
+
         assert tasks
+        datafiles = []
         for k, t in enumerate(tasks):
-            _ = t.result()
+            datafiles.append(t.result())
             if (k + 1) % 1000 == 0:
                 logger.info("processed %d files", k + 1)
 
         if thread_pool_executor is None:
             pool.shutdown()
-
-        datafiles = []
-        for _ in range(q_datafiles.qsize()):
-            datafiles.append(q_datafiles.get())
-        if shuffle:
-            random.shuffle(datafiles)
-        else:
-            datafiles.sort(key=lambda x: x["path"])
 
         datafiles_cumlength = list(
             itertools.accumulate(v["num_rows"] for v in datafiles)
@@ -224,7 +212,7 @@ class ParquetFileData(collections.abc.Sequence):
     # with facilities to make it conform to our required APIs.
     #
     # If you want to use the  `arrow.parquet` methods directly,
-    # use it via `self.file`, or `self.table` if not None.
+    # use it via `self.file`, or `self.data`.
 
     def __init__(
         self,
@@ -275,16 +263,19 @@ class ParquetFileData(collections.abc.Sequence):
             return self._column_names
         return self.metadata.schema.names
 
-    def select_columns(self, cols: Union[str, Sequence[str]]):
+    def select_columns(self, cols: Union[str, Sequence[str]]) -> None:
         """
-        Specify the columns to downnload. Usually this is called only once,
-        and early on in the life of the object; or narrow a previous selection.
-        Expanding a previous selection is supported, but that may trigger
-        data reload under the hood.
+        Specify the columns to read. Usually this is called only once,
+        and early on in the life of the object, although it can be called
+        anytime. If called multiple times, later calls will narrow the
+        selection within the columns selected in previous calls.
+
+        This method mutates the underlying object.
 
         Examples:
 
-            obj = ParquetFileData('file_path').select_columns(['a', 'b', 'c'])
+            obj = ParquetFileData('file_path')
+            obj.select_columns(['a', 'b', 'c'])
             print(obj[2])
             obj.select_columns(['b', 'c'])
             print(obj[3])
@@ -292,7 +283,6 @@ class ParquetFileData(collections.abc.Sequence):
             for v in obj:
                 print(v)
         """
-        # TODO: use `None` to re-select all?
         if isinstance(cols, str):
             cols = [cols]
         assert len(set(cols)) == len(cols)  # no repeat values
@@ -308,10 +298,10 @@ class ParquetFileData(collections.abc.Sequence):
                         None if v is None else v.select(cols) for v in self._row_groups
                     ]
             else:
-                # Usually you should not get it in this situation.
-                # Warn?
-                self._data = None
-                self._row_groups = None
+                cc = [col for col in cols if col not in self._column_names]
+                raise ValueError(
+                    f"cannot select the columns {cc} because they are not in existing set of columns"
+                )
         else:
             if self._data is not None:
                 self._data = self._data.select(cols)
@@ -332,6 +322,25 @@ class ParquetFileData(collections.abc.Sequence):
 
     def __len__(self):
         return self.num_rows
+
+    def _locate_row_group_for_item(self, idx):
+        # Assuming user is checking neighboring items,
+        # then the requested item may be in the same row-group
+        # as the item requested last time.
+        if self._row_groups_num_rows is None:
+            meta = self.metadata
+            self._row_groups_num_rows = [
+                meta.row_group(i).num_rows for i in range(self.num_row_groups)
+            ]
+            self._row_groups_num_rows_cumsum = list(
+                itertools.accumulate(self._row_groups_num_rows)
+            )
+
+        igrp, idx_in_grp, group_info = locate_idx_in_chunked_seq(
+            idx, self._row_groups_num_rows_cumsum, self._getitem_last_row_group
+        )
+        self._getitem_last_row_group = group_info
+        return igrp, idx_in_grp
 
     def __getitem__(self, idx: int):
         """
@@ -366,49 +375,16 @@ class ParquetFileData(collections.abc.Sequence):
                     return {k: v.as_py() for k, v in z.items()}
                 return z
 
-        if self._row_groups_num_rows is None:
-            meta = self.metadata
-            self._row_groups_num_rows = [
-                meta.row_group(i).num_rows for i in range(self.num_row_groups)
-            ]
-            self._row_groups_num_rows_cumsum = list(
-                itertools.accumulate(self._row_groups_num_rows)
-            )
-
-        # Assuming user is checking neighboring items,
-        # then the requested item may be in the same row-group
-        # as the item requested last time.
-        igrp = None
-        if (last_group := self._getitem_last_row_group) is not None:
-            if last_group[1] <= idx < last_group[2]:
-                igrp = last_group[0]
-        if igrp is None:
-            igrp = bisect.bisect_right(self._row_groups_num_rows_cumsum, idx)
-            if igrp == 0:
-                self._getitem_last_row_group = (
-                    0,  # row-group index
-                    0,  # item index lower bound
-                    self._row_groups_num_rows_cumsum[0],  # item index upper bound
-                )
-            else:
-                self._getitem_last_row_group = (
-                    igrp,
-                    self._row_groups_num_rows_cumsum[igrp - 1],
-                    self._row_groups_num_rows_cumsum[igrp],
-                )
+        igrp, idx_in_row_group = self._locate_row_group_for_item(idx)
 
         if self._row_groups is None:
             self._row_groups = [None] * self.num_row_groups
-
         if self._row_groups[igrp] is None:
             self._row_groups[igrp] = self.file.read_row_group(
                 igrp, columns=self._column_names
             )
         row_group = self._row_groups[igrp]
-        if igrp == 0:
-            idx_in_row_group = idx
-        else:
-            idx_in_row_group = idx - self._row_groups_num_rows_cumsum[igrp - 1]
+
         if row_group.num_columns == 1:
             z = row_group.column(0)[idx_in_row_group]
             if self._scalar_as_py:
@@ -477,3 +453,7 @@ class ParquetFileData(collections.abc.Sequence):
                 idx, columns=self._column_names
             )
         return self._row_groups[idx]
+
+    def view(self):
+        # The returned object supports slicing.
+        return ListView(self)

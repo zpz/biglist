@@ -1,4 +1,5 @@
 import bisect
+import itertools
 import logging
 import os
 import queue
@@ -20,6 +21,8 @@ from typing import (
 )
 
 from upathlib import LocalUpath, Upath, PathType, resolve_path  # type: ignore
+from ._util import locate_idx_in_chunked_seq
+
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +37,15 @@ class FileLoaderMode:
 
 class FileView(Sequence[T]):
     """
-    A main use case of FileView is to pass these around in
+    Given a function `loader` that would load `file` and return
+    a Sequence. A `FileView` object keeps `loader` and `file`
+    but does not call `loader` until the resultant Sequence
+    is needed. In other words, it does "lazy" loading.
+
+    This makes a `FileView` object light weight and, more importantly,
+    lend itself to pickling.
+    One use case of FileView is to pass these objects around in
     `multiprocessing` code for concurrent data processing.
-    A `FileView` object lends itself to pickling, and loads data
-    "lazily", meaning it does not load data upon creation, but
-    rather loads data only when need to.
     """
 
     def __init__(self, file: Upath, loader: Callable):
@@ -166,6 +173,44 @@ class ListView(Sequence[T]):
     @property
     def raw(self) -> Sequence[T]:
         return self._list
+
+
+class ChainedList(Sequence[T]):
+    def __init__(self, *lists: Sequence[T]):
+        self._lists = lists
+        self._lists_len = None
+        self._lists_len_cumsum = None
+        self._len = None
+        self._get_item_last_list = None
+
+    def __len__(self):
+        if self._len is None:
+            if self._lists_len is None:
+                self._lists_len = [len(v) for v in self._lists]
+            self._len = sum(self._lists_len)
+        return self._len
+
+    def __bool__(self):
+        return len(self) > 0
+
+    def __getitem__(self, idx: int):
+        if self._lists_len_cumsum is None:
+            if self._lists_len is None:
+                self._lists_len = [len(v) for v in self._lists]
+            self._lists_len_cumsum = list(itertools.accumulate(self._lists_len))
+        ilist, idx_in_list, list_info = locate_idx_in_chunked_seq(
+            idx, self._lists_len_cumsum, self._get_item_last_list
+        )
+        self._get_item_last_list = list_info
+        return self._lists[ilist][idx_in_list]
+
+    def __iter__(self):
+        for v in self._lists:
+            yield from v
+
+    def view(self):
+        # The returned object supports slicing.
+        return ListView(self)
 
 
 class BiglistBase(Sequence[T]):

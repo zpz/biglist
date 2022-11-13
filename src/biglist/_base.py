@@ -185,7 +185,9 @@ class ChainedList(Sequence[T]):
 
     def __repr__(self):
         return "<{} with {} member lists, total length {}>".format(
-            self.__class__.__name__, len(self._lists), self._len,
+            self.__class__.__name__,
+            len(self._lists),
+            self._len,
         )
 
     def __str__(self):

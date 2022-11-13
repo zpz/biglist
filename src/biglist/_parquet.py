@@ -460,6 +460,5 @@ class ParquetFileData(collections.abc.Sequence):
 
 
 def read_parquet_file(path: PathType, **kwargs):
-    f = ParquetBiglist.read_parquet_file(
-        str(ParquetBiglist.resolve_path(path)))
+    f = ParquetBiglist.read_parquet_file(str(ParquetBiglist.resolve_path(path)))
     return ParquetFileData(f, **kwargs)

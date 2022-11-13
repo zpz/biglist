@@ -174,6 +174,10 @@ class ListView(Sequence[T]):
     def raw(self) -> Sequence[T]:
         return self._list
 
+    def collect(self) -> List[T]:
+        # Warning: don't do this on "big" data!
+        return list(self)
+
 
 class ChainedList(Sequence[T]):
     def __init__(self, *lists: Sequence[T]):

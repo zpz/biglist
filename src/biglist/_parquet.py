@@ -50,7 +50,7 @@ class ParquetBiglist(BiglistBase):
     """
 
     @classmethod
-    def get_gcsfs(cls, *, good_for_hours=1):
+    def get_gcsfs(cls, *, good_for_minutes=30):
         # Import here b/c user may not be on GCP
         from datetime import datetime
         import google.auth
@@ -63,7 +63,7 @@ class ParquetBiglist(BiglistBase):
             cls._GCP_CREDENTIALS = cred
         if (
             not cred.token
-            or (cred.expiry - datetime.now()).total_seconds() < good_for_hours * 3600
+            or (cred.expiry - datetime.now()).total_seconds() < good_for_minutes * 60
         ):
             cred.refresh(google.auth.transport.requests.Request())
         return GcsFileSystem(
@@ -134,7 +134,7 @@ class ParquetBiglist(BiglistBase):
         elif path.is_file():
             raise FileExistsError(path)
 
-        def get_file_meta(f, p):
+        def get_file_meta(f, p: str):
             meta = f(p).metadata
             return {
                 "path": p,
@@ -457,3 +457,8 @@ class ParquetFileData(collections.abc.Sequence):
     def view(self):
         # The returned object supports slicing.
         return ListView(self)
+
+
+def read_parquet_file(path: PathType, **kwargs):
+    f = ParquetBiglist.read_parquet_file(str(ParquetBiglist.resolve_path(path)))
+    return ParquetFileData(f, **kwargs)

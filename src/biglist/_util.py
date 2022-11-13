@@ -2,11 +2,13 @@ import bisect
 from typing import Sequence, Tuple
 
 
-def locate_idx_in_chunked_seq(idx: int, len_cumsum: Sequence[int], last_chunk: Tuple[int, int, int] = None):
-    '''
+def locate_idx_in_chunked_seq(
+    idx: int, len_cumsum: Sequence[int], last_chunk: Tuple[int, int, int] = None
+):
+    """
     Suppose a sequence is composed of a number of member sequences.
     This function finds which member sequence contains the requested item.
-    
+
     `idx`: index of the item of interest.
     `len_cumsum`: cumulative lengths of the member sequences.
     `last_chunk`: info about the last call to this function, consisting of
@@ -14,7 +16,7 @@ def locate_idx_in_chunked_seq(idx: int, len_cumsum: Sequence[int], last_chunk: T
          'starting index of the chosen sequence',
          'finishing index (exclusive) of the chosen sequence',
         )
-    '''
+    """
     if idx < 0:
         idx = len_cumsum[-1] + idx
     if idx < 0 or idx > len_cumsum[-1]:

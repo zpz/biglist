@@ -189,7 +189,7 @@ class ChainedList(Sequence[T]):
                 self._lists_len = [len(v) for v in self._lists]
             self._len = sum(self._lists_len)
         return self._len
-    
+
     def __bool__(self):
         return len(self) > 0
 
@@ -203,7 +203,7 @@ class ChainedList(Sequence[T]):
         )
         self._get_item_last_list = list_info
         return self._lists[ilist][idx_in_list]
-    
+
     def __iter__(self):
         for v in self._lists:
             yield from v

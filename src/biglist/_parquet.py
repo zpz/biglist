@@ -342,7 +342,7 @@ class ParquetFileData(collections.abc.Sequence):
         )
         self._getitem_last_row_group = group_info
         return igrp, idx_in_grp
-    
+
     def __getitem__(self, idx: int):
         """
         Get one record or row.
@@ -375,7 +375,6 @@ class ParquetFileData(collections.abc.Sequence):
                 if self._scalar_as_py:
                     return {k: v.as_py() for k, v in z.items()}
                 return z
-
 
         igrp, idx_in_row_group = self._locate_row_group_for_item(idx)
 

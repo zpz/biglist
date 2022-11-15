@@ -126,12 +126,15 @@ def test_big_parquet_list():
     print('')
     p = biglist._get_data_files()[0][0]['path']
     d = ParquetFileData(biglist.read_parquet_file(p))
-    d.select_columns(['key', 'value'])
-    print(d[3])
-    d.select_columns('value')
-    assert isinstance(d[2], str)
-    print(d[2])
-    print(list(ListView(d)[:7]))
+    d1 = d.columns(['key', 'value'])
+    print(d1[3])
+    d2 = d1.columns('value')
+    assert isinstance(d2[2], str)
+    print(d2[2])
+    with pytest.raises(ValueError):
+        d3 = d2.columns('key')
+    print(d.columns('key').view()[7:17].collect())
+    print(list(d.view()[:7]))
 
     #
     print('')

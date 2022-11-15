@@ -226,6 +226,10 @@ class ChainedList(Sequence[T]):
         # The returned object supports slicing.
         return ListView(self)
 
+    @property
+    def raw(self) -> Sequence[T]:
+        return self._lists
+
 
 class BiglistBase(Sequence[T]):
     """

@@ -47,7 +47,7 @@ class ParquetBiglist(BiglistBase):
     directory, the files therein (recursively) are sorted by the string
     value of each file path.
 
-    As long as you use a `ParquetBiglist` object to read, it is assumed
+    As long as you use a `ParquetBiglist` object to read, it is assumed that
     the dataset has not changed since the creation of the object.
     """
 
@@ -105,6 +105,16 @@ class ParquetBiglist(BiglistBase):
             as they don't change. However, if any data file is on the local disk,
             you're tied to the particular machine for the use of the `ParquetBiglist`
             object.
+
+        `path`: folder to be used by this object is save whatever it needs to persist.
+            Id `None`, a temporary location will be used.
+
+        `suffix`: files with this suffix in directories specified in `data_path`
+            will be included. To include all files, use `suffix = '*'`.
+            
+        `keep_files`: should files persisted by the current object (in `path`)
+            be deleted when this object is garbage collected?
+            By default, this is `True` if `path` is specified, and `False` otherwise.
 
         This classmethod gathers info of the data files and saves it to facilitate
         reading the data.
@@ -200,12 +210,12 @@ class ParquetBiglist(BiglistBase):
     def _get_data_file(self, datafiles, idx):
         return self.resolve_path(datafiles[idx]["path"])
 
-    def iter_batches(self, batch_size=None):
+    def iter_batches(self, batch_size=1000) -> Iterator[pyarrow.RecordBatch]:
         for file in self.iter_files():
             yield from file.iter_batches(batch_size)
 
     @property
-    def datafiles(self):
+    def datafiles(self) -> List[str]:
         return [f["path"] for f in self.info["datafiles"]]
 
 
@@ -404,6 +414,7 @@ class ParquetFileData(collections.abc.Sequence):
             return z
 
     def __iter__(self):
+        # Iterate over rows.
         # The type of yielded individual elements is the same as `__getitem__`.
         if self._data is None:
             for batch in self.file.iter_batches(columns=self._column_names):
@@ -435,7 +446,7 @@ class ParquetFileData(collections.abc.Sequence):
                     for row in zip(*self._data.columns):
                         yield dict(zip(names, row))
 
-    def iter_batches(self, batch_size=None) -> Iterator[pyarrow.RecordBatch]:
+    def iter_batches(self, batch_size=1000) -> Iterator[pyarrow.RecordBatch]:
         """
         User often wants to specify `batch_size` b/c the default
         may be too large.
@@ -448,6 +459,9 @@ class ParquetFileData(collections.abc.Sequence):
             yield from self._data.to_batches(batch_size)
 
     def row_group(self, idx: int) -> pyarrow.Table:
+        '''
+        Return the specified row group.
+        '''
         assert 0 <= idx < self.num_row_groups
         if self._row_groups is None:
             self._row_groups = [None] * self.num_row_groups

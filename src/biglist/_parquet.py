@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import collections.abc
 import itertools
 import logging
@@ -251,6 +253,16 @@ class ParquetFileData(collections.abc.Sequence):
     def __str__(self):
         return self.__repr__()
 
+    def __len__(self):
+        return self.num_rows
+
+    @property
+    def data(self) -> pyarrow.Table:
+        """Eagerly read in the whole file as a table."""
+        if self._data is None:
+            self._data = self.file.read(columns=self._column_names)
+        return self._data
+
     @property
     def num_columns(self) -> int:
         if self._column_names:
@@ -263,23 +275,26 @@ class ParquetFileData(collections.abc.Sequence):
             return self._column_names
         return self.metadata.schema.names
 
-    def select_columns(self, cols: Union[str, Sequence[str]]) -> None:
+    def columns(self, cols: Union[str, Sequence[str]]) -> ParquetFileData:
         """
-        Specify the columns to read. Usually this is called only once,
-        and early on in the life of the object, although it can be called
-        anytime. If called multiple times, later calls will narrow the
-        selection within the columns selected in previous calls.
+        Return a new `ParquetFileData` object that will only load
+        the specified columns.
 
-        This method mutates the underlying object.
+        The columns of interest have to be within currently available columns.
+        In other words, if a series of calls to this method will incrementally
+        narrow down the selection of columns.
+
+        This method "slices" the data by columns, in contrast to most other
+        data access methods that are selecting rows.
 
         Examples:
 
             obj = ParquetFileData('file_path')
-            obj.select_columns(['a', 'b', 'c'])
-            print(obj[2])
-            obj.select_columns(['b', 'c'])
-            print(obj[3])
-            obj.select_columns('b')
+            obj1 = obj.columns(['a', 'b', 'c'])
+            print(obj1[2])
+            obj2 = obj1.columns(['b', 'c'])
+            print(obj2[3])
+            obj3 = obj.columns('d')
             for v in obj:
                 print(v)
         """
@@ -291,37 +306,25 @@ class ParquetFileData(collections.abc.Sequence):
             if all(col in self._column_names for col in cols):
                 if len(cols) == len(self._column_names):
                     return self
-                if self._data is not None:
-                    self._data = self._data.select(cols)
-                if self._row_groups is not None:
-                    self._row_groups = [
-                        None if v is None else v.select(cols) for v in self._row_groups
-                    ]
             else:
                 cc = [col for col in cols if col not in self._column_names]
                 raise ValueError(
                     f"cannot select the columns {cc} because they are not in existing set of columns"
                 )
-        else:
-            if self._data is not None:
-                self._data = self._data.select(cols)
-            if self._row_groups is not None:
-                self._row_groups = [
-                    None if v is None else v.select(cols) for v in self._row_groups
-                ]
 
-        self._column_names = cols
-        return self
-
-    @property
-    def data(self) -> pyarrow.Table:
-        """Eagerly read in the whole file as a table."""
-        if self._data is None:
-            self._data = self.file.read(columns=self._column_names)
-        return self._data
-
-    def __len__(self):
-        return self.num_rows
+        obj = self.__class__(
+            self.file, eager_load=False, scalar_as_py=self._scalar_as_py
+        )
+        obj._row_groups_num_rows = self._row_groups_num_rows
+        obj._row_groups_num_rows_cumsum = self._row_groups_num_rows_cumsum
+        if self._row_groups:
+            obj._row_groups = [
+                None if v is None else v.select(cols) for v in self._row_groups
+            ]
+        if self._data is not None:
+            obj._data = self._data.select(cols)
+        obj._column_names = cols
+        return obj
 
     def _locate_row_group_for_item(self, idx):
         # Assuming user is checking neighboring items,
@@ -401,7 +404,7 @@ class ParquetFileData(collections.abc.Sequence):
             return z
 
     def __iter__(self):
-        # Type of yielded individual elements is the same as `__getitem__`.
+        # The type of yielded individual elements is the same as `__getitem__`.
         if self._data is None:
             for batch in self.file.iter_batches(columns=self._column_names):
                 if batch.num_columns == 1:
@@ -455,7 +458,7 @@ class ParquetFileData(collections.abc.Sequence):
         return self._row_groups[idx]
 
     def view(self):
-        # The returned object supports slicing.
+        # The returned object supports row slicing.
         return ListView(self)
 
 

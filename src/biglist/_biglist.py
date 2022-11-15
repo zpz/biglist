@@ -460,14 +460,15 @@ class Biglist(BiglistBase[T]):
                 multiprocessing.current_process().name,
                 threading.current_thread().name,
             )
+        finfo = self._multiplex_info_file(task_id)
+        flock = finfo.with_suffix(finfo.suffix + ".lock")
         while True:
-            f = self._multiplex_info_file(task_id)
-            with f.with_suffix(f.suffix + ".lock").lock():
-                ss = self._multiplex_info_file(task_id).read_json()
+            with flock.lock():
+                ss = finfo.read_json()
                 n = ss["next"]
                 if n == ss["total"]:
                     return
-                self._multiplex_info_file(task_id).write_json(
+                finfo.write_json(
                     {
                         "next": n + 1,
                         "worker_id": worker_id,

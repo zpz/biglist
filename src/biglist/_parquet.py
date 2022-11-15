@@ -111,7 +111,7 @@ class ParquetBiglist(BiglistBase):
 
         `suffix`: files with this suffix in directories specified in `data_path`
             will be included. To include all files, use `suffix = '*'`.
-            
+
         `keep_files`: should files persisted by the current object (in `path`)
             be deleted when this object is garbage collected?
             By default, this is `True` if `path` is specified, and `False` otherwise.
@@ -459,9 +459,9 @@ class ParquetFileData(collections.abc.Sequence):
             yield from self._data.to_batches(batch_size)
 
     def row_group(self, idx: int) -> pyarrow.Table:
-        '''
+        """
         Return the specified row group.
-        '''
+        """
         assert 0 <= idx < self.num_row_groups
         if self._row_groups is None:
             self._row_groups = [None] * self.num_row_groups

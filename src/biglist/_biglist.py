@@ -461,7 +461,7 @@ class Biglist(BiglistBase[T]):
                 threading.current_thread().name,
             )
         finfo = self._multiplex_info_file(task_id)
-        flock = finfo.with_suffix(finfo.suffix + '.lock')
+        flock = finfo.with_suffix(finfo.suffix + ".lock")
         while True:
             with flock.lock():
                 ss = finfo.read_json()

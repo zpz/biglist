@@ -311,8 +311,10 @@ class ParquetFileData(collections.abc.Sequence):
                 raise ValueError(
                     f"cannot select the columns {cc} because they are not in existing set of columns"
                 )
-                
-        obj = self.__class__(self.file, eager_load=False, scalar_as_py=self._scalar_as_py)
+
+        obj = self.__class__(
+            self.file, eager_load=False, scalar_as_py=self._scalar_as_py
+        )
         obj._row_groups_num_rows = self._row_groups_num_rows
         obj._row_groups_num_rows_cumsum = self._row_groups_num_rows_cumsum
         if self._row_groups:

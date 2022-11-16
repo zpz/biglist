@@ -224,7 +224,7 @@ class ParquetFileData(collections.abc.Sequence):
     # with facilities to make it conform to our required APIs.
     #
     # If you want to use the  `arrow.parquet` methods directly,
-    # use it via `self.file`, or `self.data`.
+    # use it via `self.file`, or `self.data()`.
 
     def __init__(
         self,
@@ -241,14 +241,14 @@ class ParquetFileData(collections.abc.Sequence):
         self.num_row_groups = meta.num_row_groups
         self._row_groups_num_rows = None
         self._row_groups_num_rows_cumsum = None
-        self._row_groups: List[pyarrow.Table] = None
+        self._row_groups: List[ParquetBatchData] = None
 
         self._column_names = None
-        self._scalar_as_py = scalar_as_py
+        self.scalar_as_py = scalar_as_py
 
-        self._data: pyarrow.Table = None
+        self._data: ParquetBatchData = None
         if eager_load:
-            _ = self.data
+            _ = self.data(use_threads=False)
 
         self._getitem_last_row_group = None
 
@@ -266,11 +266,12 @@ class ParquetFileData(collections.abc.Sequence):
     def __len__(self):
         return self.num_rows
 
-    @property
-    def data(self) -> pyarrow.Table:
+    def data(self, *, use_threads=True) -> ParquetBatchData:
         """Eagerly read in the whole file as a table."""
         if self._data is None:
-            self._data = self.file.read(columns=self._column_names)
+            self._data = ParquetBatchData(
+                self.file.read(columns=self._column_names, use_threads=use_threads),
+                scalar_as_py=self.scalar_as_py)
         return self._data
 
     @property
@@ -284,6 +285,85 @@ class ParquetFileData(collections.abc.Sequence):
         if self._column_names:
             return self._column_names
         return self.metadata.schema.names
+
+    def _locate_row_group_for_item(self, idx):
+        # Assuming user is checking neighboring items,
+        # then the requested item may be in the same row-group
+        # as the item requested last time.
+        if self._row_groups_num_rows is None:
+            meta = self.metadata
+            self._row_groups_num_rows = [
+                meta.row_group(i).num_rows for i in range(self.num_row_groups)
+            ]
+            self._row_groups_num_rows_cumsum = list(
+                itertools.accumulate(self._row_groups_num_rows)
+            )
+
+        igrp, idx_in_grp, group_info = locate_idx_in_chunked_seq(
+            idx, self._row_groups_num_rows_cumsum, self._getitem_last_row_group
+        )
+        self._getitem_last_row_group = group_info
+        return igrp, idx_in_grp
+
+    def __getitem__(self, idx: int):
+        """
+        Get one record or row.
+
+        `idx`: row index in this file.
+
+        See `ParquetBatchData.__getitem__`.
+        """
+        if idx < 0:
+            idx = self.num_rows + idx
+        if idx < 0 or idx >= self.num_rows:
+            raise IndexError(idx)
+
+        if self._data is not None:
+            return self._data[idx]
+
+        igrp, idx_in_row_group = self._locate_row_group_for_item(idx)
+        row_group = self.row_group(igrp)
+        return row_group[idx_in_row_group]
+
+    def __iter__(self):
+        '''
+        Iterate over rows.
+        The type of yielded individual elements is the same as `__getitem__`.
+        '''
+        if self._data is None:
+            for batch in self.file.iter_batches(columns=self._column_names):
+                yield from ParquetBatchData(batch, scalar_as_py=self.scalar_as_py)
+        else:
+            yield from self._data
+
+    def iter_batches(self, batch_size=1000) -> Iterator[ParquetBatchData]:
+        """
+        User often wants to specify `batch_size` b/c the default
+        may be too large.
+        """
+        if self._data is None:
+            for batch in self.file.iter_batches(batch_size=batch_size, columns=self._column_names):
+                yield ParquetBatchData(batch, scalar_as_py=self.scalar_as_py)
+        else:
+            for batch in self._data.data().to_batches(batch_size):
+                yield ParquetBatchData(batch, scalar_as_py=self.scalar_as_py)
+
+    def row_group(self, idx: int) -> ParquetBatchData:
+        """
+        Return the specified row group.
+        """
+        assert 0 <= idx < self.num_row_groups
+        if self._row_groups is None:
+            self._row_groups = [None] * self.num_row_groups
+        if self._row_groups[idx] is None:
+            self._row_groups[idx] = ParquetBatchData(
+                self.file.read_row_group(idx, columns=self._column_names),
+                scalar_as_py=self.scalar_as_py)
+        return self._row_groups[idx]
+
+    def view(self):
+        # The returned object supports row slicing.
+        return ListView(self)
 
     def columns(self, cols: Union[str, Sequence[str]]) -> ParquetFileData:
         """
@@ -323,37 +403,48 @@ class ParquetFileData(collections.abc.Sequence):
                 )
 
         obj = self.__class__(
-            self.file, eager_load=False, scalar_as_py=self._scalar_as_py
+            self.file, eager_load=False, scalar_as_py=self.scalar_as_py
         )
         obj._row_groups_num_rows = self._row_groups_num_rows
         obj._row_groups_num_rows_cumsum = self._row_groups_num_rows_cumsum
         if self._row_groups:
             obj._row_groups = [
-                None if v is None else v.select(cols) for v in self._row_groups
+                None if v is None else v.columns(cols)
+                for v in self._row_groups
             ]
         if self._data is not None:
-            obj._data = self._data.select(cols)
+            obj._data = self._data.columns(cols)
         obj._column_names = cols
         return obj
 
-    def _locate_row_group_for_item(self, idx):
-        # Assuming user is checking neighboring items,
-        # then the requested item may be in the same row-group
-        # as the item requested last time.
-        if self._row_groups_num_rows is None:
-            meta = self.metadata
-            self._row_groups_num_rows = [
-                meta.row_group(i).num_rows for i in range(self.num_row_groups)
-            ]
-            self._row_groups_num_rows_cumsum = list(
-                itertools.accumulate(self._row_groups_num_rows)
-            )
 
-        igrp, idx_in_grp, group_info = locate_idx_in_chunked_seq(
-            idx, self._row_groups_num_rows_cumsum, self._getitem_last_row_group
+class ParquetBatchData(collections.abc.Sequence):
+    def __init__(self, data: Union[pyarrow.Table, pyarrow.RecordBatch],
+                 *, scalar_as_py: bool = True):
+        self._data = data
+        self.scalar_as_py = scalar_as_py
+        self.num_rows = data.num_rows
+        self.num_columns = data.num_columns
+        self.column_names = data.schema.names
+
+    def __repr__(self):
+        return "<{} with {} rows, {} columns>".format(
+            self.__class__.__name__,
+            self.num_rows,
+            self.num_columns,
         )
-        self._getitem_last_row_group = group_info
-        return igrp, idx_in_grp
+
+    def __str__(self):
+        return self.__repr__()
+
+    def data(self):
+        return self._data
+
+    def __len__(self):
+        return self.num_rows
+
+    def __bool__(self):
+        return self.num_rows > 0
 
     def __getitem__(self, idx: int):
         """
@@ -361,12 +452,12 @@ class ParquetFileData(collections.abc.Sequence):
 
         `idx`: row index in this file.
 
-        If `self._scalar_as_py` is False,
+        If `self.scalar_as_py` is False,
           If data has a single column, return the value on the specified row.
           The return is a `pyarrow.Scalar`` type such as `pyarrow.lib.StringScalar`.
           If data has multiple columns, return a dict with keys being column names
           and values being `pyarrow.Scalar`` types.
-        If `self._scalar_as_py` if True,
+        If `self.scalar_as_py` if True,
           the `pyarrow.Scalar` values are converted to Python native types.
         """
         if idx < 0:
@@ -374,106 +465,76 @@ class ParquetFileData(collections.abc.Sequence):
         if idx < 0 or idx >= self.num_rows:
             raise IndexError(idx)
 
-        if self._data is not None:
-            if self._data.num_columns == 1:
-                z = self._data.column(0)[idx]
-                if self._scalar_as_py:
-                    return z.as_py()
-                return z
-            else:
-                z = {
-                    col: self._data.column(col)[idx] for col in self._data.column_names
-                }
-                if self._scalar_as_py:
-                    return {k: v.as_py() for k, v in z.items()}
-                return z
-
-        igrp, idx_in_row_group = self._locate_row_group_for_item(idx)
-
-        if self._row_groups is None:
-            self._row_groups = [None] * self.num_row_groups
-        if self._row_groups[igrp] is None:
-            self._row_groups[igrp] = self.file.read_row_group(
-                igrp, columns=self._column_names
-            )
-        row_group = self._row_groups[igrp]
-
-        if row_group.num_columns == 1:
-            z = row_group.column(0)[idx_in_row_group]
-            if self._scalar_as_py:
+        if self.num_columns == 1:
+            z = self._data.column(0)[idx]
+            if self.scalar_as_py:
                 return z.as_py()
-            else:
-                return z
-        else:
-            z = {
-                col: row_group.column(col)[idx_in_row_group]
-                for col in row_group.column_names
-            }
-            if self._scalar_as_py:
-                return {k: v.as_py() for k, v in z.items()}
             return z
+
+        z = {
+            col: self._data.column(col)[idx] for col in self.column_names
+        }
+        if self.scalar_as_py:
+            return {k: v.as_py() for k, v in z.items()}
+        return z
 
     def __iter__(self):
         # Iterate over rows.
         # The type of yielded individual elements is the same as `__getitem__`.
-        if self._data is None:
-            for batch in self.file.iter_batches(columns=self._column_names):
-                if batch.num_columns == 1:
-                    if self._scalar_as_py:
-                        yield from (v.as_py() for v in batch.column(0))
-                    else:
-                        yield from batch.column(0)
-                else:
-                    names = batch.schema.names
-                    if self._scalar_as_py:
-                        for row in zip(*batch.columns):
-                            yield dict(zip(names, (v.as_py() for v in row)))
-                    else:
-                        for row in zip(*batch.columns):
-                            yield dict(zip(names, row))
-        else:
-            if self._data.num_columns == 1:
-                if self._scalar_as_py:
-                    yield from (v.as_py() for v in self._data.column(0))
-                else:
-                    yield from self._data.column(0)
+        if self.num_columns == 1:
+            if self.scalar_as_py:
+                yield from (v.as_py() for v in self._data.column(0))
             else:
-                names = self._data.column_names
-                if self._scalar_as_py:
-                    for row in zip(*self._data.columns):
-                        yield dict(zip(names, (v.as_py() for v in row)))
-                else:
-                    for row in zip(*self._data.columns):
-                        yield dict(zip(names, row))
-
-    def iter_batches(self, batch_size=1000) -> Iterator[pyarrow.RecordBatch]:
-        """
-        User often wants to specify `batch_size` b/c the default
-        may be too large.
-        """
-        if self._data is None:
-            yield from self.file.iter_batches(
-                batch_size=batch_size, columns=self._column_names
-            )
+                yield from self._data.column(0)
         else:
-            yield from self._data.to_batches(batch_size)
-
-    def row_group(self, idx: int) -> pyarrow.Table:
-        """
-        Return the specified row group.
-        """
-        assert 0 <= idx < self.num_row_groups
-        if self._row_groups is None:
-            self._row_groups = [None] * self.num_row_groups
-        if self._row_groups[idx] is None:
-            self._row_groups[idx] = self.file.read_row_group(
-                idx, columns=self._column_names
-            )
-        return self._row_groups[idx]
+            names = self.column_names
+            if self.scalar_as_py:
+                for row in zip(*self._data.columns):
+                    yield dict(zip(names, (v.as_py() for v in row)))
+            else:
+                for row in zip(*self._data.columns):
+                    yield dict(zip(names, row))
 
     def view(self):
-        # The returned object supports row slicing.
         return ListView(self)
+
+    def columns(self, cols: Union[str, Sequence[str]]) -> ParquetBatchData:
+        """
+        Return a new `ParquetBatchData` object that will only produce
+        the specified columns.
+
+        The columns of interest have to be within currently available columns.
+        In other words, a series of calls to this method would incrementally
+        narrow down the selection of columns.
+
+        This method "slices" the data by columns, in contrast to most other
+        data access methods that are selecting rows.
+
+        Examples:
+
+            obj = ParquetBatchData(parquet_table)
+            obj1 = obj.columns(['a', 'b', 'c'])
+            print(obj1[2])
+            obj2 = obj1.columns(['b', 'c'])
+            print(obj2[3])
+            obj3 = obj.columns('d')
+            for v in obj:
+                print(v)
+        """
+        if isinstance(cols, str):
+            cols = [cols]
+        assert len(set(cols)) == len(cols)  # no repeat values
+
+        if all(col in self.column_names for col in cols):
+            if len(cols) == len(self.column_names):
+                return self
+        else:
+            cc = [col for col in cols if col not in self.column_names]
+            raise ValueError(
+                f"cannot select the columns {cc} because they are not in existing set of columns"
+            )
+
+        return self.__class__(self._data.select(cols), scalar_as_py=self.scalar_as_py)
 
 
 def read_parquet_file(path: PathType, **kwargs):

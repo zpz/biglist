@@ -315,23 +315,6 @@ class BiglistBase(Sequence[T]):
         self._n_read_threads = 3
         self._n_write_threads = 3
 
-    def destroy(self) -> None:
-        """
-        Clears all the files and releases all in-memory data held by this object,
-        so that the object is as if upon `__init__` with an empty directory pointed to
-        by `self.path`.
-
-        After this method is called, this object is no longer usable.
-        """
-        # if self._file_dumper is not None:
-        #     self._file_dumper.cancel()
-        self._file_dumper = None
-        self._read_buffer = None
-        self._read_buffer_file_idx = None
-        self._read_buffer_item_range = None
-        self._append_buffer = []
-        self.path.rmrf(quiet=True)
-
     def __repr__(self):
         return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data file(s)>"
 

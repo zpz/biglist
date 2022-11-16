@@ -222,12 +222,10 @@ def test_mp2():
         for path in pool.imap_unordered(find_big, biglist.file_views()):
             z = Biglist(path)
             yourlist.extend(z)
-            z.destroy()
+            del z
     yourlist.flush()
 
     assert sorted(yourlist) == sorted(v for v in data if v > 40)
-    biglist.destroy()
-    yourlist.destroy()
 
 
 async def sum_square(mylist):
@@ -248,7 +246,6 @@ async def test_async():
     tasks = (sum_square(x) for x in biglist.file_views())
     results = await asyncio.gather(*tasks)
     assert sum(results) == sum(v*v for v in biglist)
-    biglist.destroy()
 
 
 def mult_worker(path, task_id, q):

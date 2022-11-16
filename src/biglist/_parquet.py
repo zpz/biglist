@@ -207,7 +207,7 @@ class ParquetBiglist(BiglistBase):
 
     def __del__(self) -> None:
         if not self.keep_files:
-            self.destroy()
+            self.path.rmrf()
 
     def __repr__(self):
         return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data file(s) stored at {self.info['datapath']}>"

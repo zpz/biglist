@@ -314,30 +314,6 @@ class BiglistBase(Sequence[T]):
 
         self._n_read_threads = 3
         self._n_write_threads = 3
-        self.keep_files = True
-
-    def __del__(self) -> None:
-        if self.keep_files:
-            self.flush()
-        else:
-            self.destroy()
-
-    def destroy(self) -> None:
-        """
-        Clears all the files and releases all in-memory data held by this object,
-        so that the object is as if upon `__init__` with an empty directory pointed to
-        by `self.path`.
-
-        After this method is called, this object is no longer usable.
-        """
-        # if self._file_dumper is not None:
-        #     self._file_dumper.cancel()
-        self._file_dumper = None
-        self._read_buffer = None
-        self._read_buffer_file_idx = None
-        self._read_buffer_item_range = None
-        self._append_buffer = []
-        self.path.rmrf(quiet=True)
 
     def __repr__(self):
         return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data file(s)>"
@@ -372,10 +348,6 @@ class BiglistBase(Sequence[T]):
         # `datafiles` is the return of `get_datafiles`.
         # `idx` is the index of the file of interest in `datafiles`.
         raise NotImplementedError
-
-    def flush(self):
-        # Persist element changes. To be defined by read-write subclasses.
-        pass
 
     def __len__(self) -> int:
         # This assumes the current object is the only one
@@ -483,7 +455,6 @@ class BiglistBase(Sequence[T]):
         it consumes the entire data. To distribute the iteration
         to multiple workers, use `concurrent_iter` or `concurrent_iter_files`.
         """
-        self.flush()
         # Assuming the biglist will not change (not being appended to)
         # during iteration.
 
@@ -625,7 +596,6 @@ class BiglistBase(Sequence[T]):
         # Multiple views may be used to view diff parts
         # of the Biglist; they open and read files independent of
         # other views.
-        self.flush()
         return ListView(self)
 
     @property

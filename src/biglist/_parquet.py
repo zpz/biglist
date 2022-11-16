@@ -201,6 +201,14 @@ class ParquetBiglist(BiglistBase):
 
         return obj
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.keep_files = True
+
+    def __del__(self) -> None:
+        if not self.keep_files:
+            self.path.rmrf()
+
     def __repr__(self):
         return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data file(s) stored at {self.info['datapath']}>"
 

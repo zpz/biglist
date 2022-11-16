@@ -239,6 +239,13 @@ class Biglist(BiglistBase[T]):
         super().__init__(*args, **kwargs)
         self._data_files: Optional[list] = None
         self._data_files_cumlength_ = []
+        self.keep_files = True
+
+    def __del__(self) -> None:
+        if self.keep_files:
+            self.flush()
+        else:
+            self.path.rmrf()
 
     @property
     def batch_size(self) -> int:
@@ -411,6 +418,14 @@ class Biglist(BiglistBase[T]):
     def _get_data_file(self, datafiles, idx):
         # `datafiles` is the return of `get_datafiles`.
         return self._data_dir / datafiles[idx][0]
+
+    def iter_files(self):
+        self.flush()
+        return super().iter_files()
+
+    def view(self):
+        self.flush()
+        return super().view()
 
     def _multiplex_info_file(self, task_id: str) -> Upath:
         """

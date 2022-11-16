@@ -314,13 +314,6 @@ class BiglistBase(Sequence[T]):
 
         self._n_read_threads = 3
         self._n_write_threads = 3
-        self.keep_files = True
-
-    def __del__(self) -> None:
-        if self.keep_files:
-            self.flush()
-        else:
-            self.destroy()
 
     def destroy(self) -> None:
         """
@@ -372,10 +365,6 @@ class BiglistBase(Sequence[T]):
         # `datafiles` is the return of `get_datafiles`.
         # `idx` is the index of the file of interest in `datafiles`.
         raise NotImplementedError
-
-    def flush(self):
-        # Persist element changes. To be defined by read-write subclasses.
-        pass
 
     def __len__(self) -> int:
         # This assumes the current object is the only one
@@ -483,7 +472,6 @@ class BiglistBase(Sequence[T]):
         it consumes the entire data. To distribute the iteration
         to multiple workers, use `concurrent_iter` or `concurrent_iter_files`.
         """
-        self.flush()
         # Assuming the biglist will not change (not being appended to)
         # during iteration.
 
@@ -625,7 +613,6 @@ class BiglistBase(Sequence[T]):
         # Multiple views may be used to view diff parts
         # of the Biglist; they open and read files independent of
         # other views.
-        self.flush()
         return ListView(self)
 
     @property

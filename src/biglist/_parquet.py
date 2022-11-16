@@ -271,7 +271,8 @@ class ParquetFileData(collections.abc.Sequence):
         if self._data is None:
             self._data = ParquetBatchData(
                 self.file.read(columns=self._column_names, use_threads=use_threads),
-                scalar_as_py=self.scalar_as_py)
+                scalar_as_py=self.scalar_as_py,
+            )
         return self._data
 
     @property
@@ -326,10 +327,10 @@ class ParquetFileData(collections.abc.Sequence):
         return row_group[idx_in_row_group]
 
     def __iter__(self):
-        '''
+        """
         Iterate over rows.
         The type of yielded individual elements is the same as `__getitem__`.
-        '''
+        """
         if self._data is None:
             for batch in self.file.iter_batches(columns=self._column_names):
                 yield from ParquetBatchData(batch, scalar_as_py=self.scalar_as_py)
@@ -342,7 +343,9 @@ class ParquetFileData(collections.abc.Sequence):
         may be too large.
         """
         if self._data is None:
-            for batch in self.file.iter_batches(batch_size=batch_size, columns=self._column_names):
+            for batch in self.file.iter_batches(
+                batch_size=batch_size, columns=self._column_names
+            ):
                 yield ParquetBatchData(batch, scalar_as_py=self.scalar_as_py)
         else:
             for batch in self._data.data().to_batches(batch_size):
@@ -358,7 +361,8 @@ class ParquetFileData(collections.abc.Sequence):
         if self._row_groups[idx] is None:
             self._row_groups[idx] = ParquetBatchData(
                 self.file.read_row_group(idx, columns=self._column_names),
-                scalar_as_py=self.scalar_as_py)
+                scalar_as_py=self.scalar_as_py,
+            )
         return self._row_groups[idx]
 
     def view(self):
@@ -409,8 +413,7 @@ class ParquetFileData(collections.abc.Sequence):
         obj._row_groups_num_rows_cumsum = self._row_groups_num_rows_cumsum
         if self._row_groups:
             obj._row_groups = [
-                None if v is None else v.columns(cols)
-                for v in self._row_groups
+                None if v is None else v.columns(cols) for v in self._row_groups
             ]
         if self._data is not None:
             obj._data = self._data.columns(cols)
@@ -419,8 +422,12 @@ class ParquetFileData(collections.abc.Sequence):
 
 
 class ParquetBatchData(collections.abc.Sequence):
-    def __init__(self, data: Union[pyarrow.Table, pyarrow.RecordBatch],
-                 *, scalar_as_py: bool = True):
+    def __init__(
+        self,
+        data: Union[pyarrow.Table, pyarrow.RecordBatch],
+        *,
+        scalar_as_py: bool = True,
+    ):
         self._data = data
         self.scalar_as_py = scalar_as_py
         self.num_rows = data.num_rows
@@ -471,9 +478,7 @@ class ParquetBatchData(collections.abc.Sequence):
                 return z.as_py()
             return z
 
-        z = {
-            col: self._data.column(col)[idx] for col in self.column_names
-        }
+        z = {col: self._data.column(col)[idx] for col in self.column_names}
         if self.scalar_as_py:
             return {k: v.as_py() for k, v in z.items()}
         return z

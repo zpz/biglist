@@ -5,6 +5,11 @@ from ._base import FileView, ListView, ChainedList
 from ._biglist import Biglist
 
 try:
-    from ._parquet import ParquetBiglist, ParquetFileData, ParquetBatchData, read_parquet_file
+    from ._parquet import (
+        ParquetBiglist,
+        ParquetFileData,
+        ParquetBatchData,
+        read_parquet_file,
+    )
 except ImportError:
     pass

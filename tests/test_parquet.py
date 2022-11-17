@@ -4,7 +4,7 @@ from uuid import uuid4
 import pyarrow
 from pyarrow import parquet
 from upathlib import LocalUpath
-from biglist import ParquetBiglist, ParquetFileData, ListView
+from biglist import ParquetBiglist, ParquetFileData, ListView, write_parquet_file
 import pytest
 
 
@@ -68,16 +68,34 @@ def test_big_parquet_list():
     
     N = 10000
 
-    key = pyarrow.array([random.randint(0, 10000) for _ in range(N)])
-    val = pyarrow.array([str(uuid4()) for _ in range(N)])
-    tab = pyarrow.Table.from_arrays([key, val], names=['key', 'value'])
-    parquet.write_table(tab, str(path / 'data_1.parquet'))
+    # key = pyarrow.array([random.randint(0, 10000) for _ in range(N)])
+    # val = pyarrow.array([str(uuid4()) for _ in range(N)])
+    # tab = pyarrow.Table.from_arrays([key, val], names=['key', 'value'])
+    # parquet.write_table(tab, str(path / 'data_1.parquet'))
 
-    key = pyarrow.array([random.randint(0, 10000) for _ in range(N)])
-    val = pyarrow.array([str(uuid4()) for _ in range(N)])
-    tab = pyarrow.Table.from_arrays([key, val], names=['key', 'value'])
+    write_parquet_file(
+        path / 'data_1.parquet',
+        [
+            [random.randint(0, 10000) for _ in range(N)],
+            [str(uuid4()) for _ in range(N)],
+        ],
+        names=['key', 'value']
+    )
+
+    # key = pyarrow.array([random.randint(0, 10000) for _ in range(N)])
+    # val = pyarrow.array([str(uuid4()) for _ in range(N)])
+    # tab = pyarrow.Table.from_arrays([key, val], names=['key', 'value'])
     (path / 'd2').localpath.mkdir()
-    parquet.write_table(tab, str(path / 'd2' / 'data_2.parquet'))
+    # parquet.write_table(tab, str(path / 'd2' / 'data_2.parquet'))
+
+    write_parquet_file(
+        path / 'd2' / 'data_2.parquet',
+        [ 
+         [random.randint(0, 10000) for _ in range(N)],
+         [str(uuid4()) for _ in range(N)],
+         ],
+        names=['key', 'value']
+    )
 
     biglist = ParquetBiglist.new(path)
     assert len(biglist) == N + N

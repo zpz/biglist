@@ -6,12 +6,12 @@ import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Union, Sequence, Iterator, List
+from typing import Union, Sequence, Iterator, List, Iterable
 
 import pyarrow
 from pyarrow.parquet import ParquetFile
 from pyarrow.fs import FileSystem, GcsFileSystem
-from upathlib import Upath
+from upathlib import Upath, LocalUpath
 from ._base import BiglistBase, FileLoaderMode, PathType, ListView
 from ._util import locate_idx_in_chunked_seq
 
@@ -218,7 +218,7 @@ class ParquetBiglist(BiglistBase):
     def _get_data_file(self, datafiles, idx):
         return self.resolve_path(datafiles[idx]["path"])
 
-    def iter_batches(self, batch_size=1000) -> Iterator[pyarrow.RecordBatch]:
+    def iter_batches(self, batch_size=10_000) -> Iterator[ParquetBatchData]:
         for file in self.iter_files():
             yield from file.iter_batches(batch_size)
 
@@ -228,11 +228,15 @@ class ParquetBiglist(BiglistBase):
 
 
 class ParquetFileData(collections.abc.Sequence):
-    # Represents data of a single Parquet file,
-    # with facilities to make it conform to our required APIs.
-    #
-    # If you want to use the  `arrow.parquet` methods directly,
-    # use it via `self.file`, or `self.data()`.
+    """
+    Represents data of a single Parquet file,
+    with facilities to make it conform to our required APIs.
+
+    If you want to use the  `arrow.parquet` methods directly,
+    use it via `self.file`, or `self.data()`.
+
+    Objects of this class can't be pickled.
+    """
 
     def __init__(
         self,
@@ -345,11 +349,7 @@ class ParquetFileData(collections.abc.Sequence):
         else:
             yield from self._data
 
-    def iter_batches(self, batch_size=1000) -> Iterator[ParquetBatchData]:
-        """
-        User often wants to specify `batch_size` b/c the default
-        may be too large.
-        """
+    def iter_batches(self, batch_size=10_000) -> Iterator[ParquetBatchData]:
         if self._data is None:
             for batch in self.file.iter_batches(
                 batch_size=batch_size, columns=self._column_names
@@ -430,6 +430,10 @@ class ParquetFileData(collections.abc.Sequence):
 
 
 class ParquetBatchData(collections.abc.Sequence):
+    """
+    Objects of this class can be pickled.
+    """
+
     def __init__(
         self,
         data: Union[pyarrow.Table, pyarrow.RecordBatch],
@@ -553,3 +557,36 @@ class ParquetBatchData(collections.abc.Sequence):
 def read_parquet_file(path: PathType, **kwargs):
     f = ParquetBiglist.read_parquet_file(str(ParquetBiglist.resolve_path(path)))
     return ParquetFileData(f, **kwargs)
+
+
+def write_parquet_file(
+    path: PathType,
+    data: Union[
+        pyarrow.Table, Sequence[Union[pyarrow.Array, pyarrow.ChunkedArray, Iterable]]
+    ],
+    *,
+    names: Sequence[str] = None,
+    **kwargs,
+):
+    """
+    If the file already exists, it will be overwritten.
+    """
+    if not isinstance(data, pyarrow.Table):
+        assert names
+        assert len(names) == len(data)
+        arrays = [
+            a
+            if isinstance(a, (pyarrow.Array, pyarrow.ChunkedArray))
+            else pyarrow.array(a)
+            for a in data
+        ]
+        data = pyarrow.Table.from_arrays(arrays, names=names)
+    else:
+        assert names is None
+    path = ParquetBiglist.resolve_path(path)
+    if isinstance(path, LocalUpath):
+        path.parent.localpath.mkdir(exist_ok=True, parents=True)
+    ff, pp = FileSystem.from_uri(str(path))
+    if isinstance(ff, GcsFileSystem):
+        ff = ParquetBiglist.get_gcsfs()
+    pyarrow.parquet.write_table(data, ff.open_output_stream(pp), **kwargs)

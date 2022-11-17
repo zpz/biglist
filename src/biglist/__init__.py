@@ -1,5 +1,5 @@
 # flake8: noqa
-__version__ = "0.7.0b16"
+__version__ = "0.7.0b17"
 
 from ._base import FileView, ListView, ChainedList
 from ._biglist import Biglist
@@ -10,6 +10,7 @@ try:
         ParquetFileData,
         ParquetBatchData,
         read_parquet_file,
+        write_parquet_file,
     )
 except ImportError:
     pass

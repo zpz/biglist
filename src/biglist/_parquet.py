@@ -228,15 +228,15 @@ class ParquetBiglist(BiglistBase):
 
 
 class ParquetFileData(collections.abc.Sequence):
-    '''
+    """
     Represents data of a single Parquet file,
     with facilities to make it conform to our required APIs.
-    
+
     If you want to use the  `arrow.parquet` methods directly,
     use it via `self.file`, or `self.data()`.
-    
+
     Objects of this class can't be pickled.
-    '''
+    """
 
     def __init__(
         self,
@@ -430,9 +430,10 @@ class ParquetFileData(collections.abc.Sequence):
 
 
 class ParquetBatchData(collections.abc.Sequence):
-    '''
+    """
     Objects of this class can be pickled.
-    '''
+    """
+
     def __init__(
         self,
         data: Union[pyarrow.Table, pyarrow.RecordBatch],
@@ -558,19 +559,27 @@ def read_parquet_file(path: PathType, **kwargs):
     return ParquetFileData(f, **kwargs)
 
 
-def write_parquet_file(path: PathType,
-                       data: Union[pyarrow.Table, Sequence[Union[pyarrow.Array, pyarrow.ChunkedArray, Iterable]]],
-                       *,
-                       names: Sequence[str] = None,
-                       **kwargs):
-    '''
+def write_parquet_file(
+    path: PathType,
+    data: Union[
+        pyarrow.Table, Sequence[Union[pyarrow.Array, pyarrow.ChunkedArray, Iterable]]
+    ],
+    *,
+    names: Sequence[str] = None,
+    **kwargs,
+):
+    """
     If the file already exists, it will be overwritten.
-    '''
+    """
     if not isinstance(data, pyarrow.Table):
         assert names
         assert len(names) == len(data)
-        arrays = [a if isinstance(a, (pyarrow.Array, pyarrow.ChunkedArray))
-                  else pyarrow.array(a) for a in data]
+        arrays = [
+            a
+            if isinstance(a, (pyarrow.Array, pyarrow.ChunkedArray))
+            else pyarrow.array(a)
+            for a in data
+        ]
         data = pyarrow.Table.from_arrays(arrays, names=names)
     else:
         assert names is None

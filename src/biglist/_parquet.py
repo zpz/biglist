@@ -582,11 +582,13 @@ class ParquetBatchData(collections.abc.Sequence):
 
         return self.__class__(self._data.select(cols), scalar_as_py=self.scalar_as_py)
 
-    def column(self, idx_or_name: Union[int, str]) -> Union[pyarrow.Array, pyarrow.ChunkedArray]:
-        '''
+    def column(
+        self, idx_or_name: Union[int, str]
+    ) -> Union[pyarrow.Array, pyarrow.ChunkedArray]:
+        """
         If `self._data` is `pyarrow.Table`, return `pyarrow.ChunkedArray`.
         If `self._data` is `pyarrow.RecordBatch`, return `pyarrow.Array`.
-        '''
+        """
         return self._data.column(idx_or_name)
 
 

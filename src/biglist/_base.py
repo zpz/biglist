@@ -454,6 +454,8 @@ class BiglistBase(Sequence[T]):
         This is "eager", and not distributed, that is,
         it consumes the entire data. To distribute the iteration
         to multiple workers, use `concurrent_iter` or `concurrent_iter_files`.
+        
+        This exists mainly as the _engine_ for `__iter__`.
         """
         # Assuming the biglist will not change (not being appended to)
         # during iteration.

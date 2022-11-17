@@ -93,7 +93,7 @@ class Biglist(BiglistBase[T]):
 
     registered_storage_formats = {}
 
-    DEFAULT_STORAGE_FORMAT = "pickle"
+    DEFAULT_STORAGE_FORMAT = "pickle-zstd"
 
     @classmethod
     def register_storage_format(
@@ -479,7 +479,14 @@ class Biglist(BiglistBase[T]):
         flock = finfo.with_suffix(finfo.suffix + ".lock")
         while True:
             with flock.lock():
+                # In concurrent use cases, I've observed
+                # `upathlib.LockAcquireError` raised here.
+                # User may want to do retry here.
                 ss = finfo.read_json()
+                # In concurrent use cases, I've observed
+                # `FileNotFoundError` here. User may want
+                # to do retry here.
+
                 n = ss["next"]
                 if n == ss["total"]:
                     return
@@ -495,7 +502,6 @@ class Biglist(BiglistBase[T]):
             yield self[n]
 
     def multiplex_stat(self, task_id: str) -> dict:
-
         return self._multiplex_info_file(task_id).read_json()
 
     def multiplex_done(self, task_id: str) -> bool:

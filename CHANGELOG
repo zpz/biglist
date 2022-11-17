@@ -4,6 +4,7 @@
 - Methods `Biglist.pre_serialize` and `Biglist.post_deserialize` are removed. Alternatives to achieve similar effects are documented.
 - New class `ChainedList`. More thoughtful use of `ListView`.
 - Removed method `Biglist.destroy`.
+- `Biglist.DEFAULT_STORAGE_FORMAT` changed from `pickle` to `pickle-zstd`.
 
 
 Release 0.6.9

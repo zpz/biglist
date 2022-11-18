@@ -538,7 +538,7 @@ class BiglistFileData(collections.abc.Sequence):
         return iter(self._data)
 
     def view(self):
-        return ListView(self._data)
+        return ListView(self)
 
 
 class JsonByteSerializer(ByteSerializer):

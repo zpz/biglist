@@ -12,7 +12,6 @@ from datetime import datetime
 from typing import (
     Iterable,
     Iterator,
-    List,
     Dict,
     Type,
     Callable,
@@ -516,35 +515,32 @@ class Biglist(BiglistBase[T]):
 class BiglistFileData(collections.abc.Sequence):
     def __init__(self, data: list):
         self._data = data
-        
+
     def data(self):
         return self._data
 
     def __repr__(self):
-        return "<{} with {} items>".format(
-            self.__class__.__name__,
-            len(self._data)
-        )
+        return "<{} with {} items>".format(self.__class__.__name__, len(self._data))
 
     def __str__(self):
         return self.__repr__()
 
     def __len__(self):
         return len(self._data)
-    
+
     def __bool__(self):
         return len(self._data) > 0
-    
+
     def __getitem__(self, idx: int):
         return self._data[idx]
-    
+
     def __iter__(self):
         return iter(self._data)
-    
+
     def view(self):
         return ListView(self._data)
 
-    
+
 class JsonByteSerializer(ByteSerializer):
     @classmethod
     def serialize(cls, x, **kwargs):

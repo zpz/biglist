@@ -596,8 +596,7 @@ class BiglistBase(Sequence[T]):
         """
         # During the use of this view, the underlying Biglist should not change.
         # Multiple views may be used to view diff parts
-        # of the Biglist; they open and read files independent of
-        # other views.
+        # of the Biglist; they open and read files independent of other views.
         return ListView(self)
 
     @property

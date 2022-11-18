@@ -256,7 +256,10 @@ class ParquetFileData(collections.abc.Sequence):
         self._row_groups: List[ParquetBatchData] = None
 
         self._column_names = None
+        self._columns = {}
         self.scalar_as_py = scalar_as_py
+        # `self.scalar_as_py` may be toggled anytime
+        # and have its effect right away.
 
         self._data: ParquetBatchData = None
         if eager_load:
@@ -285,6 +288,9 @@ class ParquetFileData(collections.abc.Sequence):
                 self.file.read(columns=self._column_names, use_threads=use_threads),
                 scalar_as_py=self.scalar_as_py,
             )
+            if self.num_row_groups == 1:
+                assert self._row_groups is None
+                self._row_groups = [self._data]
         return self._data
 
     @property
@@ -371,6 +377,9 @@ class ParquetFileData(collections.abc.Sequence):
                 self.file.read_row_group(idx, columns=self._column_names),
                 scalar_as_py=self.scalar_as_py,
             )
+            if self.num_row_groups == 1:
+                assert self._data is None
+                self._data = self._row_groups[0]
         return self._row_groups[idx]
 
     def view(self):
@@ -425,8 +434,26 @@ class ParquetFileData(collections.abc.Sequence):
             ]
         if self._data is not None:
             obj._data = self._data.columns(cols)
+        # TODO: also carry over `self._columns`?
         obj._column_names = cols
         return obj
+
+    def column(self, idx_or_name: Union[int, str]) -> pyarrow.ChunkedArray:
+        z = self._columns.get(idx_or_name)
+        if z is not None:
+            return z
+        if self._data is not None:
+            return self._data.column(idx_or_name)
+        if isinstance(idx_or_name, int):
+            idx = idx_or_name
+            name = self.column_names[idx]
+        else:
+            name = idx_or_name
+            idx = self.column_names.index(name)
+        z = self.file.read(columns=[name]).column(name)
+        self._columns[idx] = z
+        self._columns[name] = z
+        return z
 
 
 class ParquetBatchData(collections.abc.Sequence):
@@ -440,6 +467,8 @@ class ParquetBatchData(collections.abc.Sequence):
         *,
         scalar_as_py: bool = True,
     ):
+        # `self.scalar_as_py` may be toggled anytime
+        # and have its effect right away.
         self._data = data
         self.scalar_as_py = scalar_as_py
         self.num_rows = data.num_rows
@@ -552,6 +581,15 @@ class ParquetBatchData(collections.abc.Sequence):
             )
 
         return self.__class__(self._data.select(cols), scalar_as_py=self.scalar_as_py)
+
+    def column(
+        self, idx_or_name: Union[int, str]
+    ) -> Union[pyarrow.Array, pyarrow.ChunkedArray]:
+        """
+        If `self._data` is `pyarrow.Table`, return `pyarrow.ChunkedArray`.
+        If `self._data` is `pyarrow.RecordBatch`, return `pyarrow.Array`.
+        """
+        return self._data.column(idx_or_name)
 
 
 def read_parquet_file(path: PathType, **kwargs):

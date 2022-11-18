@@ -1,8 +1,9 @@
 == in progress ==
 
-- Added "external" Biglist variant---class `ParquetBiglist`---backed by Parquet data. The exposes a few new classes as part of the public API. To this purpose, there was a code global re-org.
+- Added "external" Biglist variant---class `ParquetBiglist`---backed by Parquet data. This exposes a few new classes as part of the public API. To this purpose, there was a code global re-org.
 - Methods `Biglist.pre_serialize` and `Biglist.post_deserialize` are removed. Alternatives to achieve similar effects are documented.
 - New class `ChainedList`. More thoughtful use of `ListView`.
+- `Biglist.load_data_file` returns an object of the new class `BiglistFileData`.
 - Removed method `Biglist.destroy`.
 - `Biglist.DEFAULT_STORAGE_FORMAT` changed from `pickle` to `pickle-zstd`.
 

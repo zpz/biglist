@@ -1,3 +1,4 @@
+import collections.abc
 import concurrent.futures
 import itertools
 import json
@@ -11,7 +12,6 @@ from datetime import datetime
 from typing import (
     Iterable,
     Iterator,
-    List,
     Dict,
     Type,
     Callable,
@@ -33,7 +33,7 @@ from upathlib.serializer import (
     ZOrjsonSerializer,
     ZstdOrjsonSerializer,
 )
-from ._base import BiglistBase, PathType
+from ._base import BiglistBase, PathType, ListView
 
 
 logger = logging.getLogger(__name__)
@@ -137,15 +137,17 @@ class Biglist(BiglistBase[T]):
         path.write_bytes(serializer.serialize(data))
 
     @classmethod
-    def load_data_file(cls, path: Upath, mode: int) -> List[T]:
+    def load_data_file(cls, path: Upath, mode: int):
         """
-        This method loads a data file, always producing a list.
+        This method loads a data file.
 
         If a subclass wants to perform a transformation to each
         element of the list, e.g. converting an object of a
         Python built-in type to that of a custom class, it can override
         this method to do the transformation on the output of
-        the `super()` version.
+        the `super()` version just before initiating the
+        `BiglistFileData` object. However, it may work just fine to
+        leave that transformation to the application code.
 
         `mode` is ignored.
         """
@@ -153,7 +155,8 @@ class Biglist(BiglistBase[T]):
             path.suffix.lstrip(".").replace("_", "-")
         ]
         data = path.read_bytes()
-        return deserializer.deserialize(data)
+        data = deserializer.deserialize(data)
+        return BiglistFileData(data)
 
     @classmethod
     def new(
@@ -507,6 +510,35 @@ class Biglist(BiglistBase[T]):
     def multiplex_done(self, task_id: str) -> bool:
         ss = self.multiplex_stat(task_id)
         return ss["next"] == ss["total"]
+
+
+class BiglistFileData(collections.abc.Sequence):
+    def __init__(self, data: list):
+        self._data = data
+
+    def data(self):
+        return self._data
+
+    def __repr__(self):
+        return "<{} with {} items>".format(self.__class__.__name__, len(self._data))
+
+    def __str__(self):
+        return self.__repr__()
+
+    def __len__(self):
+        return len(self._data)
+
+    def __bool__(self):
+        return len(self._data) > 0
+
+    def __getitem__(self, idx: int):
+        return self._data[idx]
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def view(self):
+        return ListView(self)
 
 
 class JsonByteSerializer(ByteSerializer):

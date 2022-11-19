@@ -1,23 +1,40 @@
 # Changelog
 
-## in progress
+All notable changes to this project will be documented in this file.
 
-- Added "external" Biglist variant---class `ParquetBiglist`---backed by Parquet data. This exposes a few new classes as part of the public API. To this purpose, there was a code global re-org.
-- Methods `Biglist.pre_serialize` and `Biglist.post_deserialize` are removed. Alternatives to achieve similar effects are documented.
-- New class `ChainedList`. More thoughtful use of `ListView`.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+## [unreleased]
+
+## [0.7.0] - 2022-11-18
+
+### Added
+
+- Added "external" Biglist variant---class `ParquetBiglist`---backed by Parquet data. This exposes a few new classes as part of the public API. To this purpose, there was a code re-org.
+- New class `ChainedList`.
+- New class `BiglistFileData`. Although currently the data file content of a `Biglist` is always a Python `list`, the class prepares for possible changes in the future. In addition, this achieves consistency between `Biglist`/`BiglistFileData` and `ParquetBiglist`/`ParquetFileData`.
+
+### Removed
+
+- Methods `Biglist.pre_serialize` and `Biglist.post_deserialize` are removed. Alternatives to achieve similar effects are documented. However, the kind of customization facilitated by `pre_serialize` and `post_deserialize` is *discouraged*. The recommendation is to persist in Python built-in types (such as `dict`, `tuple`, etc), and do conversion to/from custom types in application code.
+- Removed method `Biglist.destroy`. Persisted data of a temporary `Biglist` (i.e. you did not specify its path when calling `new`) is deleted upon the instance's garbage collection. If you want to delete the storage of a non-temporary `Biglist`, call `rmrf` on its `.path` attribute.
+
+### Changed
+
+- More systematic and thoughtful use of `ListView`.
 - `Biglist.load_data_file` returns an object of the new class `BiglistFileData`.
-- Removed method `Biglist.destroy`.
 - `Biglist.DEFAULT_STORAGE_FORMAT` changed from `pickle` to `pickle-zstd`.
+- Reformatted `CHANGELOG`.
 
 
-## Release 0.6.9
+## [0.6.9] - 2022-10-29
 
 - Add `multiplexer` methods.
 - Add parameter `require_exists` to `__init__`.
 - Add parameter `thread_pool_executor` to `__init__`, hence allowing user to control the number of threads created by this class. This is useful when a large number of `Biglist` instances are active at the same time.
 
 
-## Release 0.6.8
+## [0.6.8] - 2022-07-30
 
 - Removed the "data_info_file" which contains names and lengths of the data files,
   as well as indicating their order. Added a new file containing just the number
@@ -34,18 +51,18 @@
   like `MyBiglist[MyClass]`.
 
 
-## Release 0.6.7
+## [0.6.7] - 2022-07-18
 
 - Bug fixes.
 - Simplified bookkeeping for 'concurrent_iter'.
 
 
-## Release 0.6.6
+## [0.6.6] - 2022-07-10
 
 - Upgrade for `upathlib` 0.6.4, which has a breaking change about serializers.
 
 
-## Release 0.6.5
+## [0.6.5] - 2022-06-30
 
 - Minor changes to prepare for `upathlib` upgrade.
 - Make Orjson-based storage formats optional.
@@ -54,12 +71,12 @@
   prior to installing `biglist`, e.g. `pip install upathlib[gcs]`.
 
 
-## Release 0.6.4
+## [0.6.4] - 2022-04-10
 
 - Change default format from 'orjson' to 'pickle'.
 
 
-## Release 0.6.3
+## [0.6.3] - 2022-03-08
 
 - Minor refinements and speed improvements.
 - Explicitly separate concurrent (multi-worker) and non-concurrent
@@ -72,32 +89,32 @@
 - Refactor and simplify test and build processes.
 
 
-## Release 0.6.2
+## [0.6.2] - 2021-11-11
 
 - Fix and fine-tuning related to threading.
 
 
-## Release 0.6.1
+## [0.6.1] - 2021-08-14
 
 - Fix related to finalizing the object in __del__.
 - Use `upathlib.serializer`.
 
 
-## Release 0.5.7
+## [0.5.7] - 2021-07-03
 
 - Fixes following `upathlib` upgrade.
 
 
-## Release 0.5.5
+## [0.5.5] - 2021-06-23
 
 - Allow custom file lock.
 
 
-## Release 0.5.1
+## [0.5.1]
 
 - Added `CompressedOrjsonSerializer`, with file extension 'orjson_z'.
 
 
-## Release 0.5.0
+## [0.5.0] - 2021-06-06
 
 First public release. Most APIs are in place.

@@ -2,9 +2,8 @@ import random
 from types import SimpleNamespace
 from uuid import uuid4
 import pyarrow
-from pyarrow import parquet
 from upathlib import LocalUpath
-from biglist import ParquetBiglist, ParquetFileData, ListView, write_parquet_file
+from biglist import ParquetBiglist, ParquetFileData, write_parquet_file
 import pytest
 
 

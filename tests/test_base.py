@@ -37,11 +37,11 @@ def _test_view(datalv):
     assert list(llv) == [1, 5, 9]
     
 
-def test_listview():
+def test_ListView():
     _test_view(ListView(list(range(20))))
 
 
-def test_biglistview():
+def test_bigListView():
     bl = Biglist.new(storage_format='json')
     bl.extend(range(20))
     bl.flush()
@@ -49,7 +49,7 @@ def test_biglistview():
     _test_view(datalv)
 
 
-def test_listview2():
+def test_ListView2():
     x = list(range(20))
     z = ListView(x, [2, 3, 5, 6, 13])
     print(z)

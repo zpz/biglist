@@ -1,4 +1,6 @@
-== in progress ==
+# Changelog
+
+## in progress
 
 - Added "external" Biglist variant---class `ParquetBiglist`---backed by Parquet data. This exposes a few new classes as part of the public API. To this purpose, there was a code global re-org.
 - Methods `Biglist.pre_serialize` and `Biglist.post_deserialize` are removed. Alternatives to achieve similar effects are documented.
@@ -8,16 +10,14 @@
 - `Biglist.DEFAULT_STORAGE_FORMAT` changed from `pickle` to `pickle-zstd`.
 
 
-Release 0.6.9
-=============
+## Release 0.6.9
 
 - Add `multiplexer` methods.
 - Add parameter `require_exists` to `__init__`.
 - Add parameter `thread_pool_executor` to `__init__`, hence allowing user to control the number of threads created by this class. This is useful when a large number of `Biglist` instances are active at the same time.
 
 
-Release 0.6.8
-=============
+## Release 0.6.8
 
 - Removed the "data_info_file" which contains names and lengths of the data files,
   as well as indicating their order. Added a new file containing just the number
@@ -34,21 +34,18 @@ Release 0.6.8
   like `MyBiglist[MyClass]`.
 
 
-Release 0.6.7
-=============
+## Release 0.6.7
 
 - Bug fixes.
 - Simplified bookkeeping for 'concurrent_iter'.
 
 
-Release 0.6.6
-=============
+## Release 0.6.6
 
 - Upgrade for `upathlib` 0.6.4, which has a breaking change about serializers.
 
 
-Release 0.6.5
-=============
+## Release 0.6.5
 
 - Minor changes to prepare for `upathlib` upgrade.
 - Make Orjson-based storage formats optional.
@@ -57,14 +54,12 @@ Release 0.6.5
   prior to installing `biglist`, e.g. `pip install upathlib[gcs]`.
 
 
-Release 0.6.4
-=============
+## Release 0.6.4
 
 - Change default format from 'orjson' to 'pickle'.
 
 
-Release 0.6.3
-=============
+## Release 0.6.3
 
 - Minor refinements and speed improvements.
 - Explicitly separate concurrent (multi-worker) and non-concurrent
@@ -77,38 +72,32 @@ Release 0.6.3
 - Refactor and simplify test and build processes.
 
 
-Release 0.6.2
-=============
+## Release 0.6.2
 
 - Fix and fine-tuning related to threading.
 
 
-Release 0.6.1
-=============
+## Release 0.6.1
 
 - Fix related to finalizing the object in __del__.
 - Use `upathlib.serializer`.
 
 
-Release 0.5.7
-=============
+## Release 0.5.7
 
 - Fixes following `upathlib` upgrade.
 
 
-Release 0.5.5
-=============
+## Release 0.5.5
 
 - Allow custom file lock.
 
 
-Release 0.5.1
-=============
+## Release 0.5.1
 
 - Added `CompressedOrjsonSerializer`, with file extension 'orjson_z'.
 
 
-Release 0.5.0
-=============
+## Release 0.5.0
 
 First public release. Most APIs are in place.

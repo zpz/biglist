@@ -113,15 +113,16 @@ class ListView(Sequence[T]):
         self._list = list_
         self._range = range_
 
+    @property
+    def raw(self) -> Sequence[T]:
+        return self._list
+
+    @property
+    def range(self):
+        return self._range
+
     def __repr__(self):
-        if self._range is None:
-            return f"<{self.__class__.__name__} into {self._list}>"
-        if isinstance(self._range, range):
-            return f"<{self.__class__.__name__} into {self._list}[{self._range}]>"
-        if len(self._range) <= 5:
-            return f"<{self.__class__.__name__} into {self._list}[{self._range}]>"
-        idx = ", ".join(map(str, self._range[:5]))
-        return f"<{self.__class__.__name__} into {self._list}[{idx}, ...]>"
+        return f"<{self.__class__.__name__} into {self.__len__()}/{len(self._list)} of {self._list}>"
 
     def __str__(self):
         return self.__repr__()
@@ -169,10 +170,6 @@ class ListView(Sequence[T]):
             # the random-access performance of `self._list`.
             for i in self._range:
                 yield self._list[i]
-
-    @property
-    def raw(self) -> Sequence[T]:
-        return self._list
 
     def collect(self) -> List[T]:
         # Warning: don't do this on "big" data!
@@ -276,7 +273,10 @@ class BiglistBase(Sequence[T]):
         # by two "workers". It by no means has to be "locking that file".
         #
         # Refer to `Upath.lock`.
-        with file.lock():
+        #
+        # Locking is used by several "concurrent distributed reading" methods.
+        # The scope of the lock is for read/write a tiny "control info" file.
+        with file.lock(timeout=120):
             yield
 
     def __init__(

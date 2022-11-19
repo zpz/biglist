@@ -481,7 +481,7 @@ class Biglist(BiglistBase[T]):
         finfo = self._multiplex_info_file(task_id)
         flock = finfo.with_suffix(finfo.suffix + ".lock")
         while True:
-            with flock.lock():
+            with self.lockfile(flock):
                 # In concurrent use cases, I've observed
                 # `upathlib.LockAcquireError` raised here.
                 # User may want to do retry here.

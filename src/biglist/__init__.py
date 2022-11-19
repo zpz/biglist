@@ -1,5 +1,5 @@
 # flake8: noqa
-__version__ = "0.7.0b18"
+__version__ = "0.7.0"
 
 from ._base import FileView, ListView, ChainedList
 from ._biglist import Biglist, BiglistFileData

@@ -16,11 +16,10 @@ from typing import (
     Type,
     Callable,
     Optional,
-    TypeVar,
 )
 from uuid import uuid4
 
-from upathlib import Upath  # type: ignore
+from upathlib import Upath, PathType
 from upathlib.serializer import (
     ByteSerializer,
     _loads,
@@ -33,15 +32,20 @@ from upathlib.serializer import (
     ZOrjsonSerializer,
     ZstdOrjsonSerializer,
 )
-from ._base import BiglistBase, PathType, ListView
+from ._base import BiglistBase, ListView, T
 
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
-
 
 class Dumper:
+    '''
+    This class performs file-saving in a thread pool.
+    
+    `n_threads`: max number of threads to use. There are at most
+        this many submitted and unfinished file-dumping tasks
+        at any time.
+    '''
     def __init__(self, executor: ThreadPoolExecutor, n_threads: int):
         self._executor: executor = executor
         self._n_threads = n_threads
@@ -57,11 +61,23 @@ class Dumper:
     def dump_file(
         self, file_dumper: Callable[[Upath, list], None], data_file: Upath, data: list
     ):
+        '''
+        `file_dumper`: this function takes a file path and the data as a list, and saves
+            the data in the file named by the path.
+            
+        `data_file` and `data`: parameters to `file_dumper`.
+        '''
         if self._sem is None:
             self._sem = threading.Semaphore(
                 min(self._n_threads, self._executor._max_workers)
             )
-        self._sem.acquire()  # Wait here if the executor is busy at capacity.
+        self._sem.acquire()
+        # Wait here if the executor is busy at capacity.
+        # The `Dumper` object runs in the same thread as the `Biglist` object,
+        # hence if it's waiting for the semaphore here, it is blocking
+        # further actions of the `Biglist` and waiting for one file-dumping
+        # to finish.
+
         task = self._executor.submit(file_dumper, data_file, data)
         self._task_file_data[task] = (data_file.name, data)
         # It's useful to keep the data here, as it will be needed
@@ -71,6 +87,17 @@ class Dumper:
         # then it is called immediately.
 
     def get_file_data(self, data_file: Upath):
+        '''
+        This is for such a special need:
+        
+        Suppose 2 files are in the dump queue, hence not saved on disk yet,
+        however, they're already in the file-list of the `Biglist`'s meta info.
+        Now if we access one element by index, and the code determines based on
+        meta info that the element is in one of the files in-queue here.
+        Then we can't load the file from disk (as it is not persisted yet);
+        we can only get that file's data from the dump-queue via calling
+        this method.
+        '''
         file_name = data_file.name
         for name, data in self._task_file_data.values():
             # `_task_file_data` is not long, so this is OK.
@@ -79,10 +106,10 @@ class Dumper:
         return None
 
     def wait(self):
+        '''
+        Wait to finish all the submitted dumping tasks.
+        '''
         concurrent.futures.wait(list(self._task_file_data.keys()))
-
-    def cancel(self):
-        self._task_file_data = {}
 
 
 class Biglist(BiglistBase[T]):
@@ -168,32 +195,96 @@ class Biglist(BiglistBase[T]):
         storage_format: str = None,
         **kwargs,
     ):
-        # A Biglist object construction is in either of the two modes
-        # below:
-        #    a) create a new Biglist to store new data.
-        #    b) create a Biglist object pointing to storage of
-        #       existing data, which was created by a previous call to Biglist.new.
-        #
-        # Some settings are applicable only in mode (a), b/c in
-        # mode (b) they can't be changed and, if needed, should only
-        # use the value already set in mode (a).
-        # Such settings should happen in this classmethod `new`
-        # and should not be parameters to the object initiator function `__init__`.
-        #
-        # These settings typically should be taken care of after creating
-        # the object with `__init__`.
-        #
-        # `__init__` should be defined in such a way that it works for
-        # both a barebone object that is created in this `new`, and a
-        # fleshed out object that already has data.
-        #
-        # Some settings may be applicable to an existing Biglist object,
-        # i.e. they control ways to use the object, and are not an intrinsic
-        # property of the object. Hence they can be set to diff values while
-        # using an existing Biglist object. Such settings should be
-        # parameters to `__init__` and not to `new`. These parameters
-        # may be used when calling `new`, in which case they will be passed
-        # on to `__init__`.
+        '''
+        A Biglist object construction is in either of the two modes
+        below:
+           a) create a new Biglist to store new data.
+           b) create a Biglist object pointing to storage of
+              existing data, which was created by a previous call to `Biglist.new`.
+        
+        In case (a), one has called `Biglist.new`. In case (b), one has called
+        `Biglist(..)` (i.e. `__init__`).
+
+        Some settings are applicable only in mode (a), b/c in
+        mode (b) they can't be changed and, if needed, should only
+        use the value already set in mode (a).
+        Such settings should happen in this classmethod `new`
+        and should not be parameters to the the method `__init__`.
+        Examples include `storage_format` and `batch_size`.
+
+        These settings typically should be taken care of in `new` after creating
+        the object with `__init__`.
+        
+        `__init__` should be defined in such a way that it works for
+        both a barebone object that is created in this `new`, as well as a
+        fleshed out object that already has data.
+        
+        Some settings may be applicable to an existing `Biglist` object,
+        i.e. they control ways to use the object, and are not an intrinsic
+        property of the object. Hence they can be set to diff values while
+        using an existing Biglist object. Such settings should be
+        parameters to `__init__` and not to `new`. If specified in a call
+        to `new`, these parameters will be passed on to `__init__`.
+        
+        `path`: a directory in which this `Biglist` will save data files
+            as well as meta-info files. If not specified, `cls.get_temp_path`
+            will be called to determine a temporary path.
+
+        `batch_size`: max number of data elements in each persisted data file.
+        
+            There's no good default value for this parameter, although one is
+            provided, because the code doesn't know (at the beginning of `new`)
+            the typical size of the data elements. User is recommended to
+            specify the value of this parameter.
+            
+            In determining the value for `batch_size`, the most important
+            consideration is the size of each data file, which is determined
+            by the typical size of the data elements as well as the the number
+            of elements in each file. `batch_size` is the upper bound for the latter.
+
+            The file size impacts a few things.
+            
+                - It should not be so small that the file reading/writing is large
+                  relative overhead. This is especially important when `path` is
+                  cloud storage.
+                  
+                - It should not be so large that it is "unwieldy", e.g. approaching
+                  1GB.
+
+                - When iterating over a `Biglist` object, there can be up to (by default) 4
+                  files-worth of data in memory at any time. See the method `iter_files`.
+                
+                - When `append`ing or `extend`ing at high speed, there can be up to
+                  (by default) 4 times `batch_size` data elements in memory at any time.
+                  See `_flush` and `Dumper`.
+
+            Another consideration is access pattern of elements in the `Biglist`. If
+            there are many "jumping around" with random element access, large data files
+            will lead to very wasteful file loading, because to read any element,
+            its hosting file must be read into memory. (HOWEVER, if your use pattern is
+            heavy on random access, you SHOULD NOT use `Biglist`.)
+
+            If the Biglist is consumed by end-to-end iteration, then `batch_size` is not
+            expected to be a sensitive setting, as long as it is in a reasonable range.
+            
+            Rule of thumb: it is recommended to keep the persisted files between 32-128MB
+            in size. (Note: no benchmark was performed to back this recommendation.) 
+
+        `keep_files`: if not specified, the default behavior this the following:
+        
+            If `path` is `None`, then this is `False`---the temporary directory
+            will be deleted when this `Biglist` object goes away.
+            
+            If `path` is not `None`, i.e. user has deliberately specified a location,
+            then this is `True`---files saved by this `Biglist` object will stay.
+            
+            User can pass in `True` or `False` to override the default behavior.
+        
+        `storage_format`: this should be a key in `cls.registered_storage_formats`.
+            If not specified, `cls.DEFAULT_STORAGE_FORMAT` is used.
+        
+        `kwargs`: additional arguments are passed on to `__init__`.
+        '''
 
         if not path:
             path = cls.get_temp_path()
@@ -214,10 +305,6 @@ class Biglist(BiglistBase[T]):
 
         if not batch_size:
             batch_size = 10000
-            # There's no good default value for this,
-            # because we don't know the typical size of
-            # the data elements. User is recommended
-            # to provide the argument `batch_size`.
         else:
             assert batch_size > 0
         obj.info["batch_size"] = batch_size

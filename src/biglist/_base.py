@@ -91,7 +91,7 @@ class ListView(Sequence[T]):
     to `Biglist` via a call to `Biglist.view()`.
 
     A `ListView` object does "zero-copy"---it keeps track of
-    indices of elements in the window as well as a reference to
+    indices of elements in the window along with a reference to
     the underlying sequence. One may slice a `ListView` object,
     and this index-tracking continues. Only when a single-element
     access or an iteration is performed, the relevant elements
@@ -177,18 +177,32 @@ class ListView(Sequence[T]):
 
 
 class ChainedList(Sequence[T]):
+    '''
+    This class tracks a series of `Sequence`s to provide
+    random element access and iteration on the series as a whole.
+    A call to the method `view` further returns an object that
+    supports slicing.
+    
+    Note that `ListView` is also a `Sequence`, hence could be
+    a member of the series.
+    '''
     def __init__(self, *lists: Sequence[T]):
         self._lists = lists
-        self._lists_len = None
-        self._lists_len_cumsum = None
-        self._len = None
+        self._lists_len: List[int] = None
+        self._lists_len_cumsum: List[int] = None
+        self._len: int = None
+
+        # Records info about the last call to `__getitem__`
+        # to hopefully speed up the next call, under the assumption
+        # that user tends to access consecutive or neighboring
+        # elements.
         self._get_item_last_list = None
 
     def __repr__(self):
-        return "<{} with {} member lists, total length {}>".format(
+        return "<{} with {} elements in {} member lists>".format(
             self.__class__.__name__,
-            len(self._lists),
             self._len,
+            len(self._lists),
         )
 
     def __str__(self):
@@ -225,6 +239,10 @@ class ChainedList(Sequence[T]):
 
     @property
     def raw(self) -> Sequence[T]:
+        # A member list could be a `ListView`. The current method
+        # does not follow a `ListView` to its "raw" component, b/c
+        # that might not have the same elements as the view, hence
+        # losing info.
         return self._lists
 
 
@@ -233,6 +251,9 @@ class BiglistBase(Sequence[T]):
     This base class contains code mainly concerning *read* only.
     The subclass `Biglist` adds functionalities for writing,
     whereas other subclasses, such as `ParquetBiglist`, may be read-only.
+    
+    Data access is optimized for iteration, whereas random access
+    (via index or slice) is less efficient, and assumed to be rare.
     """
 
     @staticmethod
@@ -282,9 +303,28 @@ class BiglistBase(Sequence[T]):
     def __init__(
         self,
         path: PathType,
+        *,
         thread_pool_executor: ThreadPoolExecutor = None,
         require_exists: bool = True,
     ):
+        '''
+        `path`: directory that contains files written by an instance
+            of this class.
+
+        `thread_pool_executor`: methods for reading and writing
+            use worker threads. If this parameter is specified, then
+            the provided thread pool will be used. This is useful
+            when a large number of Biglist instances are active
+            at the same time, because the provided thread pool
+            controls the max number of threads.
+
+        `require_exits`: when initializing an object of this class,
+            contents of the directory `path` should be already in place.
+            This is indicated by `require_exists = True`. In the 
+            classmethod `new` of a subclass, when creating an instance
+            before any file is written, `require_exists=False` is used.
+            User should always leave this parameter at its default value.
+        '''
         self.path = self.resolve_path(path)
 
         self._read_buffer: Optional[Sequence[T]] = None
@@ -314,6 +354,8 @@ class BiglistBase(Sequence[T]):
 
         self._n_read_threads = 3
         self._n_write_threads = 3
+        # You may assign these to other values right upon creation
+        # of the `Biglist` object.
 
     def __repr__(self):
         return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data file(s)>"
@@ -369,13 +411,8 @@ class BiglistBase(Sequence[T]):
         For better speed, use `__iter__`.
 
         This does not support slicing. For slicing, see method `view`.
-
-        This is called in these cases:
-
-            - Access a single item of a Biglist object.
-            - Access a single item of a Biglist.view()
-            - Access a single item of a slice on a Biglist.view()
-            - Iterate a slice on a Biglist.view()
+        The object returned by `view()` eventually also calls this method
+        to access elements.
         """
         if not isinstance(idx, int):
             raise TypeError(
@@ -451,9 +488,12 @@ class BiglistBase(Sequence[T]):
 
     def iter_files(self) -> Iterator[Sequence[T]]:
         """
-        This is "eager", and not distributed, that is,
-        it consumes the entire data. To distribute the iteration
-        to multiple workers, use `concurrent_iter` or `concurrent_iter_files`.
+        This is "eager" and not distributed, that is,
+        this call consumes the entire data. To distribute the iteration
+        to multiple workers, see `concurrent_iter` and `concurrent_iter_files`.
+
+        This yields the content of one file at a time.
+        Specifically, it yields the output of `self.load_data_file(...)`.
 
         This exists mainly as the _engine_ for `__iter__`.
         """
@@ -566,6 +606,10 @@ class BiglistBase(Sequence[T]):
         return self.concurrent_file_iter_done(task_id)
 
     def file_view(self, file: Union[Upath, int]) -> FileView:
+        '''
+        `file`: the data file path or the index of the file
+            in the list of data files.
+        '''
         if isinstance(file, int):
             datafiles, _ = self._get_data_files()
             file = self._get_data_file(datafiles, file)
@@ -605,4 +649,13 @@ class BiglistBase(Sequence[T]):
 
     @property
     def datafiles(self) -> List[str]:
+        '''
+        Return the list of file paths.
+        '''
         raise NotImplementedError
+
+    @property
+    def datafiles_info(self) -> List[Tuple[str, int, int]]:
+        '''
+        Return the list of (file_path, item_count, cum_count)
+        '''

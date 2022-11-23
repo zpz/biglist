@@ -104,6 +104,7 @@ def test_big_parquet_list():
     print('datafiles')
     z = biglist.datafiles
     print(z)
+    print('datafiles_info:\n', biglist.datafiles_info)
     assert isinstance(z, list)
     assert all(isinstance(v, str) for v in z)
     print('')

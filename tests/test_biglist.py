@@ -32,8 +32,9 @@ def test_numbers():
     z = mylist.datafiles
     print('')
     print('num datafiles:', n)
-    print('datafiles:')
-    print(z)
+    print('datafiles:\n', z)
+    print('datafiles_info:\n', mylist.datafiles_info)
+
     assert isinstance(z, list)
     assert len(z) == n
     assert all(isinstance(v, str) for v in z)

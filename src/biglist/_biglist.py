@@ -91,13 +91,13 @@ class Dumper:
         """
         This is for such a special need:
 
-        Suppose 2 files are in the dump queue, hence not saved on disk yet,
-        however, they're already in the file-list of the `Biglist`'s meta info.
-        Now if we access one element by index, and the code determines based on
-        meta info that the element is in one of the files in-queue here.
-        Then we can't load the file from disk (as it is not persisted yet);
-        we can only get that file's data from the dump-queue via calling
-        this method.
+            Suppose 2 files are in the dump queue, hence not saved on disk yet,
+            however, they're already in the file-list of the `Biglist`'s meta info.
+            Now if we access one element by index, and the code determines based on
+            meta info that the element is in one of the files in-queue here.
+            Then we can't load the file from disk (as it is not persisted yet);
+            we can only get that file's data from the dump-queue via calling
+            this method.
         """
         file_name = data_file.name
         for name, data in self._task_file_data.values():
@@ -114,11 +114,6 @@ class Dumper:
 
 
 class Biglist(BiglistBase[T]):
-    """
-    Data access is optimized for iteration, whereas random access
-    (via index or slice) is less efficient, and assumed to be rare.
-    """
-
     registered_storage_formats = {}
 
     DEFAULT_STORAGE_FORMAT = "pickle-zstd"
@@ -425,13 +420,17 @@ class Biglist(BiglistBase[T]):
 
     def flush(self):
         """
-        When the user is done adding elements to the list, the buffer size
-        may not happen to be `self.batch_size`, hence this method is not called
-        automatically,
-        and the last chunk of elements are not persisted in files.
+        While `_flush` is called automatically whenever the "append buffer"
+        is full, this method is not called automatically, because this method
+        is expected to be called only when the user is done adding elements
+        to the list, yet the code has no way to know the user is "done".
+        When the user is done adding elements, the "append buffer" could be
+        only partially filled, hence `_flush` is not called, and the content
+        of the buffer is not persisted to disk.
+
         This is when the *user* should call this method.
-        (If user does not call, it is called when this object is going out of scope,
-        as appropriate.)
+        (If user does not call, it is auto called when this object is going
+        out of scope, if `self.keep_files` is `True`.)
 
         In summary, call this method once the user is done with adding elements
         to the list *in this session*, meaning in this run of the program.
@@ -473,12 +472,15 @@ class Biglist(BiglistBase[T]):
                         files1 = (v.split("_") + [v] for v in files0)
                         files2 = (
                             (float(v[0]), v[-1], int(v[2].partition(".")[0]))
+                            # timestamp, file name, item count
                             for v in files1
                         )
-                        files = sorted(files2)
+                        files = sorted(files2)  # sort by timestamp
                         if len(files) == nfiles:
                             break
                         time.sleep(0.2)
+                        # A few files may be being dumped and not done yet.
+                        # Wait for them.
 
                     if len(files) != nfiles:
                         raise RuntimeError(
@@ -506,8 +508,15 @@ class Biglist(BiglistBase[T]):
         df, _ = self._get_data_files()
         return [str(self._get_data_file(df, i)) for i in range(len(df))]
 
-    def _get_data_file(self, datafiles, idx):
-        # `datafiles` is the return of `get_datafiles`.
+    @property
+    def datafiles_info(self):
+        files = self.datafiles
+        counts = (v[1] for v in self._data_files)
+        cumcounts = self._data_files_cumlength_
+        return list(zip(files, counts, cumcounts))
+
+    def _get_data_file(self, datafiles, idx) -> Upath:
+        # `datafiles` is the return of `_get_datafiles`.
         return self._data_dir / datafiles[idx][0]
 
     def iter_files(self):

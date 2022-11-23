@@ -82,7 +82,7 @@ class ParquetBiglist(BiglistBase):
     @classmethod
     def load_data_file(cls, path: Upath, mode: int):
         # This method or `read_parquet_file` could be useful by themselves.
-        # User may want to make free-standing functions as trivial wrappers of them.
+        # The free-standing function `read_parquet_file` below implements this idea.
         return ParquetFileData(
             cls.read_parquet_file(str(path)), eager_load=(mode == FileLoaderMode.ITER)
         )
@@ -149,7 +149,7 @@ class ParquetBiglist(BiglistBase):
         def get_file_meta(f, p: str):
             meta = f(p).metadata
             return {
-                "path": p,
+                "path": p,  # str of full path
                 "num_rows": meta.num_rows,
                 "row_groups_num_rows": [
                     meta.row_group(k).num_rows for k in range(meta.num_row_groups)
@@ -223,8 +223,16 @@ class ParquetBiglist(BiglistBase):
             yield from file.iter_batches(batch_size)
 
     @property
-    def datafiles(self) -> List[str]:
+    def datafiles(self):
         return [f["path"] for f in self.info["datafiles"]]
+
+    @property
+    def datafiles_info(self):
+        files = self.info["datafiles"]
+        cumlen = self.info["datafiles_cumlength"]
+        return [
+            (file["path"], file["num_rows"], cum) for file, cum in zip(files, cumlen)
+        ]
 
 
 class ParquetFileData(collections.abc.Sequence):
@@ -392,11 +400,11 @@ class ParquetFileData(collections.abc.Sequence):
         the specified columns.
 
         The columns of interest have to be within currently available columns.
-        In other words, if a series of calls to this method will incrementally
+        In other words, a series of calls to this method will incrementally
         narrow down the selection of columns.
 
         This method "slices" the data by columns, in contrast to most other
-        data access methods that are selecting rows.
+        data access methods that select rows.
 
         Examples:
 
@@ -459,6 +467,9 @@ class ParquetFileData(collections.abc.Sequence):
 class ParquetBatchData(collections.abc.Sequence):
     """
     Objects of this class can be pickled.
+
+    Note: `ParquetBiglist.iter_batches` yields objects of this class;
+    that could be useful in multiprocessing.
     """
 
     def __init__(

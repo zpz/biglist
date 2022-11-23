@@ -228,11 +228,10 @@ class ParquetBiglist(BiglistBase):
 
     @property
     def datafiles_info(self):
-        files = self.info['datafiles']
-        cumlen = self.info['datafiles_cumlength']
+        files = self.info["datafiles"]
+        cumlen = self.info["datafiles_cumlength"]
         return [
-            (file['path'], file['num_rows'], cum)
-            for file, cum in zip(files, cumlen)
+            (file["path"], file["num_rows"], cum) for file, cum in zip(files, cumlen)
         ]
 
 
@@ -468,7 +467,7 @@ class ParquetFileData(collections.abc.Sequence):
 class ParquetBatchData(collections.abc.Sequence):
     """
     Objects of this class can be pickled.
-    
+
     Note: `ParquetBiglist.iter_batches` yields objects of this class;
     that could be useful in multiprocessing.
     """

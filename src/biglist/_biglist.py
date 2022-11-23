@@ -427,7 +427,7 @@ class Biglist(BiglistBase[T]):
         When the user is done adding elements, the "append buffer" could be
         only partially filled, hence `_flush` is not called, and the content
         of the buffer is not persisted to disk.
-        
+
         This is when the *user* should call this method.
         (If user does not call, it is auto called when this object is going
         out of scope, if `self.keep_files` is `True`.)

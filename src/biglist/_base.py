@@ -177,15 +177,16 @@ class ListView(Sequence[T]):
 
 
 class ChainedList(Sequence[T]):
-    '''
+    """
     This class tracks a series of `Sequence`s to provide
     random element access and iteration on the series as a whole.
     A call to the method `view` further returns an object that
     supports slicing.
-    
+
     Note that `ListView` is also a `Sequence`, hence could be
     a member of the series.
-    '''
+    """
+
     def __init__(self, *lists: Sequence[T]):
         self._lists = lists
         self._lists_len: List[int] = None
@@ -251,7 +252,7 @@ class BiglistBase(Sequence[T]):
     This base class contains code mainly concerning *read* only.
     The subclass `Biglist` adds functionalities for writing,
     whereas other subclasses, such as `ParquetBiglist`, may be read-only.
-    
+
     Data access is optimized for iteration, whereas random access
     (via index or slice) is less efficient, and assumed to be rare.
     """
@@ -307,7 +308,7 @@ class BiglistBase(Sequence[T]):
         thread_pool_executor: ThreadPoolExecutor = None,
         require_exists: bool = True,
     ):
-        '''
+        """
         `path`: directory that contains files written by an instance
             of this class.
 
@@ -320,11 +321,11 @@ class BiglistBase(Sequence[T]):
 
         `require_exits`: when initializing an object of this class,
             contents of the directory `path` should be already in place.
-            This is indicated by `require_exists = True`. In the 
+            This is indicated by `require_exists = True`. In the
             classmethod `new` of a subclass, when creating an instance
             before any file is written, `require_exists=False` is used.
             User should always leave this parameter at its default value.
-        '''
+        """
         self.path = self.resolve_path(path)
 
         self._read_buffer: Optional[Sequence[T]] = None
@@ -606,10 +607,10 @@ class BiglistBase(Sequence[T]):
         return self.concurrent_file_iter_done(task_id)
 
     def file_view(self, file: Union[Upath, int]) -> FileView:
-        '''
+        """
         `file`: the data file path or the index of the file
             in the list of data files.
-        '''
+        """
         if isinstance(file, int):
             datafiles, _ = self._get_data_files()
             file = self._get_data_file(datafiles, file)
@@ -649,13 +650,13 @@ class BiglistBase(Sequence[T]):
 
     @property
     def datafiles(self) -> List[str]:
-        '''
+        """
         Return the list of file paths.
-        '''
+        """
         raise NotImplementedError
 
     @property
     def datafiles_info(self) -> List[Tuple[str, int, int]]:
-        '''
+        """
         Return the list of (file_path, item_count, cum_count)
-        '''
+        """

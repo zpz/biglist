@@ -20,7 +20,7 @@ from typing import (
     TypeVar,
 )
 
-from upathlib import LocalUpath, Upath, PathType, resolve_path  # type: ignore
+from upathlib import LocalUpath, Upath, PathType, resolve_path
 from ._util import locate_idx_in_chunked_seq
 
 
@@ -46,9 +46,12 @@ class FileView(Sequence[T]):
     lend itself to pickling.
     One use case of FileView is to pass these objects around in
     `multiprocessing` code for concurrent data processing.
+    
+    The method `BiglistBase.file_view` returns a `FileView` object.
     """
 
-    def __init__(self, file: Upath, loader: Callable):
+    def __init__(self, file: Upath,
+                 loader: Callable[[Upath, FileLoaderMode], Sequence[T]]):
         """
         `loader`: a function that will load the data file and return
             a Sequence. This could be a classmethod, static method,
@@ -61,13 +64,17 @@ class FileView(Sequence[T]):
         self._data = None
 
     def __repr__(self):
-        return f"<{self.__class__.__name__} into '{self._file}', with loader {self._loader}>"
+        return f"{self.__class__.__name__}({self._file}, {self._loader})"
 
     def __str__(self):
         return self.__repr__()
 
     @property
     def data(self) -> Sequence[T]:
+        '''
+        Get the underlying data `Sequence` object.
+        File loading happens the first time this is accessed.
+        '''
         if self._data is None:
             self._data = self._loader(self._file, FileLoaderMode.RAND)
         return self._data
@@ -280,7 +287,7 @@ class BiglistBase(Sequence[T]):
         return path  # type: ignore
 
     @classmethod
-    def load_data_file(cls, path: Upath, mode: int) -> Sequence[T]:
+    def _load_data_file(cls, path: Upath, mode: int) -> Sequence[T]:
         """
         `mode`: take values defined in `FileLoaderMode`.
         """
@@ -474,7 +481,7 @@ class BiglistBase(Sequence[T]):
         else:
             data = self._file_dumper.get_file_data(file)
         if data is None:
-            data = self.load_data_file(file, FileLoaderMode.RAND)
+            data = self._load_data_file(file, FileLoaderMode.RAND)
 
         self._read_buffer_file_idx = ifile
         self._read_buffer = data
@@ -494,7 +501,7 @@ class BiglistBase(Sequence[T]):
         to multiple workers, see `concurrent_iter` and `concurrent_iter_files`.
 
         This yields the content of one file at a time.
-        Specifically, it yields the output of `self.load_data_file(...)`.
+        Specifically, it yields the output of `self._load_data_file(...)`.
 
         This exists mainly as the _engine_ for `__iter__`.
         """
@@ -505,7 +512,7 @@ class BiglistBase(Sequence[T]):
         ndatafiles = len(datafiles)
 
         if ndatafiles == 1:
-            yield self.load_data_file(
+            yield self._load_data_file(
                 self._get_data_file(datafiles, 0), FileLoaderMode.ITER
             )
         elif ndatafiles > 1:
@@ -515,7 +522,7 @@ class BiglistBase(Sequence[T]):
 
             for i in range(max_workers):
                 t = executor.submit(
-                    self.load_data_file,
+                    self._load_data_file,
                     self._get_data_file(datafiles, i),
                     FileLoaderMode.ITER,
                 )
@@ -531,7 +538,7 @@ class BiglistBase(Sequence[T]):
                 if nfiles_queued < ndatafiles:
                     # `nfiles_queued` is the index of the next file to download.
                     t = executor.submit(
-                        self.load_data_file,
+                        self._load_data_file,
                         self._get_data_file(datafiles, nfiles_queued),
                         FileLoaderMode.ITER,
                     )
@@ -581,7 +588,7 @@ class BiglistBase(Sequence[T]):
 
             file = self._get_data_file(datafiles, n_files_claimed)
             logger.debug('yielding data of file "%s"', file)
-            yield self.load_data_file(file, FileLoaderMode.RAND)
+            yield self._load_data_file(file, FileLoaderMode.RAND)
             # Here, using `FileLoaderMode.ITER` is "eager" loading.
             # `RAND` is "lazy" loading, giving user more choices.
 
@@ -614,7 +621,7 @@ class BiglistBase(Sequence[T]):
         if isinstance(file, int):
             datafiles, _ = self._get_data_files()
             file = self._get_data_file(datafiles, file)
-        return FileView(file, self.__class__.load_data_file)  # type: ignore
+        return FileView(file, self.__class__._load_data_file)  # type: ignore
 
     def file_views(self) -> List[FileView]:
         # This is intended to facilitate parallel processing,

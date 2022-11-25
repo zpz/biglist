@@ -52,7 +52,7 @@ class ParquetBiglist(BiglistBase):
     """
 
     @classmethod
-    def get_gcsfs(cls, *, good_for_minutes=30):
+    def get_gcsfs(cls, *, good_for_seconds=600):
         # Import here b/c user may not be on GCP
         from datetime import datetime
         import google.auth
@@ -65,9 +65,10 @@ class ParquetBiglist(BiglistBase):
             cls._GCP_CREDENTIALS = cred
         if (
             not cred.token
-            or (cred.expiry - datetime.now()).total_seconds() < good_for_minutes * 60
+            or (cred.expiry - datetime.utcnow()).total_seconds() < good_for_seconds
         ):
             cred.refresh(google.auth.transport.requests.Request())
+            # One check shows this token expires in one hour.
         return GcsFileSystem(
             access_token=cred.token, credential_token_expiration=cred.expiry
         )
@@ -80,7 +81,7 @@ class ParquetBiglist(BiglistBase):
         return ParquetFile(ff.open_input_file(pp))
 
     @classmethod
-    def load_data_file(cls, path: Upath, mode: int):
+    def _load_data_file(cls, path: Upath, mode: int):
         # This method or `read_parquet_file` could be useful by themselves.
         # The free-standing function `read_parquet_file` below implements this idea.
         return ParquetFileData(

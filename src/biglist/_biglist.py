@@ -134,7 +134,7 @@ class Biglist(BiglistBase[T]):
         cls.registered_storage_formats[name] = serializer
 
     @classmethod
-    def dump_data_file(cls, path: Upath, data: list):
+    def _dump_data_file(cls, path: Upath, data: list):
         """
         This method persists a batch of data elements, always a list,
         to disk or cloud storage.
@@ -150,8 +150,8 @@ class Biglist(BiglistBase[T]):
         One useful pattern is to dump result of `instance.to_dict()`,
         and use `cls.from_dict(...)` to transform persisted data
         to user's custom type upon loading. Such conversions can be
-        achieved by customizing the methods `dump_data_file` and
-        `load_data_file`. It may work just as well to leave these
+        achieved by customizing the methods `_dump_data_file` and
+        `_load_data_file`. It may work just as well to leave these
         conversions to application code.
         """
         serializer = cls.registered_storage_formats[
@@ -160,7 +160,7 @@ class Biglist(BiglistBase[T]):
         path.write_bytes(serializer.serialize(data))
 
     @classmethod
-    def load_data_file(cls, path: Upath, mode: int):
+    def _load_data_file(cls, path: Upath, mode: int):
         """
         This method loads a data file.
 
@@ -396,9 +396,9 @@ class Biglist(BiglistBase[T]):
             self._file_dumper = Dumper(self._thread_pool, self._n_write_threads)
         if wait:
             self._file_dumper.wait()
-            self.dump_data_file(data_file, buffer)
+            self._dump_data_file(data_file, buffer)
         else:
-            self._file_dumper.dump_file(self.dump_data_file, data_file, buffer)
+            self._file_dumper.dump_file(self._dump_data_file, data_file, buffer)
             # This call will return quickly if the dumper has queue
             # capacity for the file. The file meta data below
             # will be updated as if the saving has completed, although

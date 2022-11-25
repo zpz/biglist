@@ -46,12 +46,13 @@ class FileView(Sequence[T]):
     lend itself to pickling.
     One use case of FileView is to pass these objects around in
     `multiprocessing` code for concurrent data processing.
-    
+
     The method `BiglistBase.file_view` returns a `FileView` object.
     """
 
-    def __init__(self, file: Upath,
-                 loader: Callable[[Upath, FileLoaderMode], Sequence[T]]):
+    def __init__(
+        self, file: Upath, loader: Callable[[Upath, FileLoaderMode], Sequence[T]]
+    ):
         """
         `loader`: a function that will load the data file and return
             a Sequence. This could be a classmethod, static method,
@@ -71,10 +72,10 @@ class FileView(Sequence[T]):
 
     @property
     def data(self) -> Sequence[T]:
-        '''
+        """
         Get the underlying data `Sequence` object.
         File loading happens the first time this is accessed.
-        '''
+        """
         if self._data is None:
             self._data = self._loader(self._file, FileLoaderMode.RAND)
         return self._data

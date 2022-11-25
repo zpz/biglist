@@ -1,4 +1,4 @@
-'''
+"""
 The package `biglist` provides persisted, out-of-memory Python data structures
 that implement the `Sequence` interface, most importantly iteration, as well as random element access.
 The main use case is processing large amounts of data that can not fit in memory.
@@ -26,7 +26,7 @@ The utility class `ListView` takes any `Sequence` object and implements accessin
 its elements by single index, slice, and list of indices (like what `numpy` supports).
 Since `Biglist` and `ParquetBiglist` are both `Sequence`s, they also support
 these access mechanisms via `ListView`.
-'''
+"""
 # flake8: noqa
 __version__ = "0.7.1b1"
 

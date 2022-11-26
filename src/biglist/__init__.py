@@ -24,7 +24,7 @@ is supported.
 
 The utility class `ListView` takes any `Sequence` object and implements accessing
 its elements by single index, slice, and list of indices (like what `numpy` supports).
-Since `Biglist` and `ParquetBiglist` are both `Sequence`s, they also support
+Since `Biglist` and `ParquetBiglist` are both `Sequence`'s, they also support
 these access mechanisms via `ListView`.
 """
 # flake8: noqa

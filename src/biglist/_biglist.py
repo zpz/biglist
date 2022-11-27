@@ -180,8 +180,9 @@ class Biglist(BiglistBase[T]):
 
     @classmethod
     def _load_data_file(cls, path: Upath, mode: int):
-        return BiglistFileData(path, cls.read_data_file,
-                               eager_load=(mode == FileLoaderMode.ITER))
+        return BiglistFileData(
+            path, cls.read_data_file, eager_load=(mode == FileLoaderMode.ITER)
+        )
 
     @classmethod
     def new(
@@ -232,7 +233,7 @@ class Biglist(BiglistBase[T]):
             A directory in which this ``Biglist`` will save data files
             as well as meta-info files. The directory must be non-existent.
             It is not necessary to pre-create the parent directory of this path.
-            
+
             If not specified, ``cls.get_temp_path``
             will be called to determine a temporary path.
 
@@ -294,7 +295,7 @@ class Biglist(BiglistBase[T]):
 
         kwargs:
             additional arguments are passed on to ``__init__``.
-        
+
         Returns
         -------
         Biglist:

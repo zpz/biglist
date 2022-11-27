@@ -30,7 +30,7 @@ from upathlib.serializer import (
     ZOrjsonSerializer,
     ZstdOrjsonSerializer,
 )
-from ._base import BiglistBase, FileView, ListView, Upath, PathType, T
+from ._base import BiglistBase, FileView, Upath, PathType, T
 
 
 logger = logging.getLogger(__name__)

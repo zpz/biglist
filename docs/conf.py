@@ -28,6 +28,17 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-# html_theme = 'alabaster'
-html_theme = 'nature'
+# Interesting styles to consider:
+#  toc panel on left
+#   bizstyle
+#   pyramid
+#   nature
+#  toc panel on right
+#   sphinxdoc
+#   furo
+#  no toc panel
+#   scrolls  (good for very small, single-page doc)
+html_theme = 'furo'
+
+
 html_static_path = ['_static']

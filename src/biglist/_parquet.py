@@ -407,7 +407,7 @@ class ParquetFileData(collections.abc.Sequence):
         This method "slices" the data by columns, in contrast to most other
         data access methods that select rows.
 
-        Examples:
+        Examples::
 
             obj = ParquetFileData('file_path')
             obj1 = obj.columns(['a', 'b', 'c'])
@@ -568,7 +568,7 @@ class ParquetBatchData(collections.abc.Sequence):
         This method "slices" the data by columns, in contrast to most other
         data access methods that are selecting rows.
 
-        Examples:
+        Examples::
 
             obj = ParquetBatchData(parquet_table)
             obj1 = obj.columns(['a', 'b', 'c'])

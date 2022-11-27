@@ -367,7 +367,7 @@ class BiglistBase(Sequence[T]):
         # of the `Biglist` object.
 
     def __repr__(self):
-        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data file(s)>"
+        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} elements in {self.num_datafiles} data file(s)>"
 
     def __str__(self):
         return self.__repr__()

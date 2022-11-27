@@ -51,9 +51,7 @@ class FileView(collections.abc.Sequence, collections.abc.Iterable):
     The method `BiglistBase.file_view` returns a `FileView` object.
     """
 
-    def __init__(
-        self, path: PathType, loader: Callable, *, eager: bool = False
-    ):
+    def __init__(self, path: PathType, loader: Callable, *, eager: bool = False):
         """
         Parameters
         ----------
@@ -505,9 +503,7 @@ class BiglistBase(Sequence[T]):
         ndatafiles = len(datafiles)
 
         if ndatafiles == 1:
-            yield self.file_view(
-                self._get_data_file(datafiles, 0), eager=True
-            )
+            yield self.file_view(self._get_data_file(datafiles, 0), eager=True)
         elif ndatafiles > 1:
             max_workers = min(self._n_read_threads, ndatafiles)
             tasks = queue.Queue(max_workers)

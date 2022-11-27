@@ -244,7 +244,11 @@ class ParquetFileData(FileView):
     """
 
     def __init__(
-        self, path, loader, *, eager=False,
+        self,
+        path,
+        loader,
+        *,
+        eager=False,
         scalar_as_py: bool = True,
     ):
         self._file: ParquetFile = None
@@ -278,11 +282,11 @@ class ParquetFileData(FileView):
     @property
     def metadata(self):
         return self.file.metadata
-    
+
     @property
     def num_rows(self) -> int:
         return self.metadata.num_rows
-    
+
     @property
     def num_row_groups(self):
         return self.metadata.num_row_groups
@@ -598,11 +602,7 @@ class ParquetBatchData(collections.abc.Sequence):
 
 
 def read_parquet_file(path: PathType, **kwargs):
-    return ParquetFileData(
-        path,
-        ParquetBiglist._load_data_file,
-        **kwargs
-    )
+    return ParquetFileData(path, ParquetBiglist._load_data_file, **kwargs)
 
 
 def write_parquet_file(

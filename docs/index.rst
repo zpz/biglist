@@ -102,7 +102,7 @@ If we want to persist the data in Google Cloud Storage, we would specify a path 
 Reading a ``Biglist``
 =====================
 
-Accessing any element
+Random element access
 ---------------------
 
 ``Biglist`` implements the ``Sequence`` interface, hence we can access any element as like we do a list::
@@ -158,10 +158,12 @@ A few more examples::
 Iteration
 ---------
 
-Despite the myriad ways of accessing any element in a ``Biglist``,
+Despite the myriad ways of random access,
 don't be carried away by the ease and flexibilities.
 **Random element access for ``Biglist`` is inefficient!**
-The reason is that it needs to load the file that contains the element of interest.
+The reason is that it needs to load any file that contains the element of interest.
+(However, consecutive random accesses to elements residing in the same file will not load the file
+repeatedly.)
 
 The preferred way to consume the data of a ``Biglist`` is to iterate over it. For example,
 
@@ -197,11 +199,18 @@ is actually implemented by
 There are cases where we want to use ``iter_files`` directly.
 
 
-Reading a ``Biglist`` in multiple processes
+Reading from a ``Biglist`` in multiple processes
 -------------------------------------------
 
-Reading a ``Biglist`` in multiple machines
+To **collectively** consume a ``Biglist`` object from multiple processes,
+distribute ``FileView``'s to the processes.
+
+
+Reading from a ``Biglist`` in multiple machines
 ------------------------------------------
+
+Writing to a ``Biglist`` in multiple processes or machines
+----------------------------------------------------------
 
 
 Creating a ``ParquetBiglist``

@@ -11,8 +11,8 @@ from typing import Union, Sequence, Iterator, List, Iterable
 import pyarrow
 from pyarrow.parquet import ParquetFile
 from pyarrow.fs import FileSystem, GcsFileSystem
-from upathlib import Upath, LocalUpath
-from ._base import BiglistBase, FileLoaderMode, PathType, ListView
+from upathlib import LocalUpath
+from ._base import BiglistBase, Upath, PathType, ListView, FileView
 from ._util import locate_idx_in_chunked_seq
 
 
@@ -74,19 +74,11 @@ class ParquetBiglist(BiglistBase):
         )
 
     @classmethod
-    def read_parquet_file(cls, path: str):
-        ff, pp = FileSystem.from_uri(path)
+    def _load_data_file(cls, path: Upath):
+        ff, pp = FileSystem.from_uri(str(path))
         if isinstance(ff, GcsFileSystem):
             ff = cls.get_gcsfs()
         return ParquetFile(ff.open_input_file(pp))
-
-    @classmethod
-    def _load_data_file(cls, path: Upath, mode: int):
-        # This method or `read_parquet_file` could be useful by themselves.
-        # The free-standing function `read_parquet_file` below implements this idea.
-        return ParquetFileData(
-            cls.read_parquet_file(str(path)), eager_load=(mode == FileLoaderMode.ITER)
-        )
 
     @classmethod
     def new(
@@ -147,10 +139,10 @@ class ParquetBiglist(BiglistBase):
         elif path.is_file():
             raise FileExistsError(path)
 
-        def get_file_meta(f, p: str):
+        def get_file_meta(f, p: Upath):
             meta = f(p).metadata
             return {
-                "path": p,  # str of full path
+                "path": str(p),  # str of full path
                 "num_rows": meta.num_rows,
                 "row_groups_num_rows": [
                     meta.row_group(k).num_rows for k in range(meta.num_row_groups)
@@ -162,17 +154,17 @@ class ParquetBiglist(BiglistBase):
         else:
             pool = ThreadPoolExecutor(min(32, (os.cpu_count() or 1) + 4))
         tasks = []
-        read_parquet = cls.read_parquet_file
+        read_parquet = cls._load_data_file
         for p in data_path:
             if p.is_file():
                 if suffix == "*" or p.name.endswith(suffix):
-                    tasks.append(pool.submit(get_file_meta, read_parquet, str(p)))
+                    tasks.append(pool.submit(get_file_meta, read_parquet, p))
             else:
                 tt = []
                 for pp in p.riterdir():
                     if suffix == "*" or pp.name.endswith(suffix):
                         tt.append(
-                            (str(pp), pool.submit(get_file_meta, read_parquet, str(pp)))
+                            (str(pp), pool.submit(get_file_meta, read_parquet, pp))
                         )
                 tt.sort()
                 for p, t in tt:
@@ -219,6 +211,12 @@ class ParquetBiglist(BiglistBase):
     def _get_data_file(self, datafiles, idx):
         return self.resolve_path(datafiles[idx]["path"])
 
+    def file_view(self, file, *, eager=False):
+        if isinstance(file, int):
+            datafiles, _ = self._get_data_files()
+            file = self._get_data_file(datafiles, file)
+        return ParquetFileData(file, self._load_data_file, eager=eager)
+
     def iter_batches(self, batch_size=10_000) -> Iterator[ParquetBatchData]:
         for file in self.iter_files():
             yield from file.iter_batches(batch_size)
@@ -236,71 +234,58 @@ class ParquetBiglist(BiglistBase):
         ]
 
 
-class ParquetFileData(collections.abc.Sequence):
+class ParquetFileData(FileView):
     """
     Represents data of a single Parquet file,
     with facilities to make it conform to our required APIs.
 
     If you want to use the  `arrow.parquet` methods directly,
     use it via `self.file`, or `self.data()`.
-
-    Objects of this class can't be pickled.
     """
 
     def __init__(
-        self,
-        file: ParquetFile,
-        *,
-        eager_load: bool = False,
+        self, path, loader, *, eager=False,
         scalar_as_py: bool = True,
     ):
-        self.file = file
+        self._file: ParquetFile = None
+        self._data: ParquetBatchData = None
+        self.scalar_as_py = scalar_as_py
+        # `self.scalar_as_py` may be toggled anytime
+        # and have its effect right away.
 
-        meta = file.metadata
-        self.metadata = meta
-        self.num_rows = meta.num_rows
-        self.num_row_groups = meta.num_row_groups
         self._row_groups_num_rows = None
         self._row_groups_num_rows_cumsum = None
         self._row_groups: List[ParquetBatchData] = None
 
         self._column_names = None
         self._columns = {}
-        self.scalar_as_py = scalar_as_py
-        # `self.scalar_as_py` may be toggled anytime
-        # and have its effect right away.
-
-        self._data: ParquetBatchData = None
-        if eager_load:
-            _ = self.data(use_threads=False)
-
         self._getitem_last_row_group = None
 
-    def __repr__(self):
-        return "<{} with {} rows, {} columns, {} row-groups>".format(
-            self.__class__.__name__,
-            self.num_rows,
-            self.num_columns,
-            self.num_row_groups,
-        )
-
-    def __str__(self):
-        return self.__repr__()
+        super().__init__(path, loader, eager=eager)
 
     def __len__(self):
         return self.num_rows
 
-    def data(self, *, use_threads=True) -> ParquetBatchData:
-        """Eagerly read in the whole file as a table."""
-        if self._data is None:
-            self._data = ParquetBatchData(
-                self.file.read(columns=self._column_names, use_threads=use_threads),
-                scalar_as_py=self.scalar_as_py,
-            )
-            if self.num_row_groups == 1:
-                assert self._row_groups is None
-                self._row_groups = [self._data]
-        return self._data
+    def _load(self):
+        _ = self.data()
+
+    @property
+    def file(self):
+        if self._file is None:
+            self._file = self._loader(self._path)
+        return self._file
+
+    @property
+    def metadata(self):
+        return self.file.metadata
+    
+    @property
+    def num_rows(self) -> int:
+        return self.metadata.num_rows
+    
+    @property
+    def num_row_groups(self):
+        return self.metadata.num_row_groups
 
     @property
     def num_columns(self) -> int:
@@ -313,6 +298,18 @@ class ParquetFileData(collections.abc.Sequence):
         if self._column_names:
             return self._column_names
         return self.metadata.schema.names
+
+    def data(self, *, use_threads=True) -> ParquetBatchData:
+        """Eagerly read in the whole file as a table."""
+        if self._data is None:
+            self._data = ParquetBatchData(
+                self.file.read(columns=self._column_names, use_threads=use_threads),
+                scalar_as_py=self.scalar_as_py,
+            )
+            if self.num_row_groups == 1:
+                assert self._row_groups is None
+                self._row_groups = [self._data]
+        return self._data
 
     def _locate_row_group_for_item(self, idx):
         # Assuming user is checking neighboring items,
@@ -390,10 +387,6 @@ class ParquetFileData(collections.abc.Sequence):
                 assert self._data is None
                 self._data = self._row_groups[0]
         return self._row_groups[idx]
-
-    def view(self):
-        # The returned object supports row slicing.
-        return ListView(self)
 
     def columns(self, cols: Union[str, Sequence[str]]) -> ParquetFileData:
         """
@@ -605,8 +598,11 @@ class ParquetBatchData(collections.abc.Sequence):
 
 
 def read_parquet_file(path: PathType, **kwargs):
-    f = ParquetBiglist.read_parquet_file(str(ParquetBiglist.resolve_path(path)))
-    return ParquetFileData(f, **kwargs)
+    return ParquetFileData(
+        path,
+        ParquetBiglist._load_data_file,
+        **kwargs
+    )
 
 
 def write_parquet_file(

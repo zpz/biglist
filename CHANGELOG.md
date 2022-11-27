@@ -17,10 +17,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - New public method (property) `datafiles_info`.
+- Created Sphinx documentation and started hosting it on "Read the Docs". This is the first version to have such  documentation.
 
-### Fixed
+### Fixed, enhanced, changed
 
 - Fixed a bug in `ParquetBiglist.get_gcsfs` regarding token expiration.
+- Enhanced `FileView` and related methods.
 
 
 ## [0.7.0] - 2022-11-18

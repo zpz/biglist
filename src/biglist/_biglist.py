@@ -1,4 +1,3 @@
-import collections.abc
 import concurrent.futures
 import itertools
 import json
@@ -19,7 +18,6 @@ from typing import (
 )
 from uuid import uuid4
 
-from upathlib import Upath, PathType
 from upathlib.serializer import (
     ByteSerializer,
     _loads,
@@ -32,7 +30,7 @@ from upathlib.serializer import (
     ZOrjsonSerializer,
     ZstdOrjsonSerializer,
 )
-from ._base import BiglistBase, ListView, T, FileLoaderMode
+from ._base import BiglistBase, FileView, ListView, Upath, PathType, T
 
 
 logger = logging.getLogger(__name__)
@@ -160,7 +158,7 @@ class Biglist(BiglistBase[T]):
         path.write_bytes(serializer.serialize(data))
 
     @classmethod
-    def read_data_file(cls, path: Upath):
+    def _load_data_file(cls, path: Upath):
         """
         This method loads a data file.
 
@@ -168,21 +166,15 @@ class Biglist(BiglistBase[T]):
         element of the list, e.g. converting an object of a
         Python built-in type to that of a custom class, it can override
         this method to do the transformation on the output of
-        the `super()` version just before initiating the
-        `BiglistFileData` object. However, it may work just fine to
-        leave that transformation to the application code.
+        the `super()` version. However, it may work just fine to
+        leave that transformation to the application code once it
+        has retrieved a data element.
         """
         deserializer = cls.registered_storage_formats[
             path.suffix.lstrip(".").replace("_", "-")
         ]
         data = path.read_bytes()
         return deserializer.deserialize(data)
-
-    @classmethod
-    def _load_data_file(cls, path: Upath, mode: int):
-        return BiglistFileData(
-            path, cls.read_data_file, eager_load=(mode == FileLoaderMode.ITER)
-        )
 
     @classmethod
     def new(
@@ -539,6 +531,12 @@ class Biglist(BiglistBase[T]):
         # `datafiles` is the return of `_get_datafiles`.
         return self._data_dir / datafiles[idx][0]
 
+    def file_view(self, file, *, eager=False):
+        if isinstance(file, int):
+            datafiles, _ = self._get_data_files()
+            file = self._get_data_file(datafiles, file)
+        return BiglistFileData(file, self._load_data_file, eager=eager)
+
     def iter_files(self):
         self.flush()
         return super().iter_files()
@@ -629,39 +627,27 @@ class Biglist(BiglistBase[T]):
         return ss["next"] == ss["total"]
 
 
-class BiglistFileData(collections.abc.Sequence):
-    def __init__(self, path: Upath, loader: Callable, *, eager_load: bool = False):
-        self._path = path
-        self._loader = loader
-        self._data = None
-        if eager_load:
-            _ = self.data()
+class BiglistFileData(FileView):
+    def __init__(self, path, loader, *, eager=False):
+        self._data: list = None
+        super().__init__(path, loader, eager=eager)
 
-    def data(self):
+    def _load(self):
         if self._data is None:
             self._data = self._loader(self._path)
+
+    def data(self):
+        self._load()
         return self._data
 
-    def __repr__(self):
-        return "<{} with {} items>".format(self.__class__.__name__, len(self._data))
-
-    def __str__(self):
-        return self.__repr__()
-
     def __len__(self):
-        return len(self._data)
-
-    def __bool__(self):
-        return len(self._data) > 0
+        return len(self.data())
 
     def __getitem__(self, idx: int):
-        return self._data[idx]
+        return self.data()[idx]
 
     def __iter__(self):
-        return iter(self._data)
-
-    def view(self):
-        return ListView(self)
+        return iter(self.data())
 
 
 class JsonByteSerializer(ByteSerializer):

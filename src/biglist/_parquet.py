@@ -429,8 +429,8 @@ class ParquetFileData(FileView):
                     f"cannot select the columns {cc} because they are not in existing set of columns"
                 )
 
-        obj = self.__class__(self._path, self._loader,
-            eager=False, scalar_as_py=self.scalar_as_py
+        obj = self.__class__(
+            self._path, self._loader, eager=False, scalar_as_py=self.scalar_as_py
         )
         obj._file = self._file
         obj._row_groups_num_rows = self._row_groups_num_rows

@@ -35,7 +35,7 @@ class FileLoaderMode:
     RAND = 1
 
 
-class FileView(collections.abc.Sequence, collections.abc.Iterable):
+class FileView(collections.abc.Sequence):
     """
     Given a function `loader` that would load `file` and return
     a Sequence. A `FileView` object keeps `loader` and `file`
@@ -280,7 +280,7 @@ class BiglistBase(Sequence[T]):
         return path  # type: ignore
 
     @classmethod
-    def _load_data_file(cls, path: Upath):
+    def load_data_file(cls, path: Upath):
         raise NotImplementedError
 
     @classmethod

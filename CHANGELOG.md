@@ -9,20 +9,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Removed
 
-### Changed
+### Changed and enhanced
 
-- Methods `dump_data_file` and `load_data_file` are renamed `_dump_data_file` and `_load_data_file`. Subclasses could have a need to override these, but that's not encouraged.
-
+- `BiglistBase.load_data_file` losts parameter `mode`. Now it has only one parameter, which is the file path.
+- Enhanced `FileView` and related code. Both `ParquetFileData` and `BiglistFileData` are now subclasses of `FileView`.
 
 ### Added
 
 - New public method (property) `datafiles_info`.
-- Created Sphinx documentation and started hosting it on "Read the Docs". This is the first version to have such  documentation.
+- Created Sphinx documentation and started hosting it on "Read the Docs". This is the first version to have such documentation.
 
-### Fixed, enhanced, changed
+### Fixed
 
 - Fixed a bug in `ParquetBiglist.get_gcsfs` regarding token expiration.
-- Enhanced `FileView` and related methods.
+
 
 
 ## [0.7.0] - 2022-11-18

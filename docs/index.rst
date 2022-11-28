@@ -95,6 +95,13 @@ a non-existent directory, e.g.
 
    >>> yourlist = Biglist.new('/project/data/store-a', batch_size=100)
 
+Later, initiate a ``Biglist`` object for reading::
+
+   >>> yourlist = Biglist('/project/data/store-a')
+
+This time, we're not using ``Biglist.new`` because we are reading an existing dataset
+at the known location.
+
 If we want to persist the data in Google Cloud Storage, we would specify a path in the
 'gs://bucket-name/path/to/data' format.
 
@@ -200,14 +207,14 @@ There are cases where we want to use ``iter_files`` directly.
 
 
 Reading from a ``Biglist`` in multiple processes
--------------------------------------------
+------------------------------------------------
 
 To **collectively** consume a ``Biglist`` object from multiple processes,
 distribute ``FileView``'s to the processes.
 
 
 Reading from a ``Biglist`` in multiple machines
-------------------------------------------
+-----------------------------------------------
 
 Writing to a ``Biglist`` in multiple processes or machines
 ----------------------------------------------------------
@@ -218,6 +225,7 @@ Creating a ``ParquetBiglist``
 
 Reading a ``ParquetBiglist``
 ============================
+
 
 API reference
 =============

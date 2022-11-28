@@ -9,7 +9,6 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime
-from multiprocessing.util import Finalize
 from typing import (
     Callable,
     Iterator,
@@ -373,7 +372,6 @@ class BiglistBase(Sequence[T]):
                 max(self._n_read_threads, self._n_write_threads)
             )
             self._thread_pool_ = executor
-            Finalize(self, executor.shutdown)
 
         return self._thread_pool_
 

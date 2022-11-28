@@ -1,3 +1,4 @@
+import atexit
 import concurrent.futures
 import itertools
 import json
@@ -6,6 +7,7 @@ import multiprocessing
 import string
 import time
 import threading
+import weakref
 from concurrent.futures import ThreadPoolExecutor, Future
 from datetime import datetime
 from typing import (
@@ -34,6 +36,33 @@ from ._base import BiglistBase, FileView, Upath, PathType, T
 
 
 logger = logging.getLogger(__name__)
+
+
+_biglist_objs = weakref.WeakSet()
+
+
+def _cleanup():
+    # Use this to guarantee proper execution of ``Biglist.__del__``.
+    # An error case was observed in this scenario:
+    #
+    #   1. The ``self.path.rmrf()`` line executes;
+    #   2. ``rmrf`` involves a background thread, in which task is submitted to a thread pool;
+    #   3. ``RuntimeError: cannot schedule new futures after interpreter shutdown`` was raised.
+    #
+    # The module ``concurrent.futures.thread`` registers a ``atexit`` function, which sets a flag
+    # saying "interpreter is shutdown". This module contains the ``ThreadPoolExecutor`` class and
+    # of course its ``submit`` method. In ``submit``, if it sees the global "interpreter is shutdown"
+    # flag is set, it raises the error above.
+    # 
+    # Here, we register this function with ``atexit`` **after** the registration of the cleanup
+    # function in the standard module, because at this time that standard module has been imported.
+    # As a result, this cleanup function runs before the standard one, hence the call to ``rmrf``
+    # finishes before the "interpreter is shutdown" is set.
+    global _biglist_objs
+    for x in _biglist_objs:
+        x.__del__()
+
+atexit.register(_cleanup)
 
 
 class Dumper:
@@ -338,6 +367,8 @@ class Biglist(BiglistBase[T]):
         self._data_files: Optional[list] = None
         self._data_files_cumlength_ = []
         self.keep_files = True
+
+        _biglist_objs.add(self)
 
     def __del__(self) -> None:
         if self.keep_files:

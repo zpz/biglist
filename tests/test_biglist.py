@@ -232,7 +232,7 @@ def test_mp2():
 async def sum_square(mylist):
     z = 0
     for v in mylist:
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.02)
         z += v * v
     return z
 

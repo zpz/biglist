@@ -9,7 +9,6 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime
-from multiprocessing.util import Finalize
 from typing import (
     Callable,
     Iterator,
@@ -36,7 +35,7 @@ class FileLoaderMode:
     RAND = 1
 
 
-class FileView(collections.abc.Sequence, collections.abc.Iterable):
+class FileView(collections.abc.Sequence):
     """
     Given a function `loader` that would load `file` and return
     a Sequence. A `FileView` object keeps `loader` and `file`
@@ -281,7 +280,7 @@ class BiglistBase(Sequence[T]):
         return path  # type: ignore
 
     @classmethod
-    def _load_data_file(cls, path: Upath):
+    def load_data_file(cls, path: Upath):
         raise NotImplementedError
 
     @classmethod
@@ -373,7 +372,6 @@ class BiglistBase(Sequence[T]):
                 max(self._n_read_threads, self._n_write_threads)
             )
             self._thread_pool_ = executor
-            Finalize(self, executor.shutdown)
 
         return self._thread_pool_
 

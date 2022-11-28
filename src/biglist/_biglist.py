@@ -53,7 +53,7 @@ def _cleanup():
     # saying "interpreter is shutdown". This module contains the ``ThreadPoolExecutor`` class and
     # of course its ``submit`` method. In ``submit``, if it sees the global "interpreter is shutdown"
     # flag is set, it raises the error above.
-    # 
+    #
     # Here, we register this function with ``atexit`` **after** the registration of the cleanup
     # function in the standard module, because at this time that standard module has been imported.
     # As a result, this cleanup function runs before the standard one, hence the call to ``rmrf``
@@ -61,6 +61,7 @@ def _cleanup():
     global _biglist_objs
     for x in _biglist_objs:
         x.__del__()
+
 
 atexit.register(_cleanup)
 

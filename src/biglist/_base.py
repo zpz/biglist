@@ -1,4 +1,5 @@
 import bisect
+import collections.abc
 import itertools
 import logging
 import os
@@ -20,7 +21,7 @@ from typing import (
     TypeVar,
 )
 
-from upathlib import LocalUpath, Upath, PathType, resolve_path  # type: ignore
+from upathlib import LocalUpath, Upath, PathType, resolve_path
 from ._util import locate_idx_in_chunked_seq
 
 
@@ -35,7 +36,7 @@ class FileLoaderMode:
     RAND = 1
 
 
-class FileView(Sequence[T]):
+class FileView(collections.abc.Sequence, collections.abc.Iterable):
     """
     Given a function `loader` that would load `file` and return
     a Sequence. A `FileView` object keeps `loader` and `file`
@@ -46,40 +47,40 @@ class FileView(Sequence[T]):
     lend itself to pickling.
     One use case of FileView is to pass these objects around in
     `multiprocessing` code for concurrent data processing.
+
+    The method `BiglistBase.file_view` returns a `FileView` object.
     """
 
-    def __init__(self, file: Upath, loader: Callable):
+    def __init__(self, path: PathType, loader: Callable, *, eager: bool = False):
         """
-        `loader`: a function that will load the data file and return
+        Parameters
+        ----------
+        loader:
+            A function that will load the data file and return
             a Sequence. This could be a classmethod, static method,
             and standing alone function, but can't be a lambda
             function, because a `FileView` object often undergoes
             pickling when it is passed between processes.
         """
-        self._file = file
+        self._path: Upath = BiglistBase.resolve_path(path)
         self._loader = loader
-        self._data = None
+        if eager:
+            self._load()
 
     def __repr__(self):
-        return f"<{self.__class__.__name__} into '{self._file}', with loader {self._loader}>"
+        return f"{self.__class__.__name__}({self._path}, {self._loader})"
 
     def __str__(self):
         return self.__repr__()
 
-    @property
-    def data(self) -> Sequence[T]:
-        if self._data is None:
-            self._data = self._loader(self._file, FileLoaderMode.RAND)
-        return self._data
+    def _load(self):
+        raise NotImplementedError
 
-    def __len__(self) -> int:
-        return len(self.data)
+    def bool(self):
+        return self.__len__() > 0
 
-    def __getitem__(self, idx: Union[int, slice]) -> T:
-        return self.data[idx]
-
-    def __iter__(self):
-        return iter(self.data)
+    def view(self):
+        return ListView(self)
 
 
 class ListView(Sequence[T]):
@@ -280,10 +281,7 @@ class BiglistBase(Sequence[T]):
         return path  # type: ignore
 
     @classmethod
-    def load_data_file(cls, path: Upath, mode: int) -> Sequence[T]:
-        """
-        `mode`: take values defined in `FileLoaderMode`.
-        """
+    def _load_data_file(cls, path: Upath):
         raise NotImplementedError
 
     @classmethod
@@ -359,7 +357,7 @@ class BiglistBase(Sequence[T]):
         # of the `Biglist` object.
 
     def __repr__(self):
-        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data file(s)>"
+        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} elements in {self.num_datafiles} data file(s)>"
 
     def __str__(self):
         return self.__repr__()
@@ -474,7 +472,7 @@ class BiglistBase(Sequence[T]):
         else:
             data = self._file_dumper.get_file_data(file)
         if data is None:
-            data = self.load_data_file(file, FileLoaderMode.RAND)
+            data = self.file_view(file, eager=False)
 
         self._read_buffer_file_idx = ifile
         self._read_buffer = data
@@ -494,7 +492,7 @@ class BiglistBase(Sequence[T]):
         to multiple workers, see `concurrent_iter` and `concurrent_iter_files`.
 
         This yields the content of one file at a time.
-        Specifically, it yields the output of `self.load_data_file(...)`.
+        Specifically, it yields `FileView` objects.
 
         This exists mainly as the _engine_ for `__iter__`.
         """
@@ -505,9 +503,7 @@ class BiglistBase(Sequence[T]):
         ndatafiles = len(datafiles)
 
         if ndatafiles == 1:
-            yield self.load_data_file(
-                self._get_data_file(datafiles, 0), FileLoaderMode.ITER
-            )
+            yield self.file_view(self._get_data_file(datafiles, 0), eager=True)
         elif ndatafiles > 1:
             max_workers = min(self._n_read_threads, ndatafiles)
             tasks = queue.Queue(max_workers)
@@ -515,9 +511,9 @@ class BiglistBase(Sequence[T]):
 
             for i in range(max_workers):
                 t = executor.submit(
-                    self.load_data_file,
+                    self.file_view,
                     self._get_data_file(datafiles, i),
-                    FileLoaderMode.ITER,
+                    eager=True,
                 )
                 tasks.put(t)
             nfiles_queued = max_workers
@@ -531,9 +527,9 @@ class BiglistBase(Sequence[T]):
                 if nfiles_queued < ndatafiles:
                     # `nfiles_queued` is the index of the next file to download.
                     t = executor.submit(
-                        self.load_data_file,
+                        self.file_view,
                         self._get_data_file(datafiles, nfiles_queued),
-                        FileLoaderMode.ITER,
+                        eager=True,
                     )
                     tasks.put(t)
                     nfiles_queued += 1
@@ -581,9 +577,7 @@ class BiglistBase(Sequence[T]):
 
             file = self._get_data_file(datafiles, n_files_claimed)
             logger.debug('yielding data of file "%s"', file)
-            yield self.load_data_file(file, FileLoaderMode.RAND)
-            # Here, using `FileLoaderMode.ITER` is "eager" loading.
-            # `RAND` is "lazy" loading, giving user more choices.
+            yield self.file_view(file, eager=False)
 
     def concurrent_file_iter_stat(self, task_id: str) -> dict:
         info = self._concurrent_file_iter_info_file(task_id).read_json()
@@ -606,15 +600,12 @@ class BiglistBase(Sequence[T]):
     def concurrent_iter_done(self, task_id: str) -> bool:
         return self.concurrent_file_iter_done(task_id)
 
-    def file_view(self, file: Union[Upath, int]) -> FileView:
+    def file_view(self, file: Union[Upath, int], *, eager: bool = False) -> FileView:
         """
         `file`: the data file path or the index of the file
             in the list of data files.
         """
-        if isinstance(file, int):
-            datafiles, _ = self._get_data_files()
-            file = self._get_data_file(datafiles, file)
-        return FileView(file, self.__class__.load_data_file)  # type: ignore
+        raise NotImplementedError
 
     def file_views(self) -> List[FileView]:
         # This is intended to facilitate parallel processing,

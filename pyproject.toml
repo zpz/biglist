@@ -28,6 +28,10 @@ Source = "https://github.com/zpz/biglist"
 
 
 [project.optional-dependencies]
+doc = [
+    "sphinx",
+    "furo",
+]
 gcs = [
     "upathlib[gcs] >= 0.6.8",
     "google-auth",

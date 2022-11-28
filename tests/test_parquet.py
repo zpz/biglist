@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 import pyarrow
 from upathlib import LocalUpath
-from biglist import ParquetBiglist, ParquetFileData, write_parquet_file
+from biglist import ParquetBiglist, ParquetFileData, write_parquet_file, read_parquet_file
 import pytest
 
 
@@ -138,12 +138,12 @@ def test_big_parquet_list():
     print(biglist.file_view(0))
     print(biglist.file_view(1).data)
     print('')
-    print(biglist.file_view(1).data.data)
+    print(biglist.file_view(1).data())
 
     # specify columns
     print('')
     p = biglist._get_data_files()[0][0]['path']
-    d = ParquetFileData(biglist.read_parquet_file(p))
+    d = read_parquet_file(p)
     d1 = d.columns(['key', 'value'])
     print(d1[3])
     d2 = d1.columns('value')
@@ -156,7 +156,7 @@ def test_big_parquet_list():
 
     #
     print('')
-    d = ParquetFileData(biglist.read_parquet_file(p), scalar_as_py=False)
+    d = read_parquet_file(p, scalar_as_py=False)
     assert d.num_columns == 2
     assert d.column_names == ['key', 'value']
     z = d[3]
@@ -169,28 +169,28 @@ def test_big_parquet_list():
     assert z['value'] != z['value'].as_py()
 
     print('')
-    d = ParquetFileData(biglist.read_parquet_file(p))
+    d = read_parquet_file(p)
     z = d[3]
     print(z)
     assert isinstance(z['key'], int)
     assert isinstance(z['value'], str)
 
     print('')
-    d = ParquetFileData(biglist.read_parquet_file(p), eager_load=False)
+    d = read_parquet_file(p, eager=False)
     for k, row in enumerate(d):
         print(row)
         if k > 3:
             break
 
     print('')
-    d = ParquetFileData(biglist.read_parquet_file(p), eager_load=True)
+    d = read_parquet_file(p, eager=True)
     for k, row in enumerate(d):
         print(row)
         if k > 3:
             break
 
     print('')
-    d = ParquetFileData(biglist.read_parquet_file(p), eager_load=True, scalar_as_py=False)
+    d = read_parquet_file(p, eager=True, scalar_as_py=False)
     for k, row in enumerate(d):
         print(row)
         if k > 3:

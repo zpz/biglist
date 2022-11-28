@@ -1,4 +1,3 @@
-import collections.abc
 import concurrent.futures
 import itertools
 import json
@@ -19,7 +18,6 @@ from typing import (
 )
 from uuid import uuid4
 
-from upathlib import Upath, PathType
 from upathlib.serializer import (
     ByteSerializer,
     _loads,
@@ -32,7 +30,7 @@ from upathlib.serializer import (
     ZOrjsonSerializer,
     ZstdOrjsonSerializer,
 )
-from ._base import BiglistBase, ListView, T
+from ._base import BiglistBase, FileView, Upath, PathType, T
 
 
 logger = logging.getLogger(__name__)
@@ -134,7 +132,7 @@ class Biglist(BiglistBase[T]):
         cls.registered_storage_formats[name] = serializer
 
     @classmethod
-    def dump_data_file(cls, path: Upath, data: list):
+    def _dump_data_file(cls, path: Upath, data: list):
         """
         This method persists a batch of data elements, always a list,
         to disk or cloud storage.
@@ -150,8 +148,8 @@ class Biglist(BiglistBase[T]):
         One useful pattern is to dump result of `instance.to_dict()`,
         and use `cls.from_dict(...)` to transform persisted data
         to user's custom type upon loading. Such conversions can be
-        achieved by customizing the methods `dump_data_file` and
-        `load_data_file`. It may work just as well to leave these
+        achieved by customizing the methods `_dump_data_file` and
+        `_load_data_file`. It may work just as well to leave these
         conversions to application code.
         """
         serializer = cls.registered_storage_formats[
@@ -160,7 +158,7 @@ class Biglist(BiglistBase[T]):
         path.write_bytes(serializer.serialize(data))
 
     @classmethod
-    def load_data_file(cls, path: Upath, mode: int):
+    def _load_data_file(cls, path: Upath):
         """
         This method loads a data file.
 
@@ -168,18 +166,15 @@ class Biglist(BiglistBase[T]):
         element of the list, e.g. converting an object of a
         Python built-in type to that of a custom class, it can override
         this method to do the transformation on the output of
-        the `super()` version just before initiating the
-        `BiglistFileData` object. However, it may work just fine to
-        leave that transformation to the application code.
-
-        `mode` is ignored.
+        the `super()` version. However, it may work just fine to
+        leave that transformation to the application code once it
+        has retrieved a data element.
         """
         deserializer = cls.registered_storage_formats[
             path.suffix.lstrip(".").replace("_", "-")
         ]
         data = path.read_bytes()
-        data = deserializer.deserialize(data)
-        return BiglistFileData(data)
+        return deserializer.deserialize(data)
 
     @classmethod
     def new(
@@ -194,92 +189,109 @@ class Biglist(BiglistBase[T]):
         """
         A Biglist object construction is in either of the two modes
         below:
-           a) create a new Biglist to store new data.
-           b) create a Biglist object pointing to storage of
-              existing data, which was created by a previous call to `Biglist.new`.
 
-        In case (a), one has called `Biglist.new`. In case (b), one has called
-        `Biglist(..)` (i.e. `__init__`).
+           a) create a new Biglist to store new data.
+
+           b) create a Biglist object pointing to storage of
+              existing data, which was created by a previous call to ``Biglist.new``.
+
+        In case (a), one has called ``Biglist.new``. In case (b), one has called
+        ``Biglist(..)`` (i.e. ``__init__``).
 
         Some settings are applicable only in mode (a), b/c in
         mode (b) they can't be changed and, if needed, should only
         use the value already set in mode (a).
-        Such settings should happen in this classmethod `new`
-        and should not be parameters to the the method `__init__`.
-        Examples include `storage_format` and `batch_size`.
+        Such settings should happen in this classmethod ``new``
+        and should not be parameters to the the method ``__init__``.
+        Examples include ``storage_format`` and ``batch_size``.
 
-        These settings typically should be taken care of in `new` after creating
-        the object with `__init__`.
+        These settings typically should be taken care of in ``new`` after creating
+        the object with ``__init__``.
 
-        `__init__` should be defined in such a way that it works for
+        ``__init__`` should be defined in such a way that it works for
         both a barebone object that is created in this `new`, as well as a
         fleshed out object that already has data.
 
-        Some settings may be applicable to an existing `Biglist` object,
+        Some settings may be applicable to an existing ``Biglist`` object,
         i.e. they control ways to use the object, and are not an intrinsic
         property of the object. Hence they can be set to diff values while
         using an existing Biglist object. Such settings should be
-        parameters to `__init__` and not to `new`. If specified in a call
-        to `new`, these parameters will be passed on to `__init__`.
+        parameters to ``__init__`` and not to ``new``. If specified in a call
+        to ``new``, these parameters will be passed on to ``__init__``.
 
-        `path`: a directory in which this `Biglist` will save data files
-            as well as meta-info files. If not specified, `cls.get_temp_path`
+        Parameters
+        ----------
+        path:
+            A directory in which this ``Biglist`` will save data files
+            as well as meta-info files. The directory must be non-existent.
+            It is not necessary to pre-create the parent directory of this path.
+
+            If not specified, ``cls.get_temp_path``
             will be called to determine a temporary path.
 
-        `batch_size`: max number of data elements in each persisted data file.
+        batch_size:
+            max number of data elements in each persisted data file.
 
             There's no good default value for this parameter, although one is
-            provided, because the code doesn't know (at the beginning of `new`)
+            provided, because the code doesn't know (at the beginning of ``new``)
             the typical size of the data elements. User is recommended to
             specify the value of this parameter.
 
-            In determining the value for `batch_size`, the most important
+            In determining the value for ``batch_size``, the most important
             consideration is the size of each data file, which is determined
             by the typical size of the data elements as well as the the number
-            of elements in each file. `batch_size` is the upper bound for the latter.
+            of elements in each file. ``batch_size`` is the upper bound for the latter.
 
             The file size impacts a few things.
 
                 - It should not be so small that the file reading/writing is large
-                  relative overhead. This is especially important when `path` is
+                  relative overhead. This is especially important when ``path`` is
                   cloud storage.
 
                 - It should not be so large that it is "unwieldy", e.g. approaching
                   1GB.
 
-                - When iterating over a `Biglist` object, there can be up to (by default) 4
-                  files-worth of data in memory at any time. See the method `iter_files`.
+                - When iterating over a ``Biglist`` object, there can be up to (by default) 4
+                  files-worth of data in memory at any time. See the method ``iter_files``.
 
-                - When `append`ing or `extend`ing at high speed, there can be up to
-                  (by default) 4 times `batch_size` data elements in memory at any time.
-                  See `_flush` and `Dumper`.
+                - When ``append``ing or ``extend``ing at high speed, there can be up to
+                  (by default) 4 times ``batch_size`` data elements in memory at any time.
+                  See ``_flush`` and ``Dumper``.
 
-            Another consideration is access pattern of elements in the `Biglist`. If
+            Another consideration is access pattern of elements in the ``Biglist``. If
             there are many "jumping around" with random element access, large data files
             will lead to very wasteful file loading, because to read any element,
             its hosting file must be read into memory. (HOWEVER, if your use pattern is
-            heavy on random access, you SHOULD NOT use `Biglist`.)
+            heavy on random access, you SHOULD NOT use ``Biglist``.)
 
-            If the Biglist is consumed by end-to-end iteration, then `batch_size` is not
+            If the Biglist is consumed by end-to-end iteration, then ``batch_size`` is not
             expected to be a sensitive setting, as long as it is in a reasonable range.
 
             Rule of thumb: it is recommended to keep the persisted files between 32-128MB
             in size. (Note: no benchmark was performed to back this recommendation.)
 
-        `keep_files`: if not specified, the default behavior this the following:
+        keep_files:
+            if not specified, the default behavior this the following:
 
-            If `path` is `None`, then this is `False`---the temporary directory
+            If ``path`` is ``None``, then this is ``False``---the temporary directory
             will be deleted when this `Biglist` object goes away.
 
-            If `path` is not `None`, i.e. user has deliberately specified a location,
-            then this is `True`---files saved by this `Biglist` object will stay.
+            If ``path`` is not ``None``, i.e. user has deliberately specified a location,
+            then this is ``True``---files saved by this ``Biglist`` object will stay.
 
-            User can pass in `True` or `False` to override the default behavior.
+            User can pass in ``True`` or ``False`` to override the default behavior.
 
-        `storage_format`: this should be a key in `cls.registered_storage_formats`.
-            If not specified, `cls.DEFAULT_STORAGE_FORMAT` is used.
+        storage_format:
+            this should be a key in ``cls.registered_storage_formats``.
+            If not specified, ``cls.DEFAULT_STORAGE_FORMAT`` is used.
 
-        `kwargs`: additional arguments are passed on to `__init__`.
+        kwargs:
+            additional arguments are passed on to ``__init__``.
+
+        Returns
+        -------
+        Biglist:
+            A new ``Biglist`` object.
         """
 
         if not path:
@@ -396,9 +408,9 @@ class Biglist(BiglistBase[T]):
             self._file_dumper = Dumper(self._thread_pool, self._n_write_threads)
         if wait:
             self._file_dumper.wait()
-            self.dump_data_file(data_file, buffer)
+            self._dump_data_file(data_file, buffer)
         else:
-            self._file_dumper.dump_file(self.dump_data_file, data_file, buffer)
+            self._file_dumper.dump_file(self._dump_data_file, data_file, buffer)
             # This call will return quickly if the dumper has queue
             # capacity for the file. The file meta data below
             # will be updated as if the saving has completed, although
@@ -519,6 +531,12 @@ class Biglist(BiglistBase[T]):
         # `datafiles` is the return of `_get_datafiles`.
         return self._data_dir / datafiles[idx][0]
 
+    def file_view(self, file, *, eager=False):
+        if isinstance(file, int):
+            datafiles, _ = self._get_data_files()
+            file = self._get_data_file(datafiles, file)
+        return BiglistFileData(file, self._load_data_file, eager=eager)
+
     def iter_files(self):
         self.flush()
         return super().iter_files()
@@ -609,33 +627,27 @@ class Biglist(BiglistBase[T]):
         return ss["next"] == ss["total"]
 
 
-class BiglistFileData(collections.abc.Sequence):
-    def __init__(self, data: list):
-        self._data = data
+class BiglistFileData(FileView):
+    def __init__(self, path, loader, *, eager=False):
+        self._data: list = None
+        super().__init__(path, loader, eager=eager)
+
+    def _load(self):
+        if self._data is None:
+            self._data = self._loader(self._path)
 
     def data(self):
+        self._load()
         return self._data
 
-    def __repr__(self):
-        return "<{} with {} items>".format(self.__class__.__name__, len(self._data))
-
-    def __str__(self):
-        return self.__repr__()
-
     def __len__(self):
-        return len(self._data)
-
-    def __bool__(self):
-        return len(self._data) > 0
+        return len(self.data())
 
     def __getitem__(self, idx: int):
-        return self._data[idx]
+        return self.data()[idx]
 
     def __iter__(self):
-        return iter(self._data)
-
-    def view(self):
-        return ListView(self)
+        return iter(self.data())
 
 
 class JsonByteSerializer(ByteSerializer):

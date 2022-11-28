@@ -4,11 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [unreleased]
+
+## [0.7.1] - unreleased
+
+### Removed
+
+### Changed
+
+- Methods `dump_data_file` and `load_data_file` are renamed `_dump_data_file` and `_load_data_file`. Subclasses could have a need to override these, but that's not encouraged.
+
 
 ### Added
 
 - New public method (property) `datafiles_info`.
+- Created Sphinx documentation and started hosting it on "Read the Docs". This is the first version to have such  documentation.
+
+### Fixed, enhanced, changed
+
+- Fixed a bug in `ParquetBiglist.get_gcsfs` regarding token expiration.
+- Enhanced `FileView` and related methods.
 
 
 ## [0.7.0] - 2022-11-18

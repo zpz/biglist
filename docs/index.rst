@@ -486,9 +486,12 @@ via ``file_views``, distributed reading via ``concurrent_iter_files``---these ar
 However, the structures of the data files are very different between ``Biglist`` and ``ParquetBiglist``.
 For ``Biglist``, each data file contains a straight Python list, elements of which being whatever have been
 passed into ``append``.
-For ``ParquetBiglist``, each data file is in a sophisticated columnar format, which is publically documented.
+For ``ParquetBiglist``, each data file is in a sophisticated columnar format, which is publicly documented.
 A variety of ways are provided to get data out of the Parquet format;
 some favor convenience, some favor efficiency. Let's see some examples.
+
+A row perspective
+-----------------
 
 ::
 
@@ -543,8 +546,181 @@ First of all, a ``FileView`` object is an ``Iterable`` ``Sequence``, providing r
    {'make': 'ford', 'year': 1966, 'sales': 170}
    >>>
 
+``ParquetFileData`` uses ``pyarrow`` to read the Parquet files.
+The values above are nice and simple Python types, but they are not the original ``pyarrow`` types;
+they have undergone a conversion. This conversion can be toggled by the property ``scalar_as_py``::
 
+   >>> f0[8]
+   {'make': 'ford', 'year': 1968, 'sales': 381}
+   >>> f0.scalar_as_py = False
+   >>> f0[8]
+   {'make': <pyarrow.StringScalar: 'ford'>, 'year': <pyarrow.Int64Scalar: 1968>, 'sales': <pyarrow.Int64Scalar: 381>}
+   >>> f0.scalar_as_py = True
 
+A Parquet file consists of one or more "row groups". Each row-group is a batch of rows stored column-wise.
+We can get info about the row-groups, and even work with a row-group as the unit of reading::
+
+   >>> f0.num_row_groups
+   7
+   >>> f0.metadata
+   <pyarrow._parquet.FileMetaData object at 0x7faa8c0bb2c0>
+   created_by: parquet-cpp-arrow version 10.0.1
+   num_columns: 3
+   num_rows: 61
+   num_row_groups: 7
+   format_version: 2.6
+   serialized_size: 2375
+   >>> f0.metadata.row_group(1)
+   <pyarrow._parquet.RowGroupMetaData object at 0x7faa7fae5400>
+   num_columns: 3
+   num_rows: 10
+   total_byte_size: 408
+   >>> f0.metadata.row_group(0)
+   <pyarrow._parquet.RowGroupMetaData object at 0x7faa6f1ec1d0>
+   num_columns: 3
+   num_rows: 10
+   total_byte_size: 400
+   >>> rg = f0.row_group(0)
+   >>> rg
+   <ParquetBatchData with 10 rows, 3 columns>
+
+(We have specified ``row_group_size=10`` in the call to ``write_parquet_file`` for demonstration.
+In practice, a row-group tends to be much larger.)
+
+A ``ParquetBatchData`` object is again an ``Iterable`` ``Sequence``.
+All our row-access tools are available::
+
+   >>> rg.num_rows
+   10
+   >>> len(rg)
+   10
+   >>> rg.num_columns
+   3
+   >>> rg[3]
+   {'make': 'ford', 'year': 1963, 'sales': 249}
+   >>> rg[-2]
+   {'make': 'ford', 'year': 1968, 'sales': 381}
+   >>> rg.view()[4:7].collect()
+   [{'make': 'ford', 'year': 1964, 'sales': 249}, {'make': 'ford', 'year': 1965, 'sales': 167}, {'make': 'ford', 'year': 1966, 'sales': 170}]
+   >>> rg.scalar_as_py = False
+   >>> rg[3]
+   {'make': <pyarrow.StringScalar: 'ford'>, 'year': <pyarrow.Int64Scalar: 1963>, 'sales': <pyarrow.Int64Scalar: 249>}
+   >>> rg.scalar_as_py = True
+
+When we request a specific row, ``ParquetFileData`` will load the row-group that contains the row of interest.
+It doe not load the entire data in the file.
+However, we can get greedy and ask for the whole data in one go::
+
+   >>> f0
+   ParquetFileData('/tmp/a/b/c/e/ford.parquet', <bound method ParquetBiglist.load_data_file of <class 'biglist._parquet.ParquetBiglist'>>)
+   >>> f0.data()
+   <ParquetBatchData with 61 rows, 3 columns>
+
+This is again a ``ParquetBatchData`` object. All the familiar row-access tools are at our disposal.
+
+Finally, if the file is large, we may choose to iterate over it by batches instead of by rows::
+
+   >>> for batch in f0.iter_batches(batch_size=10):
+   ...     print(batch)
+   <ParquetBatchData with 10 rows, 3 columns>
+   <ParquetBatchData with 10 rows, 3 columns>
+   <ParquetBatchData with 10 rows, 3 columns>
+   <ParquetBatchData with 10 rows, 3 columns>
+   <ParquetBatchData with 10 rows, 3 columns>
+   <ParquetBatchData with 10 rows, 3 columns>
+   <ParquetBatchData with 1 rows, 3 columns>
+
+The batches are again ``ParquetBatchData`` objects. At the core of a ``ParquetBatchData`` is
+a ``pyarrow.Table`` or ``pyarrow.RecordBatch``. ``ParquetBatchData`` is friendly to ``pickle`` and,
+I suppose, pickling ``pyarrow`` objects are very efficient.
+So, the batches could be useful in ``multiprocessing`` scenarios.
+
+A column perspective
+--------------------
+
+Parquet is a *columnar* format.
+If we only need a subset of the columns, we should say so, so that the un-needed columns will
+not be loaded from disk (or cloud, as it may be).
+
+Both ``ParquetFileData`` and ``ParquetBatchData`` provide the method ``columns`` to return a subset
+of the original object with only the requested columns (either already loaded or to be loaded).
+
+   >>> f0.column_names
+   ['make', 'year', 'sales']
+   >>> cols = f0.columns(['year', 'sales'])
+   >>> cols
+   ParquetFileData('/tmp/a/b/c/e/ford.parquet', <bound method ParquetBiglist.load_data_file of <class 'biglist._parquet.ParquetBiglist'>>)
+   >>> cols.num_columns
+   2
+   >>> cols.column_names
+   ['year', 'sales']
+
+``ParquetFileData.columns`` returns another ``ParquetFileData``, whereas
+``ParquetBatchData.columns`` returns another ``ParquetBatchData``::
+
+   >>> rg
+   <ParquetBatchData with 10 rows, 3 columns>
+   >>> rg.column_names
+   ['make', 'year', 'sales']
+   >>> rgcols = rg.columns(['make', 'year'])
+   >>> rgcols.column_names
+   ['make', 'year']
+   >>> len(rgcols)
+   10
+   >>> rgcols[5]
+   {'make': 'ford', 'year': 1965}
+
+It's an interesting case when there's only one column::
+
+   >>> f0
+   ParquetFileData('/tmp/a/b/c/e/ford.parquet', <bound method ParquetBiglist.load_data_file of <class 'biglist._parquet.ParquetBiglist'>>)
+   >>> sales = f0.columns(['sales'])
+   >>> sales
+   ParquetFileData('/tmp/a/b/c/e/ford.parquet', <bound method ParquetBiglist.load_data_file of <class 'biglist._parquet.ParquetBiglist'>>)
+   >>> sales.column_names
+   ['sales']
+   >>> len(sales)
+   61
+   >>> sales[3]
+   249
+   >>> list(sales)
+   [78, 50, 311, 249, 249, 167, 170, 410, 381, 456, 106, 140, 104, 87, 127, 385, 443, 381, 294, 403, 74, 495, 97, 341, 276, 364, 421, 93, 378, 256, 352, 464, 413, 192, 436, 500, 103, 489, 197, 386, 454, 409, 450, 325, 484, 361, 201, 88, 446, 433, 475, 116, 388, 427, 275, 216, 332, 168, 248, 354, 216]
+   >>> sales.view()[:8].collect()
+   [78, 50, 311, 249, 249, 167, 170, 410]
+
+Of note here is the type of the objects returned from the element-access methods: it's *not* ``dict``.
+Because there's only one column whose name is known, there is no need to carry that with every element.
+Also note that the values have been converted to Python builtin types.
+The original ``pyarrow`` values will not look as nice::
+   
+   >>> sales.scalar_as_py = False
+   >>> sales.view()[:8].collect()
+   [<pyarrow.Int64Scalar: 78>, <pyarrow.Int64Scalar: 50>, <pyarrow.Int64Scalar: 311>, <pyarrow.Int64Scalar: 249>, <pyarrow.Int64Scalar: 249>, <pyarrow.Int64Scalar: 167>, <pyarrow.Int64Scalar: 170>, <pyarrow.Int64Scalar: 410>]
+   >>> sales.scalar_as_py = True
+
+Both ``ParquetFileData`` and ``ParquetBatchData`` have another method called ``column``, which retrieves a single column
+and returns a ``pyarrow.Array`` or ``pyarrow.ChunkedArray``. For example,
+
+::
+
+   >>> sales2 = f0.column('sales')
+   >>> sales2
+   <pyarrow.lib.ChunkedArray object at 0x7faa6e354270>
+   [
+   [
+      78,
+      50,
+      311,
+      249,
+      249,
+      ...
+      332,
+      168,
+      248,
+      354,
+      216
+   ]
+   ]
 
 
 API reference

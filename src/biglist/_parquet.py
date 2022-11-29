@@ -421,7 +421,7 @@ class ParquetFileData(FileView):
                 self._data = self._row_groups[0]
         return self._row_groups[idx]
 
-    def columns(self, cols: Union[str, Sequence[str]]) -> ParquetFileData:
+    def columns(self, cols: Sequence[str]) -> ParquetFileData:
         """
         Return a new ``ParquetFileData`` object that will only load
         the specified columns.
@@ -440,12 +440,10 @@ class ParquetFileData(FileView):
             print(obj1[2])
             obj2 = obj1.columns(['b', 'c'])
             print(obj2[3])
-            obj3 = obj.columns('d')
+            obj3 = obj.columns(['d'])
             for v in obj:
                 print(v)
         """
-        if isinstance(cols, str):
-            cols = [cols]
         assert len(set(cols)) == len(cols)  # no repeat values
 
         if self._column_names:
@@ -590,7 +588,7 @@ class ParquetBatchData(collections.abc.Sequence):
     def view(self):
         return ListView(self)
 
-    def columns(self, cols: Union[str, Sequence[str]]) -> ParquetBatchData:
+    def columns(self, cols: Sequence[str]) -> ParquetBatchData:
         """
         Return a new ``ParquetBatchData`` object that will only produce
         the specified columns.
@@ -609,12 +607,10 @@ class ParquetBatchData(collections.abc.Sequence):
             print(obj1[2])
             obj2 = obj1.columns(['b', 'c'])
             print(obj2[3])
-            obj3 = obj.columns('d')
+            obj3 = obj.columns(['d'])
             for v in obj:
                 print(v)
         """
-        if isinstance(cols, str):
-            cols = [cols]
         assert len(set(cols)) == len(cols)  # no repeat values
 
         if all(col in self.column_names for col in cols):

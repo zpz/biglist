@@ -37,20 +37,20 @@ class FileLoaderMode:
 
 class FileView(collections.abc.Sequence):
     """
-    Given a function `loader` that would load `file` and return
-    a Sequence. A `FileView` object keeps `loader` and `file`
-    but does not call `loader` until the resultant Sequence
+    Given a function ``loader`` that would load ``path`` and return
+    a Sequence, a ``FileView`` object keeps ``loader`` and ``path``
+    but does not call ``loader`` until the resultant ``Sequence``
     is needed. In other words, it does "lazy" loading.
 
-    This makes a `FileView` object light weight and, more importantly,
+    This makes a ``FileView`` object light weight and, more importantly,
     lend itself to pickling.
     One use case of FileView is to pass these objects around in
-    `multiprocessing` code for concurrent data processing.
+    ``multiprocessing`` code for concurrent data processing.
 
-    The method `BiglistBase.file_view` returns a `FileView` object.
+    The method ``BiglistBase.file_view`` returns a ``FileView`` object.
     """
 
-    def __init__(self, path: PathType, loader: Callable, *, eager: bool = False):
+    def __init__(self, path: PathType, loader: Callable):
         """
         Parameters
         ----------
@@ -58,21 +58,22 @@ class FileView(collections.abc.Sequence):
             A function that will load the data file and return
             a Sequence. This could be a classmethod, static method,
             and standing alone function, but can't be a lambda
-            function, because a `FileView` object often undergoes
+            function, because a ``FileView`` object often undergoes
             pickling when it is passed between processes.
         """
-        self._path: Upath = BiglistBase.resolve_path(path)
-        self._loader = loader
-        if eager:
-            self._load()
+        self.path: Upath = BiglistBase.resolve_path(path)
+        self.loader = loader
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({self._path}, {self._loader})"
+        return f"{self.__class__.__name__}('{self.path}', {self.loader})"
 
     def __str__(self):
         return self.__repr__()
 
-    def _load(self):
+    def load(self) -> None:
+        """
+        This method *eagerly* loads data.
+        """
         raise NotImplementedError
 
     def bool(self):
@@ -88,11 +89,11 @@ class ListView(Sequence[T]):
     element access by slice or index array.
 
     One use case is to provide slicing capabilities
-    to `Biglist` via a call to `Biglist.view()`.
+    to ``Biglist`` via a call to ``Biglist.view``.
 
-    A `ListView` object does "zero-copy"---it keeps track of
+    A ``ListView`` object does "zero-copy"---it keeps track of
     indices of elements in the window along with a reference to
-    the underlying sequence. One may slice a `ListView` object,
+    the underlying sequence. One may slice a ``ListView`` object,
     and this index-tracking continues. Only when a single-element
     access or an iteration is performed, the relevant elements
     are retrieved from the underlying sequence.
@@ -100,14 +101,14 @@ class ListView(Sequence[T]):
 
     def __init__(self, list_: Sequence[T], range_: Union[range, Sequence[int]] = None):
         """
-        This provides a "window" into the sequence `list_`,
-        which may be another `ListView` (which *is* a sequence, hence
+        This provides a "window" into the sequence ``list_``,
+        which may be another ``ListView`` (which *is* a sequence, hence
         no special treatment).
 
         During the use of this object, it is assumed that the underlying
-        `list_` is not changing. Otherwise the results may be incorrect.
+        ``list_`` is not changing. Otherwise the results may be incorrect.
 
-        As a sequence, `list_` must support random access by index.
+        As a sequence, ``list_`` must support random access by index.
         It does not need to support slicing.
         """
         self._list = list_
@@ -140,7 +141,7 @@ class ListView(Sequence[T]):
         Element access by a single index, slice, or an index array.
         Negative index and standard slice syntax both work as expected.
 
-        Slice and index-array access returns a new `ListView` object.
+        Slice and index-array access returns a new ``ListView`` object.
         """
         if isinstance(idx, int):
             # Return a single element.
@@ -178,12 +179,12 @@ class ListView(Sequence[T]):
 
 class ChainedList(Sequence[T]):
     """
-    This class tracks a series of `Sequence`s to provide
+    This class tracks a series of ``Sequence``'s to provide
     random element access and iteration on the series as a whole.
-    A call to the method `view` further returns an object that
+    A call to the method ``view`` further returns an object that
     supports slicing.
 
-    Note that `ListView` is also a `Sequence`, hence could be
+    Note that ``ListView`` is also a ``Sequence``, hence could be
     a member of the series.
     """
 
@@ -240,18 +241,20 @@ class ChainedList(Sequence[T]):
 
     @property
     def raw(self) -> Sequence[T]:
-        # A member list could be a `ListView`. The current method
-        # does not follow a `ListView` to its "raw" component, b/c
-        # that might not have the same elements as the view, hence
-        # losing info.
+        """
+        A member list could be a ``ListView```. The current method
+        does not follow a ``ListView`` to its "raw" component, b/c
+        that might not have the same elements as the view, hence
+        losing info.
+        """
         return self._lists
 
 
 class BiglistBase(Sequence[T]):
     """
     This base class contains code mainly concerning *read* only.
-    The subclass `Biglist` adds functionalities for writing,
-    whereas other subclasses, such as `ParquetBiglist`, may be read-only.
+    The subclass ``Biglist`` adds functionalities for writing,
+    whereas other subclasses, such as ``ParquetBiglist``, may be read-only.
 
     Data access is optimized for iteration, whereas random access
     (via index or slice) is less efficient, and assumed to be rare.
@@ -286,15 +289,17 @@ class BiglistBase(Sequence[T]):
     @classmethod
     @contextmanager
     def lockfile(cls, file: Upath):
-        # Although by default this uses `file.lock()`, it doesn't have to be.
-        # All this method needs is to guarantee that the code block identified
-        # by `file` (essentially the name) is NOT executed concurrently
-        # by two "workers". It by no means has to be "locking that file".
-        #
-        # Refer to `Upath.lock`.
-        #
-        # Locking is used by several "concurrent distributed reading" methods.
-        # The scope of the lock is for read/write a tiny "control info" file.
+        """
+        Although by default this uses ``file.lock()``, it doesn't have to be.
+        All this method needs is to guarantee that the code block identified
+        by ``file`` (essentially the name) is NOT executed concurrently
+        by two "workers". It by no means has to be "locking that file".
+
+        See ``Upath.lock``.
+
+        Locking is used by several "concurrent distributed reading" methods.
+        The scope of the lock is for read/write a tiny "control info" file.
+        """
         with file.lock(timeout=120):
             yield
 
@@ -306,21 +311,26 @@ class BiglistBase(Sequence[T]):
         require_exists: bool = True,
     ):
         """
-        `path`: directory that contains files written by an instance
+        Parameters
+        ----------
+        path:
+            Directory that contains files written by an instance
             of this class.
 
-        `thread_pool_executor`: methods for reading and writing
+        thread_pool_executor:
+            Methods for reading and writing
             use worker threads. If this parameter is specified, then
             the provided thread pool will be used. This is useful
             when a large number of Biglist instances are active
             at the same time, because the provided thread pool
             controls the max number of threads.
 
-        `require_exits`: when initializing an object of this class,
-            contents of the directory `path` should be already in place.
-            This is indicated by `require_exists = True`. In the
-            classmethod `new` of a subclass, when creating an instance
-            before any file is written, `require_exists=False` is used.
+        require_exists:
+            When initializing an object of this class,
+            contents of the directory ``path`` should be already in place.
+            This is indicated by ``require_exists = True``. In the
+            classmethod ``new`` of a subclass, when creating an instance
+            before any file is written, ``require_exists=False`` is used.
             User should always leave this parameter at its default value.
         """
         self.path = self.resolve_path(path)
@@ -403,12 +413,12 @@ class BiglistBase(Sequence[T]):
         """
         Element access by single index; negative index works as expected.
 
-        This is not optimized for speed. For example, `self._get_data_files`
+        This is not optimized for speed. For example, ``self._get_data_files``
         could be expensive involving directory crawl, maybe even in the cloud.
-        For better speed, use `__iter__`.
+        For better speed, use ``__iter__``.
 
-        This does not support slicing. For slicing, see method `view`.
-        The object returned by `view()` eventually also calls this method
+        This does not support slicing. For slicing, see method ``view``.
+        The object returned by ``view`` eventually also calls this method
         to access elements.
         """
         if not isinstance(idx, int):
@@ -470,7 +480,7 @@ class BiglistBase(Sequence[T]):
         else:
             data = self._file_dumper.get_file_data(file)
         if data is None:
-            data = self.file_view(file, eager=False)
+            data = self.file_view(file)
 
         self._read_buffer_file_idx = ifile
         self._read_buffer = data
@@ -483,16 +493,16 @@ class BiglistBase(Sequence[T]):
         if self._append_buffer:
             yield from self._append_buffer
 
-    def iter_files(self) -> Iterator[Sequence[T]]:
+    def iter_files(self) -> Iterator[FileView]:
         """
         This is "eager" and not distributed, that is,
         this call consumes the entire data. To distribute the iteration
-        to multiple workers, see `concurrent_iter` and `concurrent_iter_files`.
+        to multiple workers, see ``concurrent_iter_files``.
 
         This yields the content of one file at a time.
-        Specifically, it yields `FileView` objects.
+        Specifically, it yields ``FileView`` objects.
 
-        This exists mainly as the _engine_ for `__iter__`.
+        This exists mainly as the _engine_ for ``__iter__``.
         """
         # Assuming the biglist will not change (not being appended to)
         # during iteration.
@@ -501,18 +511,21 @@ class BiglistBase(Sequence[T]):
         ndatafiles = len(datafiles)
 
         if ndatafiles == 1:
-            yield self.file_view(self._get_data_file(datafiles, 0), eager=True)
+            z = self.file_view(self._get_data_file(datafiles, 0))
+            z.load()
+            yield z
         elif ndatafiles > 1:
             max_workers = min(self._n_read_threads, ndatafiles)
             tasks = queue.Queue(max_workers)
             executor = self._thread_pool
 
+            def _read_file(idx):
+                z = self.file_view(self._get_data_file(datafiles, idx))
+                z.load()
+                return z
+
             for i in range(max_workers):
-                t = executor.submit(
-                    self.file_view,
-                    self._get_data_file(datafiles, i),
-                    eager=True,
-                )
+                t = executor.submit(_read_file, i)
                 tasks.put(t)
             nfiles_queued = max_workers
 
@@ -524,11 +537,7 @@ class BiglistBase(Sequence[T]):
                 # downloading queue to keep it busy.
                 if nfiles_queued < ndatafiles:
                     # `nfiles_queued` is the index of the next file to download.
-                    t = executor.submit(
-                        self.file_view,
-                        self._get_data_file(datafiles, nfiles_queued),
-                        eager=True,
-                    )
+                    t = executor.submit(_read_file, nfiles_queued)
                     tasks.put(t)
                     nfiles_queued += 1
 
@@ -543,7 +552,7 @@ class BiglistBase(Sequence[T]):
     def new_concurrent_file_iter(self) -> str:
         """
         One worker, such as a "coordinator", calls this method once.
-        After that, one or more workers independently call `concurrent_iter_files`,
+        After that, one or more workers independently call ``concurrent_iter_files``,
         providing the task-ID returned by this method.
         The content of the Biglist is split between the workers because
         each data file will be obtained by exactly one worker.
@@ -556,9 +565,12 @@ class BiglistBase(Sequence[T]):
         )
         return task_id
 
-    def concurrent_iter_files(self, task_id: str) -> Iterator[Sequence[T]]:
+    def concurrent_iter_files(self, task_id: str) -> Iterator[FileView]:
         """
-        `task_id`: returned by `new_concurrent_file_iter`.
+        Parameters
+        ----------
+        task_id:
+            Returned by ``new_concurrent_file_iter``.
         """
         datafiles, _ = self._get_data_files()
         while True:
@@ -575,7 +587,7 @@ class BiglistBase(Sequence[T]):
 
             file = self._get_data_file(datafiles, n_files_claimed)
             logger.debug('yielding data of file "%s"', file)
-            yield self.file_view(file, eager=False)
+            yield self.file_view(file)
 
     def concurrent_file_iter_stat(self, task_id: str) -> dict:
         info = self._concurrent_file_iter_info_file(task_id).read_json()
@@ -585,22 +597,12 @@ class BiglistBase(Sequence[T]):
         zz = self.concurrent_file_iter_stat(task_id)
         return zz["n_files_claimed"] >= zz["n_files"]
 
-    def new_concurrent_iter(self) -> str:
-        return self.new_concurrent_file_iter()
-
-    def concurrent_iter(self, task_id: str) -> Iterator[T]:
-        for f in self.concurrent_iter_files(task_id):
-            yield from f
-
-    def concurrent_iter_stat(self, task_id: str) -> dict:
-        return self.concurrent_file_iter_stat()
-
-    def concurrent_iter_done(self, task_id: str) -> bool:
-        return self.concurrent_file_iter_done(task_id)
-
-    def file_view(self, file: Union[Upath, int], *, eager: bool = False) -> FileView:
+    def file_view(self, file: Union[Upath, int]) -> FileView:
         """
-        `file`: the data file path or the index of the file
+        Parameters
+        ----------
+        file:
+            The data file path or the index of the file
             in the list of data files.
         """
         raise NotImplementedError
@@ -608,7 +610,6 @@ class BiglistBase(Sequence[T]):
     def file_views(self) -> List[FileView]:
         # This is intended to facilitate parallel processing,
         # e.g. send views on diff files to diff processes.
-        # `concurrent_iter_files` can achieve the same goal.
         datafiles, _ = self._get_data_files()
         return [
             self.file_view(self._get_data_file(datafiles, i))
@@ -618,19 +619,22 @@ class BiglistBase(Sequence[T]):
     def view(self) -> ListView[T]:
         """
         By convention, "slicing" should return an object of the same class
-        as the original object. This is not possible for the `Biglist` class,
-        hence its `__getitem__` does not support slicing. Slicing is supported
+        as the original object. This is not possible for the ``Biglist`` class,
+        hence its ``__getitem__`` does not support slicing. Slicing is supported
         by this "view" method---the object returned by this method can be
         sliced, e.g.,
+
+        ::
 
             biglist = Biglist(...)
             v = biglist.view()
             print(v[2:8])
             print(v[3::2])
+
+        During the use of this view, the underlying Biglist should not change.
+        Multiple views may be used to view diff parts
+        of the ``Biglist``; they open and read files independent of other views.
         """
-        # During the use of this view, the underlying Biglist should not change.
-        # Multiple views may be used to view diff parts
-        # of the Biglist; they open and read files independent of other views.
         return ListView(self)
 
     @property

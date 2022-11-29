@@ -41,11 +41,12 @@ def test_ListView():
     _test_view(ListView(list(range(20))))
 
 
-def test_bigListView():
+def test_BigListView():
     bl = Biglist.new(storage_format='json')
     bl.extend(range(20))
     bl.flush()
     datalv = bl.view()
+    
     _test_view(datalv)
 
 

@@ -38,16 +38,16 @@ logger = logging.getLogger(__name__)
 
 class ParquetBiglist(BiglistBase):
     """
-    `ParquetBiglist` defines a kind of "external Biglist", that is,
+    ``ParquetBiglist`` defines a kind of "external Biglist", that is,
     it points to pre-existing Parquet files (produced by other code)
     and provides facilities to read the data.
 
     About the order of file reading: the order of the entries in the input
-    `data_path` to `ParquetBiglist.new` is preserved; if any entry is a
+    ``data_path`` to ``ParquetBiglist.new`` is preserved; if any entry is a
     directory, the files therein (recursively) are sorted by the string
     value of each file path.
 
-    As long as you use a `ParquetBiglist` object to read, it is assumed that
+    As long as you use a ``ParquetBiglist`` object to read, it is assumed that
     the dataset has not changed since the creation of the object.
     """
 
@@ -74,7 +74,7 @@ class ParquetBiglist(BiglistBase):
         )
 
     @classmethod
-    def _load_data_file(cls, path: Upath):
+    def load_data_file(cls, path: Upath):
         ff, pp = FileSystem.from_uri(str(path))
         if isinstance(ff, GcsFileSystem):
             ff = cls.get_gcsfs()
@@ -92,28 +92,34 @@ class ParquetBiglist(BiglistBase):
         **kwargs,
     ):
         """
-        `data_path`: Parquet file(s) for folder(s) containing Parquet files;
+        Parameters
+        ----------
+        data_path:
+            Parquet file(s) for folder(s) containing Parquet files;
             folders are traversed recursively. The data files can represent a mix
             of locations, including a mix of local and cloud locations, as long
             as they don't change. However, if any data file is on the local disk,
-            you're tied to the particular machine for the use of the `ParquetBiglist`
+            you're tied to the particular machine for the use of the ``ParquetBiglist``
             object.
 
-        `path`: folder to be used by this object is save whatever it needs to persist.
-            Id `None`, a temporary location will be used.
+        path:
+            Folder to be used by this object is save whatever it needs to persist.
+            If `None``, a temporary location will be used.
 
-        `suffix`: files with this suffix in directories specified in `data_path`
-            will be included. To include all files, use `suffix = '*'`.
+        suffix:
+            Files with this suffix in directories specified in ``data_path``
+            will be included. To include all files, use ``suffix = '*'``.
 
-        `keep_files`: should files persisted by the current object (in `path`)
+        keep_files:
+            Should files persisted by the current object (in ``path``)
             be deleted when this object is garbage collected?
-            By default, this is `True` if `path` is specified, and `False` otherwise.
+            By default, this is ``True`` if ``path`` is specified, and ``False`` otherwise.
 
         This classmethod gathers info of the data files and saves it to facilitate
         reading the data.
 
         If the number of data files is small, it's entirely feasible to create a temporary
-        object of this class (by leaving `path` at the default `None`) "on-the-fly"
+        object of this class (by leaving ``path`` at the default ``None``) "on-the-fly"
         for one-time use.
         """
         if (
@@ -154,7 +160,7 @@ class ParquetBiglist(BiglistBase):
         else:
             pool = ThreadPoolExecutor(min(32, (os.cpu_count() or 1) + 4))
         tasks = []
-        read_parquet = cls._load_data_file
+        read_parquet = cls.load_data_file
         for p in data_path:
             if p.is_file():
                 if suffix == "*" or p.name.endswith(suffix):
@@ -211,11 +217,11 @@ class ParquetBiglist(BiglistBase):
     def _get_data_file(self, datafiles, idx):
         return self.resolve_path(datafiles[idx]["path"])
 
-    def file_view(self, file, *, eager=False):
+    def file_view(self, file):
         if isinstance(file, int):
             datafiles, _ = self._get_data_files()
             file = self._get_data_file(datafiles, file)
-        return ParquetFileData(file, self._load_data_file, eager=eager)
+        return ParquetFileData(file, self.load_data_file)
 
     def iter_batches(self, batch_size=10_000) -> Iterator[ParquetBatchData]:
         for file in self.iter_files():
@@ -239,23 +245,17 @@ class ParquetFileData(FileView):
     Represents data of a single Parquet file,
     with facilities to make it conform to our required APIs.
 
-    If you want to use the  `arrow.parquet` methods directly,
-    use it via `self.file`, or `self.data()`.
+    If you want to use the  ``arrow.parquet`` methods directly,
+    use it via ``self.file()``.
     """
 
     def __init__(
         self,
         path,
         loader,
-        *,
-        eager=False,
-        scalar_as_py: bool = True,
     ):
         self._file: ParquetFile = None
         self._data: ParquetBatchData = None
-        self.scalar_as_py = scalar_as_py
-        # `self.scalar_as_py` may be toggled anytime
-        # and have its effect right away.
 
         self._row_groups_num_rows = None
         self._row_groups_num_rows_cumsum = None
@@ -265,18 +265,45 @@ class ParquetFileData(FileView):
         self._columns = {}
         self._getitem_last_row_group = None
 
-        super().__init__(path, loader, eager=eager)
+        super().__init__(path, loader)
+
+        self._scalar_as_py = None
+        self.scalar_as_py = True
+
+    @property
+    def scalar_as_py(self):
+        if self._scalar_as_py is None:
+            self._scalar_as_py = True
+        return self._scalar_as_py
+
+    @scalar_as_py.setter
+    def scalar_as_py(self, value: bool):
+        self._scalar_as_py = bool(value)
+        if self._data is not None:
+            self._data.scalar_as_py = self._scalar_as_py
+        if self._row_groups:
+            for r in self._row_groups:
+                if r is not None:
+                    r.scalar_as_py = self._scalar_as_py
 
     def __len__(self):
         return self.num_rows
 
-    def _load(self):
-        _ = self.data()
+    def load(self):
+        """Eagerly read in the whole file as a table."""
+        if self._data is None:
+            self._data = ParquetBatchData(
+                self.file.read(columns=self._column_names, use_threads=True),
+            )
+            self._data.scalar_as_py = (self.scalar_as_py,)
+            if self.num_row_groups == 1:
+                assert self._row_groups is None
+                self._row_groups = [self._data]
 
     @property
     def file(self):
         if self._file is None:
-            self._file = self._loader(self._path)
+            self._file = self.loader(self.path)
         return self._file
 
     @property
@@ -303,16 +330,8 @@ class ParquetFileData(FileView):
             return self._column_names
         return self.metadata.schema.names
 
-    def data(self, *, use_threads=True) -> ParquetBatchData:
-        """Eagerly read in the whole file as a table."""
-        if self._data is None:
-            self._data = ParquetBatchData(
-                self.file.read(columns=self._column_names, use_threads=use_threads),
-                scalar_as_py=self.scalar_as_py,
-            )
-            if self.num_row_groups == 1:
-                assert self._row_groups is None
-                self._row_groups = [self._data]
+    def data(self) -> ParquetBatchData:
+        self.load()
         return self._data
 
     def _locate_row_group_for_item(self, idx):
@@ -338,9 +357,12 @@ class ParquetFileData(FileView):
         """
         Get one record or row.
 
-        `idx`: row index in this file.
+        Parameters
+        ----------
+        idx:
+            Row index in this file.
 
-        See `ParquetBatchData.__getitem__`.
+        See ``ParquetBatchData.__getitem__``.
         """
         if idx < 0:
             idx = self.num_rows + idx
@@ -357,11 +379,13 @@ class ParquetFileData(FileView):
     def __iter__(self):
         """
         Iterate over rows.
-        The type of yielded individual elements is the same as `__getitem__`.
+        The type of yielded individual elements is the same as ``__getitem__``.
         """
         if self._data is None:
             for batch in self.file.iter_batches(columns=self._column_names):
-                yield from ParquetBatchData(batch, scalar_as_py=self.scalar_as_py)
+                z = ParquetBatchData(batch)
+                z.scalar_as_py = self.scalar_as_py
+                yield from z
         else:
             yield from self._data
 
@@ -370,10 +394,14 @@ class ParquetFileData(FileView):
             for batch in self.file.iter_batches(
                 batch_size=batch_size, columns=self._column_names
             ):
-                yield ParquetBatchData(batch, scalar_as_py=self.scalar_as_py)
+                z = ParquetBatchData(batch)
+                z.scalar_as_py = self.scalar_as_py
+                yield z
         else:
             for batch in self._data.data().to_batches(batch_size):
-                yield ParquetBatchData(batch, scalar_as_py=self.scalar_as_py)
+                z = ParquetBatchData(batch)
+                z.scalar_as_py = self.scalar_as_py
+                yield z
 
     def row_group(self, idx: int) -> ParquetBatchData:
         """
@@ -383,18 +411,19 @@ class ParquetFileData(FileView):
         if self._row_groups is None:
             self._row_groups = [None] * self.num_row_groups
         if self._row_groups[idx] is None:
-            self._row_groups[idx] = ParquetBatchData(
+            z = ParquetBatchData(
                 self.file.read_row_group(idx, columns=self._column_names),
-                scalar_as_py=self.scalar_as_py,
             )
+            z.scalar_as_py = self.scalar_as_py
+            self._row_groups[idx] = z
             if self.num_row_groups == 1:
                 assert self._data is None
                 self._data = self._row_groups[0]
         return self._row_groups[idx]
 
-    def columns(self, cols: Union[str, Sequence[str]]) -> ParquetFileData:
+    def columns(self, cols: Sequence[str]) -> ParquetFileData:
         """
-        Return a new `ParquetFileData` object that will only load
+        Return a new ``ParquetFileData`` object that will only load
         the specified columns.
 
         The columns of interest have to be within currently available columns.
@@ -411,12 +440,10 @@ class ParquetFileData(FileView):
             print(obj1[2])
             obj2 = obj1.columns(['b', 'c'])
             print(obj2[3])
-            obj3 = obj.columns('d')
+            obj3 = obj.columns(['d'])
             for v in obj:
                 print(v)
         """
-        if isinstance(cols, str):
-            cols = [cols]
         assert len(set(cols)) == len(cols)  # no repeat values
 
         if self._column_names:
@@ -429,9 +456,8 @@ class ParquetFileData(FileView):
                     f"cannot select the columns {cc} because they are not in existing set of columns"
                 )
 
-        obj = self.__class__(
-            self._path, self._loader, eager=False, scalar_as_py=self.scalar_as_py
-        )
+        obj = self.__class__(self.path, self.loader)
+        obj.scalar_as_py = self.scalar_as_py
         obj._file = self._file
         obj._row_groups_num_rows = self._row_groups_num_rows
         obj._row_groups_num_rows_cumsum = self._row_groups_num_rows_cumsum
@@ -467,20 +493,18 @@ class ParquetBatchData(collections.abc.Sequence):
     """
     Objects of this class can be pickled.
 
-    Note: `ParquetBiglist.iter_batches` yields objects of this class;
+    Note: ``ParquetBiglist.iter_batches`` yields objects of this class;
     that could be useful in multiprocessing.
     """
 
     def __init__(
         self,
         data: Union[pyarrow.Table, pyarrow.RecordBatch],
-        *,
-        scalar_as_py: bool = True,
     ):
         # `self.scalar_as_py` may be toggled anytime
         # and have its effect right away.
         self._data = data
-        self.scalar_as_py = scalar_as_py
+        self.scalar_as_py = True
         self.num_rows = data.num_rows
         self.num_columns = data.num_columns
         self.column_names = data.schema.names
@@ -508,15 +532,23 @@ class ParquetBatchData(collections.abc.Sequence):
         """
         Get one record or row.
 
-        `idx`: row index in this file.
+        Parameters
+        ----------
+        idx:
+            Row index in this file.
 
-        If `self.scalar_as_py` is False,
-          If data has a single column, return the value on the specified row.
-          The return is a `pyarrow.Scalar`` type such as `pyarrow.lib.StringScalar`.
-          If data has multiple columns, return a dict with keys being column names
-          and values being `pyarrow.Scalar`` types.
-        If `self.scalar_as_py` if True,
-          the `pyarrow.Scalar` values are converted to Python native types.
+        Returns
+        -------
+        If ``self.scalar_as_py`` is False,
+
+            If data has a single column, return the value on the specified row.
+            The return is a `pyarrow.Scalar`` type such as ``pyarrow.lib.StringScalar``.
+            If data has multiple columns, return a dict with keys being column names
+            and values being `pyarrow.Scalar`` types.
+
+        If ``self.scalar_as_py`` if True,
+
+            The ``pyarrow.Scalar`` values are converted to Python native types.
         """
         if idx < 0:
             idx = self.num_rows + idx
@@ -535,8 +567,10 @@ class ParquetBatchData(collections.abc.Sequence):
         return z
 
     def __iter__(self):
-        # Iterate over rows.
-        # The type of yielded individual elements is the same as `__getitem__`.
+        """
+        Iterate over rows.
+        The type of yielded individual elements is the same as ``__getitem__``.
+        """
         if self.num_columns == 1:
             if self.scalar_as_py:
                 yield from (v.as_py() for v in self._data.column(0))
@@ -554,9 +588,9 @@ class ParquetBatchData(collections.abc.Sequence):
     def view(self):
         return ListView(self)
 
-    def columns(self, cols: Union[str, Sequence[str]]) -> ParquetBatchData:
+    def columns(self, cols: Sequence[str]) -> ParquetBatchData:
         """
-        Return a new `ParquetBatchData` object that will only produce
+        Return a new ``ParquetBatchData`` object that will only produce
         the specified columns.
 
         The columns of interest have to be within currently available columns.
@@ -573,12 +607,10 @@ class ParquetBatchData(collections.abc.Sequence):
             print(obj1[2])
             obj2 = obj1.columns(['b', 'c'])
             print(obj2[3])
-            obj3 = obj.columns('d')
+            obj3 = obj.columns(['d'])
             for v in obj:
                 print(v)
         """
-        if isinstance(cols, str):
-            cols = [cols]
         assert len(set(cols)) == len(cols)  # no repeat values
 
         if all(col in self.column_names for col in cols):
@@ -590,20 +622,22 @@ class ParquetBatchData(collections.abc.Sequence):
                 f"cannot select the columns {cc} because they are not in existing set of columns"
             )
 
-        return self.__class__(self._data.select(cols), scalar_as_py=self.scalar_as_py)
+        z = self.__class__(self._data.select(cols))
+        z.scalar_as_py = self.scalar_as_py
+        return z
 
     def column(
         self, idx_or_name: Union[int, str]
     ) -> Union[pyarrow.Array, pyarrow.ChunkedArray]:
         """
-        If `self._data` is `pyarrow.Table`, return `pyarrow.ChunkedArray`.
-        If `self._data` is `pyarrow.RecordBatch`, return `pyarrow.Array`.
+        If ``self._data`` is ``pyarrow.Table``, return ``pyarrow.ChunkedArray``.
+        If ``self._data`` is ``pyarrow.RecordBatch``, return ``pyarrow.Array``.
         """
         return self._data.column(idx_or_name)
 
 
 def read_parquet_file(path: PathType, **kwargs):
-    return ParquetFileData(path, ParquetBiglist._load_data_file, **kwargs)
+    return ParquetFileData(path, ParquetBiglist.load_data_file, **kwargs)
 
 
 def write_parquet_file(

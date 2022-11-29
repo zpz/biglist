@@ -28,7 +28,7 @@ Since ``Biglist`` and ``ParquetBiglist`` are both ``Sequence``'s, they also supp
 these access mechanisms via ``ListView``.
 """
 # flake8: noqa
-__version__ = "0.7.1b1"
+__version__ = "0.7.1b2"
 
 from ._base import FileView, ListView, ChainedList
 from ._biglist import Biglist, BiglistFileData

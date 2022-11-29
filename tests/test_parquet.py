@@ -156,7 +156,8 @@ def test_big_parquet_list():
 
     #
     print('')
-    d = read_parquet_file(p, scalar_as_py=False)
+    d = read_parquet_file(p)
+    d.scalar_as_py = False
     assert d.num_columns == 2
     assert d.column_names == ['key', 'value']
     z = d[3]
@@ -176,21 +177,23 @@ def test_big_parquet_list():
     assert isinstance(z['value'], str)
 
     print('')
-    d = read_parquet_file(p, eager=False)
+    d = read_parquet_file(p)
     for k, row in enumerate(d):
         print(row)
         if k > 3:
             break
 
     print('')
-    d = read_parquet_file(p, eager=True)
+    d = read_parquet_file(p)
     for k, row in enumerate(d):
         print(row)
         if k > 3:
             break
 
     print('')
-    d = read_parquet_file(p, eager=True, scalar_as_py=False)
+    d = read_parquet_file(p)
+    d.scalar_as_py = False
+    d.load()
     for k, row in enumerate(d):
         print(row)
         if k > 3:

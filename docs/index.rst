@@ -724,7 +724,7 @@ and returns a ``pyarrow.Array`` or ``pyarrow.ChunkedArray``. For example,
 
 
 ``read_parquet_file``
----------------------
+=====================
 
 The function ``read_parquet_file`` is provided to read a single Parquet file independent of
 ``ParquetBiglist``. It returns a ``ParquetFileData`` object. All the facilities of this class,

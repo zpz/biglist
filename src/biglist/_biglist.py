@@ -676,8 +676,7 @@ class BiglistFileData(FileView):
 
     def load(self):
         if self._data is None:
-            self._data = self._loader(self._path)
-        return self
+            self._data = self.loader(self.path)
 
     def data(self):
         self.load()

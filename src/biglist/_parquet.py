@@ -294,8 +294,8 @@ class ParquetFileData(FileView):
         if self._data is None:
             self._data = ParquetBatchData(
                 self.file.read(columns=self._column_names, use_threads=True),
-                scalar_as_py=self.scalar_as_py,
             )
+            self._data.scalar_as_py=self.scalar_as_py,
             if self.num_row_groups == 1:
                 assert self._row_groups is None
                 self._row_groups = [self._data]
@@ -383,7 +383,9 @@ class ParquetFileData(FileView):
         """
         if self._data is None:
             for batch in self.file.iter_batches(columns=self._column_names):
-                yield from ParquetBatchData(batch, scalar_as_py=self.scalar_as_py)
+                z = ParquetBatchData(batch)
+                z.scalar_as_py=self.scalar_as_py                
+                yield from z
         else:
             yield from self._data
 
@@ -392,10 +394,14 @@ class ParquetFileData(FileView):
             for batch in self.file.iter_batches(
                 batch_size=batch_size, columns=self._column_names
             ):
-                yield ParquetBatchData(batch, scalar_as_py=self.scalar_as_py)
+                z = ParquetBatchData(batch)
+                z.scalar_as_py = self.scalar_as_py
+                yield z
         else:
             for batch in self._data.data().to_batches(batch_size):
-                yield ParquetBatchData(batch, scalar_as_py=self.scalar_as_py)
+                z = ParquetBatchData(batch)
+                z.scalar_as_py = self.scalar_as_py
+                yield z
 
     def row_group(self, idx: int) -> ParquetBatchData:
         """
@@ -405,10 +411,11 @@ class ParquetFileData(FileView):
         if self._row_groups is None:
             self._row_groups = [None] * self.num_row_groups
         if self._row_groups[idx] is None:
-            self._row_groups[idx] = ParquetBatchData(
+            z = ParquetBatchData(
                 self.file.read_row_group(idx, columns=self._column_names),
-                scalar_as_py=self.scalar_as_py,
             )
+            z.scalar_as_py = self.scalar_as_py
+            self._row_groups[idx] = z
             if self.num_row_groups == 1:
                 assert self._data is None
                 self._data = self._row_groups[0]
@@ -451,7 +458,8 @@ class ParquetFileData(FileView):
                     f"cannot select the columns {cc} because they are not in existing set of columns"
                 )
 
-        obj = self.__class__(self.path, self.loader, scalar_as_py=self.scalar_as_py)
+        obj = self.__class__(self.path, self.loader)
+        obj.scalar_as_py = self.scalar_as_py
         obj._file = self._file
         obj._row_groups_num_rows = self._row_groups_num_rows
         obj._row_groups_num_rows_cumsum = self._row_groups_num_rows_cumsum
@@ -512,7 +520,7 @@ class ParquetBatchData(collections.abc.Sequence):
 
     def __str__(self):
         return self.__repr__()
-
+        
     def data(self):
         return self._data
 
@@ -618,7 +626,9 @@ class ParquetBatchData(collections.abc.Sequence):
                 f"cannot select the columns {cc} because they are not in existing set of columns"
             )
 
-        return self.__class__(self._data.select(cols), scalar_as_py=self.scalar_as_py)
+        z = self.__class__(self._data.select(cols))
+        z.scalar_as_py=self.scalar_as_py
+        return z
 
     def column(
         self, idx_or_name: Union[int, str]

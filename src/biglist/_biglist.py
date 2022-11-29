@@ -671,7 +671,7 @@ class Biglist(BiglistBase[T]):
 
 class BiglistFileData(FileView):
     def __init__(self, path, loader):
-        self._data: list = None
+        self._data: list = None        
         super().__init__(path, loader)
 
     def load(self):

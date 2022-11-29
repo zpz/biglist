@@ -144,8 +144,8 @@ def test_multi_appenders():
 def iter_file(path, task_id):
     bl = Biglist(path)
     data = []
-    for x in bl.concurrent_iter(task_id):
-        data.append(x)
+    for batch in bl.concurrent_iter_files(task_id):
+        data.extend(batch)
     return data
 
 
@@ -154,23 +154,23 @@ def test_file_views():
     nn = 567
     bl.extend(range(nn))
     bl.flush()
-    task_id = bl.new_concurrent_iter()
-    print(bl.concurrent_iter_done(task_id))
+    task_id = bl.new_concurrent_file_iter()
+    print(bl.concurrent_file_iter_done(task_id))
 
     executor = ProcessPoolExecutor(6)
     tasks = [
         executor.submit(iter_file, bl.path, task_id)
         for _ in range(6)
     ]
-    print(bl.concurrent_iter_done(task_id))
+    print(bl.concurrent_file_iter_done(task_id))
 
     data = []
     for t in as_completed(tasks):
         data.extend(t.result())
 
     assert sorted(data) == list(bl)
-    assert bl.concurrent_iter_done(task_id)
-    print(bl.concurrent_iter_done(task_id))
+    assert bl.concurrent_file_iter_done(task_id)
+    print(bl.concurrent_file_iter_done(task_id))
 
 
 def square_sum(x):

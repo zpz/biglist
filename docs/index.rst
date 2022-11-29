@@ -723,6 +723,31 @@ and returns a ``pyarrow.Array`` or ``pyarrow.ChunkedArray``. For example,
    ]
 
 
+``read_parquet_file``
+---------------------
+
+The function ``read_parquet_file`` is provided to read a single Parquet file independent of
+``ParquetBiglist``. It returns a ``ParquetFileData`` object. All the facilities of this class,
+as demonstrated above, are ready for use::
+
+   >>> car_data.datafiles
+   ['/tmp/a/b/c/e/ford.parquet', '/tmp/a/b/c/e/honda.parquet']
+   >>>
+   >>> from biglist import read_parquet_file
+   >>> ff = read_parquet_file(car_data.datafiles[1])
+   >>> ff
+   ParquetFileData('/tmp/a/b/c/e/honda.parquet', <bound method ParquetBiglist.load_data_file of <class 'biglist._parquet.ParquetBiglist'>>)
+   >>> len(ff)
+   51
+   >>> ff.column_names
+   ['make', 'year', 'sales']
+   >>> ff.num_row_groups
+   6
+   >>> ff[3]
+   {'make': 'honda', 'year': 1973, 'sales': 243}
+
+
+
 API reference
 =============
 

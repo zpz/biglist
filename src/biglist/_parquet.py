@@ -295,7 +295,7 @@ class ParquetFileData(FileView):
             self._data = ParquetBatchData(
                 self.file.read(columns=self._column_names, use_threads=True),
             )
-            self._data.scalar_as_py=self.scalar_as_py,
+            self._data.scalar_as_py = (self.scalar_as_py,)
             if self.num_row_groups == 1:
                 assert self._row_groups is None
                 self._row_groups = [self._data]
@@ -384,7 +384,7 @@ class ParquetFileData(FileView):
         if self._data is None:
             for batch in self.file.iter_batches(columns=self._column_names):
                 z = ParquetBatchData(batch)
-                z.scalar_as_py=self.scalar_as_py                
+                z.scalar_as_py = self.scalar_as_py
                 yield from z
         else:
             yield from self._data
@@ -520,7 +520,7 @@ class ParquetBatchData(collections.abc.Sequence):
 
     def __str__(self):
         return self.__repr__()
-        
+
     def data(self):
         return self._data
 
@@ -627,7 +627,7 @@ class ParquetBatchData(collections.abc.Sequence):
             )
 
         z = self.__class__(self._data.select(cols))
-        z.scalar_as_py=self.scalar_as_py
+        z.scalar_as_py = self.scalar_as_py
         return z
 
     def column(

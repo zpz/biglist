@@ -71,9 +71,9 @@ class FileView(collections.abc.Sequence):
         return self.__repr__()
 
     def load(self) -> None:
-        '''
+        """
         This method *eagerly* loads data.
-        '''
+        """
         raise NotImplementedError
 
     def bool(self):
@@ -241,12 +241,12 @@ class ChainedList(Sequence[T]):
 
     @property
     def raw(self) -> Sequence[T]:
-        '''
+        """
         A member list could be a ``ListView```. The current method
         does not follow a ``ListView`` to its "raw" component, b/c
         that might not have the same elements as the view, hence
         losing info.
-        '''
+        """
         return self._lists
 
 
@@ -289,17 +289,17 @@ class BiglistBase(Sequence[T]):
     @classmethod
     @contextmanager
     def lockfile(cls, file: Upath):
-        '''
+        """
         Although by default this uses ``file.lock()``, it doesn't have to be.
         All this method needs is to guarantee that the code block identified
         by ``file`` (essentially the name) is NOT executed concurrently
         by two "workers". It by no means has to be "locking that file".
-        
+
         See ``Upath.lock``.
-        
+
         Locking is used by several "concurrent distributed reading" methods.
         The scope of the lock is for read/write a tiny "control info" file.
-        '''
+        """
         with file.lock(timeout=120):
             yield
 
@@ -623,7 +623,7 @@ class BiglistBase(Sequence[T]):
         hence its ``__getitem__`` does not support slicing. Slicing is supported
         by this "view" method---the object returned by this method can be
         sliced, e.g.,
-        
+
         ::
 
             biglist = Biglist(...)

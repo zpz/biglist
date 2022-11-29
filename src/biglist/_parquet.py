@@ -275,7 +275,7 @@ class ParquetFileData(FileView):
         if self._scalar_as_py is None:
             self._scalar_as_py = True
         return self._scalar_as_py
-    
+
     @scalar_as_py.setter
     def scalar_as_py(self, value: bool):
         self._scalar_as_py = bool(value)
@@ -451,9 +451,7 @@ class ParquetFileData(FileView):
                     f"cannot select the columns {cc} because they are not in existing set of columns"
                 )
 
-        obj = self.__class__(
-            self.path, self.loader, scalar_as_py=self.scalar_as_py
-        )
+        obj = self.__class__(self.path, self.loader, scalar_as_py=self.scalar_as_py)
         obj._file = self._file
         obj._row_groups_num_rows = self._row_groups_num_rows
         obj._row_groups_num_rows_cumsum = self._row_groups_num_rows_cumsum
@@ -536,14 +534,14 @@ class ParquetBatchData(collections.abc.Sequence):
         Returns
         -------
         If ``self.scalar_as_py`` is False,
-        
+
             If data has a single column, return the value on the specified row.
             The return is a `pyarrow.Scalar`` type such as ``pyarrow.lib.StringScalar``.
             If data has multiple columns, return a dict with keys being column names
             and values being `pyarrow.Scalar`` types.
-        
+
         If ``self.scalar_as_py`` if True,
-        
+
             The ``pyarrow.Scalar`` values are converted to Python native types.
         """
         if idx < 0:
@@ -563,10 +561,10 @@ class ParquetBatchData(collections.abc.Sequence):
         return z
 
     def __iter__(self):
-        '''
+        """
         Iterate over rows.
         The type of yielded individual elements is the same as ``__getitem__``.
-        '''
+        """
         if self.num_columns == 1:
             if self.scalar_as_py:
                 yield from (v.as_py() for v in self._data.column(0))

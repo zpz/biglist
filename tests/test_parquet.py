@@ -146,12 +146,12 @@ def test_big_parquet_list():
     d = read_parquet_file(p)
     d1 = d.columns(['key', 'value'])
     print(d1[3])
-    d2 = d1.columns('value')
+    d2 = d1.columns(['value'])
     assert isinstance(d2[2], str)
     print(d2[2])
     with pytest.raises(ValueError):
-        d3 = d2.columns('key')
-    print(d.columns('key').view()[7:17].collect())
+        d3 = d2.columns(['key'])
+    print(d.columns(['key']).view()[7:17].collect())
     print(list(d.view()[:7]))
 
     #

@@ -70,7 +70,10 @@ class Dumper:
     """
     This class performs file-saving in a thread pool.
 
-    `n_threads`: max number of threads to use. There are at most
+    Parameters
+    ----------
+    n_threads:
+        Max number of threads to use. There are at most
         this many submitted and unfinished file-dumping tasks
         at any time.
     """
@@ -91,10 +94,14 @@ class Dumper:
         self, file_dumper: Callable[[Upath, list], None], data_file: Upath, data: list
     ):
         """
-        `file_dumper`: this function takes a file path and the data as a list, and saves
+        Parameters
+        ----------
+        file_dumper:
+            This function takes a file path and the data as a list, and saves
             the data in the file named by the path.
 
-        `data_file` and `data`: parameters to `file_dumper`.
+        data_file, data:
+            Parameters to ``file_dumper``.
         """
         if self._sem is None:
             self._sem = threading.Semaphore(
@@ -120,7 +127,7 @@ class Dumper:
         This is for such a special need:
 
             Suppose 2 files are in the dump queue, hence not saved on disk yet,
-            however, they're already in the file-list of the `Biglist`'s meta info.
+            however, they're already in the file-list of the ``Biglist``'s meta info.
             Now if we access one element by index, and the code determines based on
             meta info that the element is in one of the files in-queue here.
             Then we can't load the file from disk (as it is not persisted yet);
@@ -162,7 +169,7 @@ class Biglist(BiglistBase[T]):
         cls.registered_storage_formats[name] = serializer
 
     @classmethod
-    def _dump_data_file(cls, path: Upath, data: list):
+    def dump_data_file(cls, path: Upath, data: list):
         """
         This method persists a batch of data elements, always a list,
         to disk or cloud storage.
@@ -171,15 +178,15 @@ class Biglist(BiglistBase[T]):
         element of the list, e.g. converting an object of a
         custom class to that of a Python built-in type, it can override
         this method to do the transformation prior to calling
-        the `super()` version.
+        the ``super()`` version.
 
         It is recommended to persist objects of Python built-in types only,
         which is future-proof compared to custom classes.
-        One useful pattern is to dump result of `instance.to_dict()`,
-        and use `cls.from_dict(...)` to transform persisted data
+        One useful pattern is to dump result of ``instance.to_dict()``,
+        and use ``cls.from_dict(...)`` to transform persisted data
         to user's custom type upon loading. Such conversions can be
-        achieved by customizing the methods `_dump_data_file` and
-        `_load_data_file`. It may work just as well to leave these
+        achieved by customizing the methods ``dump_data_file`` and
+        ``load_data_file``. It may work just as well to leave these
         conversions to application code.
         """
         serializer = cls.registered_storage_formats[
@@ -188,7 +195,7 @@ class Biglist(BiglistBase[T]):
         path.write_bytes(serializer.serialize(data))
 
     @classmethod
-    def _load_data_file(cls, path: Upath):
+    def load_data_file(cls, path: Upath):
         """
         This method loads a data file.
 
@@ -196,7 +203,7 @@ class Biglist(BiglistBase[T]):
         element of the list, e.g. converting an object of a
         Python built-in type to that of a custom class, it can override
         this method to do the transformation on the output of
-        the `super()` version. However, it may work just fine to
+        the ``super()`` version. However, it may work just fine to
         leave that transformation to the application code once it
         has retrieved a data element.
         """
@@ -239,7 +246,7 @@ class Biglist(BiglistBase[T]):
         the object with ``__init__``.
 
         ``__init__`` should be defined in such a way that it works for
-        both a barebone object that is created in this `new`, as well as a
+        both a barebone object that is created in this ``new``, as well as a
         fleshed out object that already has data.
 
         Some settings may be applicable to an existing ``Biglist`` object,
@@ -396,13 +403,13 @@ class Biglist(BiglistBase[T]):
     def append(self, x: T) -> None:
         """
         Append a single element to the in-memory buffer.
-        Once the buffer size reaches `self.batch_size`, the buffer's content
+        Once the buffer size reaches ``self.batch_size``, the buffer's content
         will be written to a file, and the buffer will re-start empty.
 
-        In other words, whenever `self._append_buffer` is non-empty,
+        In other words, whenever ``self._append_buffer`` is non-empty,
         its content is not written to disk yet.
         However, at any time, the content of this buffer is included in
-        `self.__len__` and in element accesses, including iterations.
+        ``self.__len__`` and in element accesses, including iterations.
         """
         self._append_buffer.append(x)
         if len(self._append_buffer) >= self.batch_size:
@@ -418,7 +425,7 @@ class Biglist(BiglistBase[T]):
         reset the buffer, and update relevant book-keeping variables.
 
         This method is called any time the size of the in-memory buffer
-        reaches `self.batch_size`. This happens w/o the user's intervention.
+        reaches ``self.batch_size``. This happens w/o the user's intervention.
         """
         if not self._append_buffer:
             return
@@ -440,9 +447,9 @@ class Biglist(BiglistBase[T]):
             self._file_dumper = Dumper(self._thread_pool, self._n_write_threads)
         if wait:
             self._file_dumper.wait()
-            self._dump_data_file(data_file, buffer)
+            self.dump_data_file(data_file, buffer)
         else:
-            self._file_dumper.dump_file(self._dump_data_file, data_file, buffer)
+            self._file_dumper.dump_file(self.dump_data_file, data_file, buffer)
             # This call will return quickly if the dumper has queue
             # capacity for the file. The file meta data below
             # will be updated as if the saving has completed, although
@@ -464,17 +471,17 @@ class Biglist(BiglistBase[T]):
 
     def flush(self):
         """
-        While `_flush` is called automatically whenever the "append buffer"
+        While ``_flush`` is called automatically whenever the "append buffer"
         is full, this method is not called automatically, because this method
         is expected to be called only when the user is done adding elements
         to the list, yet the code has no way to know the user is "done".
         When the user is done adding elements, the "append buffer" could be
-        only partially filled, hence `_flush` is not called, and the content
+        only partially filled, hence ``_flush`` is not called, and the content
         of the buffer is not persisted to disk.
 
         This is when the *user* should call this method.
         (If user does not call, it is auto called when this object is going
-        out of scope, if `self.keep_files` is `True`.)
+        out of scope, if ``self.keep_files`` is ``True``.)
 
         In summary, call this method once the user is done with adding elements
         to the list *in this session*, meaning in this run of the program.
@@ -563,11 +570,11 @@ class Biglist(BiglistBase[T]):
         # `datafiles` is the return of `_get_datafiles`.
         return self._data_dir / datafiles[idx][0]
 
-    def file_view(self, file, *, eager=False):
+    def file_view(self, file):
         if isinstance(file, int):
             datafiles, _ = self._get_data_files()
             file = self._get_data_file(datafiles, file)
-        return BiglistFileData(file, self._load_data_file, eager=eager)
+        return BiglistFileData(file, self.load_data_file)
 
     def iter_files(self):
         self.flush()
@@ -586,21 +593,21 @@ class Biglist(BiglistBase[T]):
     def new_multiplexer(self) -> str:
         """
         One worker, such as a "coordinator", calls this method once.
-        After that, one or more workers independently call `multiplex_iter`
-        to iterate over the Biglist. `multiplex_iter` takes the task-ID returned by
+        After that, one or more workers independently call ``multiplex_iter``
+        to iterate over the Biglist. ``multiplex_iter`` takes the task-ID returned by
         this method. The content of the Biglist is
         split between the workers because each data item will be obtained
         by exactly one worker.
 
         During this iteration, the Biglist object should stay unchanged---no
-        calls to `append` and `extend`.
+        calls to ``append`` and ``extend``.
 
-        Difference between `concurrent_iter` and `multiplex_iter`: the former
+        Difference between ``concurrent_iter`` and ``multiplex_iter``: the former
         distributes files to workers, whereas the latter distributes individual
         data elements to workers.
 
         Use case of multiplexer: each data element represents considerable amounts
-        of work--it is a "hyper-parameter" or the like; `multiplex_iter` facilitates
+        of work--it is a "hyper-parameter" or the like; ``multiplex_iter`` facilitates
         splitting the work represented by different values of the "hyper-parameter"
         between multiple workers.
         """
@@ -618,7 +625,10 @@ class Biglist(BiglistBase[T]):
 
     def multiplex_iter(self, task_id: str, worker_id: str = None) -> Iterator[T]:
         """
-        `task_id`: returned by `new_multiplexer`.
+        Parameters
+        ----------
+        task_id:
+            Returned by ``new_multiplexer``.
         """
         if not worker_id:
             worker_id = "{} {}".format(
@@ -660,16 +670,17 @@ class Biglist(BiglistBase[T]):
 
 
 class BiglistFileData(FileView):
-    def __init__(self, path, loader, *, eager=False):
+    def __init__(self, path, loader):
         self._data: list = None
-        super().__init__(path, loader, eager=eager)
+        super().__init__(path, loader)
 
-    def _load(self):
+    def load(self):
         if self._data is None:
             self._data = self._loader(self._path)
+        return self
 
     def data(self):
-        self._load()
+        self.load()
         return self._data
 
     def __len__(self):

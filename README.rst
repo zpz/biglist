@@ -8,7 +8,8 @@ Persistence can be on local disk or in cloud storage. Interfacing with the stora
 uses the package ``upathlib``.
 
 
-Read the [documentation](https://biglist.readthedocs.io/en/latest/).
+Read the `documentation <https://biglist.readthedocs.io/en/latest/>`_.
+
 
 Reference
 ---------

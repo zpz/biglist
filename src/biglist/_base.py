@@ -38,14 +38,19 @@ class FileLoaderMode:
 class FileView(collections.abc.Sequence):
     """
     Given a function ``loader`` that would load ``path`` and return
-    a Sequence, a ``FileView`` object keeps ``loader`` and ``path``
-    but does not call ``loader`` until the resultant ``Sequence``
-    is needed. In other words, it does "lazy" loading.
+    a ``Sequence``, a ``FileView`` object keeps ``loader`` and ``path``
+    but does not call ``loader`` until needed.
+    In other words, it does "lazy" loading.
 
     This makes a ``FileView`` object light weight and, more importantly,
     lend itself to pickling.
     One use case of FileView is to pass these objects around in
     ``multiprocessing`` code for concurrent data processing.
+
+    To be clear, a ``FileView`` object is pickle-able upon initiation.
+    After some use of the object, it may have loaded data or other things;
+    at that point it may not be pickle-able, depending on the specific
+    subclass.
 
     The method ``BiglistBase.file_view`` returns a ``FileView`` object.
     """

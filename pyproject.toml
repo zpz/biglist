@@ -28,7 +28,7 @@ Source = "https://github.com/zpz/biglist"
 
 [project.optional-dependencies]
 doc = [
-    "Sphinx",
+    "sphinx",
     "furo",
 ]
 gcs = [

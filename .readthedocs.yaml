@@ -28,4 +28,8 @@ python:
    install:
       - method: pip
         path: .
+        extra_requirements:
+          - doc
+          - gcs
+          - parquet
    # - requirements: docs/requirements.txt

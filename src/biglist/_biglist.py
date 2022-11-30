@@ -227,10 +227,10 @@ class Biglist(BiglistBase[T]):
         A Biglist object construction is in either of the two modes
         below:
 
-           a) create a new Biglist to store new data.
+        a) create a new Biglist to store new data.
 
-           b) create a Biglist object pointing to storage of
-              existing data, which was created by a previous call to ``Biglist.new``.
+        b) create a Biglist object pointing to storage of
+           existing data, which was created by a previous call to ``Biglist.new``.
 
         In case (a), one has called ``Biglist.new``. In case (b), one has called
         ``Biglist(..)`` (i.e. ``__init__``).
@@ -281,19 +281,17 @@ class Biglist(BiglistBase[T]):
 
             The file size impacts a few things.
 
-                - It should not be so small that the file reading/writing is large
-                  relative overhead. This is especially important when ``path`` is
-                  cloud storage.
+            - It should not be so small that the file reading/writing is large
+              relative overhead. This is especially important when ``path`` is cloud storage.
 
-                - It should not be so large that it is "unwieldy", e.g. approaching
-                  1GB.
+            - It should not be so large that it is "unwieldy", e.g. approaching 1GB.
 
-                - When iterating over a ``Biglist`` object, there can be up to (by default) 4
-                  files-worth of data in memory at any time. See the method ``iter_files``.
+            - When iterating over a ``Biglist`` object, there can be up to (by default) 4
+              files-worth of data in memory at any time. See the method ``iter_files``.
 
-                - When ``append``ing or ``extend``ing at high speed, there can be up to
-                  (by default) 4 times ``batch_size`` data elements in memory at any time.
-                  See ``_flush`` and ``Dumper``.
+            - When ``append``ing or ``extend``ing at high speed, there can be up to
+              (by default) 4 times ``batch_size`` data elements in memory at any time.
+              See ``_flush`` and ``Dumper``.
 
             Another consideration is access pattern of elements in the ``Biglist``. If
             there are many "jumping around" with random element access, large data files

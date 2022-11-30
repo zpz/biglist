@@ -758,6 +758,18 @@ API reference
 .. autoclass:: biglist._base.BiglistBase
 
 
+``FileView``
+------------
+
+.. autoclass:: biglist.FileView
+
+
+``ListView``
+------------
+
+.. autoclass:: biglist.ListView
+
+
 ``Biglist``
 -----------
 
@@ -769,30 +781,30 @@ API reference
 
 .. autoclass:: biglist.BiglistFileData
 
+
 ``ParquetBiglist``
 ------------------
 
 .. autoclass:: biglist.ParquetBiglist
+
 
 ``ParquetFileData``
 -------------------
 
 .. autoclass:: biglist.ParquetFileData
 
+
 ``ParquetBatchData``
 --------------------
 
 .. autoclass:: biglist.ParquetBatchData
 
-``FileView``
-------------
 
-.. autoclass:: biglist.FileView
+``ChainedList``
+---------------
 
-``ListView``
-------------
+.. autoclass:: biglist.ChainedList
 
-.. autoclass:: biglist.ListView
 
 
 .. Indices and tables

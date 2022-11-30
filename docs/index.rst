@@ -304,8 +304,14 @@ but it has some overhead incurred by "file locks".
 On the other hand, ``file_views`` can't be used in a distributed setup.
 
 
+Using ``Biglist`` as a "multiplxer"
+-----------------------------------
+
+TBD.
+
+
 Writing to a ``Biglist`` in multiple processes or machines
-----------------------------------------------------------
+==========================================================
 
 The flip side of distributed reading is distributed writing, and that is covered as well.
 If we have a biglist on the local disk, we can append to it from multiple processes or threads.
@@ -409,11 +415,6 @@ The accumulative element count is obviously the basis for random access---``Bigl
 figure out which file contains the element at a specific index.
 
 
-
-Using ``Biglist`` to implement a "multiplxer"
----------------------------------------------
-
-TBD.
 
 
 Creating a ``ParquetBiglist``
@@ -723,8 +724,8 @@ and returns a ``pyarrow.Array`` or ``pyarrow.ChunkedArray``. For example,
    ]
 
 
-``read_parquet_file``
-=====================
+Reading a standalone Parquet file
+=================================
 
 The function ``read_parquet_file`` is provided to read a single Parquet file independent of
 ``ParquetBiglist``. It returns a ``ParquetFileData`` object. All the facilities of this class,

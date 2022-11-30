@@ -1,6 +1,6 @@
 """
 The package ``biglist`` provides persisted, out-of-memory Python data structures
-that implement the ``Sequence`` interface, most importantly iteration, as well as random element access.
+that implement the ``Sequence`` and ``Iterable`` interfaces.
 The main use case is processing large amounts of data that can not fit in memory.
 Persistence can be on local disk or in cloud storage. Interfacing with the storage
 uses the package ``upathlib``.

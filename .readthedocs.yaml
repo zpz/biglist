@@ -32,4 +32,3 @@ python:
           - doc
           - gcs
           - parquet
-   # - requirements: docs/requirements.txt

@@ -3,6 +3,11 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+import os
+import sys
+sys.path.insert(0, os.path.abspath('../src'))
+
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
@@ -12,6 +17,7 @@ author = 'Zepu Zhang'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
+
 
 extensions = [
     'sphinx.ext.autodoc',
@@ -23,7 +29,7 @@ extensions = [
 autodoc_default_options = {
     'members': True,
     'undoc-members': True,
-    'special-members': '__init__, __getitem__, __iter__, __len__',
+    'special-members': '__init__, __getitem__, __iter__, __next__, __len__',
     'member-order': 'bysource',
     'show-inheritance': True,
 }

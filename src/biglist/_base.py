@@ -604,7 +604,9 @@ class BiglistBase(Sequence[T]):
         return zz["n_files_claimed"] >= zz["n_files"]
 
     def file_view(self, file):
-        warnings.warn(f"`{self.__class__.__name__}.file_view` is deprecated and will be removed in >=0.8.0; use `file_reader` instead")
+        warnings.warn(
+            f"`{self.__class__.__name__}.file_view` is deprecated and will be removed in >=0.8.0; use `file_reader` instead"
+        )
         return self.file_reader(file)
 
     def file_reader(self, file: Union[Upath, int]) -> FileReader:
@@ -618,7 +620,9 @@ class BiglistBase(Sequence[T]):
         raise NotImplementedError
 
     def file_views(self):
-        warnings.warn(f"`{self.__class__.__name__}.file_views` is deprecated and will be removed in >=0.8.0; use `file_readers` instead")
+        warnings.warn(
+            f"`{self.__class__.__name__}.file_views` is deprecated and will be removed in >=0.8.0; use `file_readers` instead"
+        )
         return self.file_readers()
 
     def file_readers(self) -> List[FileReader]:

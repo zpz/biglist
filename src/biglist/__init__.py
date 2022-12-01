@@ -46,7 +46,7 @@ try:
         read_parquet_file,
         write_parquet_file,
     )
-    
+
     # Back compat; will be removed after >=0.8.0
     ParquetFileData = ParquetFileReader
 

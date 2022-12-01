@@ -263,7 +263,7 @@ class ParquetFileReader(FileReader):
         self._getitem_last_row_group = None
 
         super().__init__(path, loader)
-        
+
         self._scalar_as_py = None
         self.scalar_as_py = True
 
@@ -387,7 +387,9 @@ class ParquetFileReader(FileReader):
     def iter_batches(self, batch_size=10_000) -> Iterator[ParquetBatchData]:
         if self._data is None:
             for batch in self.file.iter_batches(
-                batch_size=batch_size, columns=self._column_names, use_threads=True,
+                batch_size=batch_size,
+                columns=self._column_names,
+                use_threads=True,
             ):
                 z = ParquetBatchData(batch)
                 z.scalar_as_py = self.scalar_as_py

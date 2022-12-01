@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 import pyarrow
 from upathlib import LocalUpath
-from biglist import ParquetBiglist, ParquetFileData, write_parquet_file, read_parquet_file
+from biglist import ParquetBiglist, ParquetFileReader, write_parquet_file, read_parquet_file
 import pytest
 
 
@@ -32,7 +32,7 @@ def test_idx_locator():
             self._getitem_last_row_group = None
 
         def __getitem__(self, idx):
-            return ParquetFileData._locate_row_group_for_item(self, idx)
+            return ParquetFileReader._locate_row_group_for_item(self, idx)
         
     me = My()
     assert me[0] == (0, 0)
@@ -135,10 +135,10 @@ def test_big_parquet_list():
     print('')
     print(biglist)
     print(biglist.view())
-    print(biglist.file_view(0))
-    print(biglist.file_view(1).data)
+    print(biglist.file_reader(0))
+    print(biglist.file_reader(1).data)
     print('')
-    print(biglist.file_view(1).data())
+    print(biglist.file_reader(1).data())
 
     # specify columns
     print('')

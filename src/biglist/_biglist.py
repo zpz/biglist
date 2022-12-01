@@ -32,7 +32,7 @@ from upathlib.serializer import (
     ZOrjsonSerializer,
     ZstdOrjsonSerializer,
 )
-from ._base import BiglistBase, FileView, Upath, PathType, T
+from ._base import BiglistBase, FileReader, Upath, PathType, T
 
 
 logger = logging.getLogger(__name__)
@@ -568,11 +568,11 @@ class Biglist(BiglistBase[T]):
         # `datafiles` is the return of `_get_datafiles`.
         return self._data_dir / datafiles[idx][0]
 
-    def file_view(self, file):
+    def file_reader(self, file):
         if isinstance(file, int):
             datafiles, _ = self._get_data_files()
             file = self._get_data_file(datafiles, file)
-        return BiglistFileData(file, self.load_data_file)
+        return BiglistFileReader(file, self.load_data_file)
 
     def iter_files(self):
         self.flush()
@@ -667,7 +667,7 @@ class Biglist(BiglistBase[T]):
         return ss["next"] == ss["total"]
 
 
-class BiglistFileData(FileView):
+class BiglistFileReader(FileReader):
     def __init__(self, path, loader):
         self._data: list = None
         super().__init__(path, loader)

@@ -2,10 +2,10 @@ biglist
 =======
 
 The package ``biglist`` provides persisted, out-of-memory Python data structures
-that implement the ``Sequence`` and ``Iterable`` interfaces.
+that implement the ``Sequence`` and ``Iterable`` interfaces with the capabilities of
+concurrent and distributed reading and writing.
 The main use case is processing large amounts of data that can not fit in memory.
-Persistence can be on local disk or in cloud storage. Interfacing with the storage
-uses the package ``upathlib``.
+Persistence can be on local disk or in cloud storage.
 
 
 Read the `documentation <https://biglist.readthedocs.io/en/latest/>`_.

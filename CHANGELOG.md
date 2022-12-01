@@ -10,12 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Removed
 
 - Removed `BiglistBase.{new_concurrent_iter, concurrent_iter, concurrent_iter_stat, concurrent_iter_done}`. Please use `new_concurrent_file_iter` and the related methods.
+- `ParquetBiglist.iter_batches` was removed because it was simple and unnecessary.
 
 ### Changed and enhanced
 
 - `BiglistBase.load_data_file` losts parameter `mode`. Now it has only one parameter, which is the file path.
 - Enhanced `FileView` and related code. Both `ParquetFileData` and `BiglistFileData` are now subclasses of `FileView`.
 - Enhanced the treatment of `{ParquetFileData, ParquetBatchData}.scalar_as_py`.
+- Class renamings: `FileView` -> `FileReader`; `ParquetFileData` -> `ParquetFileReader`; `BiglistFileData` -> `BiglistFileReader`.
+  The old names will be available for a period of deprecation.
+- Method renamings: `file_view` -> `file_reader`; `file_views` -> `file_readers`.
+  The old names will be available for a period of deprecation.
 
 ### Added
 

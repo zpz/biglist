@@ -129,10 +129,6 @@ def test_big_parquet_list():
     print(list(z[::3]))
 
     print('')
-    for batch in biglist.iter_batches(2000):
-        print(batch)
-
-    print('')
     print(biglist)
     print(biglist.view())
     print(biglist.file_reader(0))

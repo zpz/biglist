@@ -82,7 +82,7 @@ class FileReader(collections.abc.Sequence):
         """
         raise NotImplementedError
 
-    def bool(self):
+    def __bool__(self):
         return self.__len__() > 0
 
     def view(self):

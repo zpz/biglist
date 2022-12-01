@@ -6,6 +6,7 @@ import os
 import queue
 import tempfile
 import uuid
+import warnings
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime
@@ -35,24 +36,24 @@ class FileLoaderMode:
     RAND = 1
 
 
-class FileView(collections.abc.Sequence):
+class FileReader(collections.abc.Sequence):
     """
     Given a function ``loader`` that would load ``path`` and return
-    a ``Sequence``, a ``FileView`` object keeps ``loader`` and ``path``
+    a ``Sequence``, a ``FileReader`` object keeps ``loader`` and ``path``
     but does not call ``loader`` until needed.
     In other words, it does "lazy" loading.
 
-    This makes a ``FileView`` object light weight and, more importantly,
+    This makes a ``FileReader`` object light weight and, more importantly,
     lend itself to pickling.
-    One use case of FileView is to pass these objects around in
+    One use case of FileReader is to pass these objects around in
     ``multiprocessing`` code for concurrent data processing.
 
-    To be clear, a ``FileView`` object is pickle-able upon initiation.
+    To be clear, a ``FileReader`` object is pickle-able upon initiation.
     After some use of the object, it may have loaded data or other things;
     at that point it may not be pickle-able, depending on the specific
     subclass.
 
-    The method ``BiglistBase.file_view`` returns a ``FileView`` object.
+    The method ``BiglistBase.file_reader`` returns a ``FileReader`` object.
     """
 
     def __init__(self, path: PathType, loader: Callable):
@@ -63,7 +64,7 @@ class FileView(collections.abc.Sequence):
             A function that will load the data file and return
             a Sequence. This could be a classmethod, static method,
             and standing alone function, but can't be a lambda
-            function, because a ``FileView`` object often undergoes
+            function, because a ``FileReader`` object often undergoes
             pickling when it is passed between processes.
         """
         self.path: Upath = BiglistBase.resolve_path(path)
@@ -485,7 +486,7 @@ class BiglistBase(Sequence[T]):
         else:
             data = self._file_dumper.get_file_data(file)
         if data is None:
-            data = self.file_view(file)
+            data = self.file_reader(file)
 
         self._read_buffer_file_idx = ifile
         self._read_buffer = data
@@ -498,14 +499,14 @@ class BiglistBase(Sequence[T]):
         if self._append_buffer:
             yield from self._append_buffer
 
-    def iter_files(self) -> Iterator[FileView]:
+    def iter_files(self) -> Iterator[FileReader]:
         """
         This is "eager" and not distributed, that is,
         this call consumes the entire data. To distribute the iteration
         to multiple workers, see ``concurrent_iter_files``.
 
         This yields the content of one file at a time.
-        Specifically, it yields ``FileView`` objects.
+        Specifically, it yields ``FileReader`` objects.
 
         This exists mainly as the _engine_ for ``__iter__``.
         """
@@ -516,7 +517,7 @@ class BiglistBase(Sequence[T]):
         ndatafiles = len(datafiles)
 
         if ndatafiles == 1:
-            z = self.file_view(self._get_data_file(datafiles, 0))
+            z = self.file_reader(self._get_data_file(datafiles, 0))
             z.load()
             yield z
         elif ndatafiles > 1:
@@ -525,7 +526,7 @@ class BiglistBase(Sequence[T]):
             executor = self._thread_pool
 
             def _read_file(idx):
-                z = self.file_view(self._get_data_file(datafiles, idx))
+                z = self.file_reader(self._get_data_file(datafiles, idx))
                 z.load()
                 return z
 
@@ -570,7 +571,7 @@ class BiglistBase(Sequence[T]):
         )
         return task_id
 
-    def concurrent_iter_files(self, task_id: str) -> Iterator[FileView]:
+    def concurrent_iter_files(self, task_id: str) -> Iterator[FileReader]:
         """
         Parameters
         ----------
@@ -592,7 +593,7 @@ class BiglistBase(Sequence[T]):
 
             file = self._get_data_file(datafiles, n_files_claimed)
             logger.debug('yielding data of file "%s"', file)
-            yield self.file_view(file)
+            yield self.file_reader(file)
 
     def concurrent_file_iter_stat(self, task_id: str) -> dict:
         info = self._concurrent_file_iter_info_file(task_id).read_json()
@@ -602,7 +603,11 @@ class BiglistBase(Sequence[T]):
         zz = self.concurrent_file_iter_stat(task_id)
         return zz["n_files_claimed"] >= zz["n_files"]
 
-    def file_view(self, file: Union[Upath, int]) -> FileView:
+    def file_view(self, file):
+        warnings.warn(f"`{self.__class__.__name__}.file_view` is deprecated and will be removed in >=0.8.0; use `file_reader` instead")
+        return self.file_reader(file)
+
+    def file_reader(self, file: Union[Upath, int]) -> FileReader:
         """
         Parameters
         ----------
@@ -612,12 +617,16 @@ class BiglistBase(Sequence[T]):
         """
         raise NotImplementedError
 
-    def file_views(self) -> List[FileView]:
+    def file_views(self):
+        warnings.warn(f"`{self.__class__.__name__}.file_views` is deprecated and will be removed in >=0.8.0; use `file_readers` instead")
+        return self.file_readers()
+
+    def file_readers(self) -> List[FileReader]:
         # This is intended to facilitate parallel processing,
         # e.g. send views on diff files to diff processes.
         datafiles, _ = self._get_data_files()
         return [
-            self.file_view(self._get_data_file(datafiles, i))
+            self.file_reader(self._get_data_file(datafiles, i))
             for i in range(len(datafiles))
         ]
 

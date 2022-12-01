@@ -69,15 +69,15 @@ def test_existing_numbers():
     rmtree(PATH)
 
 
-def test_fileview():
+def test_FileReader():
     bl = Biglist.new(batch_size=4, storage_format='pickle')
     bl.extend(range(22))
     bl.flush()
     assert len(bl._get_data_files()[0]) == 6
 
-    assert list(bl.file_views()[1]) == [4, 5, 6, 7]
+    assert list(bl.file_readers()[1]) == [4, 5, 6, 7]
 
-    vs = bl.file_views()
+    vs = bl.file_readers()
     list(vs[2]) == [8, 9, 10, 11]
 
     vvs = vs[2][1:3]
@@ -149,7 +149,7 @@ def iter_file(path, task_id):
     return data
 
 
-def test_file_views():
+def test_file_readers():
     bl = Biglist.new(batch_size=5, storage_format='pickle-z')
     nn = 567
     bl.extend(range(nn))
@@ -197,7 +197,7 @@ def test_mp1():
     with ProcessPoolExecutor(3) as pool:
         jobs = [
             pool.submit(square_sum, v)
-            for v in biglist.file_views()
+            for v in biglist.file_readers()
         ]
         for j, result in zip(jobs, results):
             assert j.result() == result
@@ -220,7 +220,7 @@ def test_mp2():
 
     yourlist = Biglist.new(batch_size=33)
     with multiprocessing.Pool(10) as pool:
-        for path in pool.imap_unordered(find_big, biglist.file_views()):
+        for path in pool.imap_unordered(find_big, biglist.file_readers()):
             z = Biglist(path)
             yourlist.extend(z)
             del z
@@ -244,7 +244,7 @@ async def test_async():
     biglist.extend(data)
     biglist.flush()
 
-    tasks = (sum_square(x) for x in biglist.file_views())
+    tasks = (sum_square(x) for x in biglist.file_readers())
     results = await asyncio.gather(*tasks)
     assert sum(results) == sum(v*v for v in biglist)
 

@@ -12,7 +12,7 @@ import pyarrow
 from pyarrow.parquet import ParquetFile
 from pyarrow.fs import FileSystem, GcsFileSystem
 from upathlib import LocalUpath
-from ._base import BiglistBase, Upath, PathType, ListView, FileView
+from ._base import BiglistBase, Upath, PathType, ListView, FileReader
 from ._util import locate_idx_in_chunked_seq
 
 
@@ -217,15 +217,12 @@ class ParquetBiglist(BiglistBase):
     def _get_data_file(self, datafiles, idx):
         return self.resolve_path(datafiles[idx]["path"])
 
-    def file_view(self, file):
+    def file_reader(self, file):
         if isinstance(file, int):
             datafiles, _ = self._get_data_files()
             file = self._get_data_file(datafiles, file)
-        return ParquetFileData(file, self.load_data_file)
-
-    def iter_batches(self, batch_size=10_000) -> Iterator[ParquetBatchData]:
-        for file in self.iter_files():
-            yield from file.iter_batches(batch_size)
+        z = ParquetFileReader(file, self.load_data_file)
+        return z
 
     @property
     def datafiles(self):
@@ -240,7 +237,7 @@ class ParquetBiglist(BiglistBase):
         ]
 
 
-class ParquetFileData(FileView):
+class ParquetFileReader(FileReader):
     """
     Represents data of a single Parquet file,
     with facilities to make it conform to our required APIs.
@@ -266,7 +263,7 @@ class ParquetFileData(FileView):
         self._getitem_last_row_group = None
 
         super().__init__(path, loader)
-
+        
         self._scalar_as_py = None
         self.scalar_as_py = True
 
@@ -382,17 +379,15 @@ class ParquetFileData(FileView):
         The type of yielded individual elements is the same as ``__getitem__``.
         """
         if self._data is None:
-            for batch in self.file.iter_batches(columns=self._column_names):
-                z = ParquetBatchData(batch)
-                z.scalar_as_py = self.scalar_as_py
-                yield from z
+            for batch in self.iter_batches():
+                yield from batch
         else:
             yield from self._data
 
     def iter_batches(self, batch_size=10_000) -> Iterator[ParquetBatchData]:
         if self._data is None:
             for batch in self.file.iter_batches(
-                batch_size=batch_size, columns=self._column_names
+                batch_size=batch_size, columns=self._column_names, use_threads=True,
             ):
                 z = ParquetBatchData(batch)
                 z.scalar_as_py = self.scalar_as_py
@@ -421,9 +416,9 @@ class ParquetFileData(FileView):
                 self._data = self._row_groups[0]
         return self._row_groups[idx]
 
-    def columns(self, cols: Sequence[str]) -> ParquetFileData:
+    def columns(self, cols: Sequence[str]) -> ParquetFileReader:
         """
-        Return a new ``ParquetFileData`` object that will only load
+        Return a new ``ParquetFileReader`` object that will only load
         the specified columns.
 
         The columns of interest have to be within currently available columns.
@@ -435,7 +430,7 @@ class ParquetFileData(FileView):
 
         Examples::
 
-            obj = ParquetFileData('file_path')
+            obj = ParquetFileReader('file_path')
             obj1 = obj.columns(['a', 'b', 'c'])
             print(obj1[2])
             obj2 = obj1.columns(['b', 'c'])
@@ -637,7 +632,7 @@ class ParquetBatchData(collections.abc.Sequence):
 
 
 def read_parquet_file(path: PathType, **kwargs):
-    return ParquetFileData(path, ParquetBiglist.load_data_file, **kwargs)
+    return ParquetFileReader(path, ParquetBiglist.load_data_file, **kwargs)
 
 
 def write_parquet_file(

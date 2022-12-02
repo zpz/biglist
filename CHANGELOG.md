@@ -25,7 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - New public method (property) `datafiles_info`.
-- Created Sphinx documentation and started hosting it on "Read the Docs". This is the first version to have such documentation.
+- Created Sphinx documentation and started hosting it on "Read the Docs". This is the first version to have such documentation. This is the main work of this release.
 
 ### Fixed
 

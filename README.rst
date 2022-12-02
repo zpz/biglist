@@ -14,7 +14,7 @@ Read the `documentation <https://biglist.readthedocs.io/en/latest/>`_.
 Reference
 ---------
 
-A very early version of this work is described in [a blog post](https://zpz.github.io/blog/biglist/).
+A very early version of this work is described in `a blog post <https://zpz.github.io/blog/biglist/>`_.
 
 Status
 ------

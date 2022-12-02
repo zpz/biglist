@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import bisect
 import collections.abc
 import itertools
@@ -7,6 +9,7 @@ import queue
 import tempfile
 import uuid
 import warnings
+from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime
@@ -21,6 +24,7 @@ from typing import (
     TypeVar,
 )
 
+from deprecation import deprecated
 from upathlib import LocalUpath, Upath, PathType, resolve_path
 from ._util import locate_idx_in_chunked_seq
 
@@ -38,34 +42,35 @@ class FileLoaderMode:
 
 class FileReader(collections.abc.Sequence):
     """
-    Given a function ``loader`` that would load ``path`` and return
-    a ``Sequence``, a ``FileReader`` object keeps ``loader`` and ``path``
-    but does not call ``loader`` until needed.
-    In other words, it does "lazy" loading.
-
-    This makes a ``FileReader`` object light weight and, more importantly,
-    lend itself to pickling.
-    One use case of FileReader is to pass these objects around in
+    A ``FileReader`` is a "lazy" loader of a data file.
+    It keeps track of the path of a data file along with a loader function,
+    but performs the loading only when needed.
+    In particular, upon initiation, file loading has not happened, and the object
+    is light weight and friendly to pickling.
+    
+    One use case of this class is to pass these objects around in
     ``multiprocessing`` code for concurrent data processing.
 
-    To be clear, a ``FileReader`` object is pickle-able upon initiation.
-    After some use of the object, it may have loaded data or other things;
-    at that point it may not be pickle-able, depending on the specific
-    subclass.
+    Once load have been loaded, this class provides various ways to navigate
+    the data. As a minimum requirement, a subclass must implement the
+    ``Sequence`` API, mainly random access and iteration.
 
-    The method ``BiglistBase.file_reader`` returns a ``FileReader`` object.
+    With loaded data and associated facilities, this object may no longer
+    be pickle-able, depending on the specifics of the subclass.
     """
 
     def __init__(self, path: PathType, loader: Callable):
         """
         Parameters
         ----------
-        loader:
-            A function that will load the data file and return
-            a Sequence. This could be a classmethod, static method,
-            and standing alone function, but can't be a lambda
-            function, because a ``FileReader`` object often undergoes
-            pickling when it is passed between processes.
+        path
+            Path of a data file.
+        loader
+            A function that will load the data file.
+            This could be a classmethod, staticmethod,
+            or a standalone function, but can't be a lambda
+            function, because a ``FileReader`` object is often used
+            with ``multiprocessing``, hence must be pickle-friendly.
         """
         self.path: Upath = BiglistBase.resolve_path(path)
         self.loader = loader
@@ -78,14 +83,15 @@ class FileReader(collections.abc.Sequence):
 
     def load(self) -> None:
         """
-        This method *eagerly* loads data.
+        This method *eagerly* loads all the data from the file.
         """
         raise NotImplementedError
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return self.__len__() > 0
 
-    def view(self):
+    def view(self) -> ListView:
+        '''Return a ``ListView`` object for facilitate slicing this biglist.'''
         return ListView(self)
 
 
@@ -256,29 +262,31 @@ class ChainedList(Sequence[T]):
         return self._lists
 
 
-class BiglistBase(Sequence[T]):
+class BiglistBase(Sequence[T], ABC):
     """
-    This base class contains code mainly concerning *read* only.
-    The subclass ``Biglist`` adds functionalities for writing,
-    whereas other subclasses, such as ``ParquetBiglist``, may be read-only.
-
-    Data access is optimized for iteration, whereas random access
-    (via index or slice) is less efficient, and assumed to be rare.
+    This base class contains code mainly concerning *reading* only.
+    The subclass ``Biglist`` adds functionalities for writing.
+    Other subclasses, such as ``ParquetBiglist``, may be read-only.
     """
 
     @staticmethod
-    def resolve_path(path: PathType):
-        # User may want to customize this method to provide
-        # credentials for cloud storages, if their application involves
-        # them, so that the code does not resort to default credential
-        # retrieval mechanisms, which may be slow.
+    def resolve_path(path: PathType) -> Upath:
+        '''
+        Resolve ``path`` to a ``upathlib.Upath`` object.
+
+        User may want to customize this method to provide
+        credentials for cloud storages, if their application involves
+        them, so that the code does not resort to default credential
+        retrieval mechanisms, which may be slow.
+        '''
         return resolve_path(path)
 
     @classmethod
     def get_temp_path(cls) -> Upath:
         """
-        Return a temporary directory to host a new Biglist object,
-        if user does not specify a location for it.
+        If user does not specify ``path`` when calling ``new``,
+        this method is used to determine a temporary directory.
+
         Subclass may want to customize this if they prefer other ways
         to find temporary locations. For example, they may want
         to use a temporary location in a cloud storage.
@@ -289,22 +297,29 @@ class BiglistBase(Sequence[T]):
         return path  # type: ignore
 
     @classmethod
+    @abstractmethod
     def load_data_file(cls, path: Upath):
+        '''
+        Load the data file given by ``path``.
+        
+        This function is used as the argument ``loader`` to ``FileReader.__init__``.
+        Its return type depends on the subclass.
+        The value it returns is contained in ``FileReader`` for subsequent use.
+        '''
         raise NotImplementedError
 
     @classmethod
     @contextmanager
     def lockfile(cls, file: Upath):
         """
-        Although by default this uses ``file.lock()``, it doesn't have to be.
-        All this method needs is to guarantee that the code block identified
-        by ``file`` (essentially the name) is NOT executed concurrently
-        by two "workers". It by no means has to be "locking that file".
+        All this method does is to guarantee that the code block identified
+        by ``file`` (essentially the name) is *not* executed concurrently
+        by two "workers".
+
+        This method is used by several "distributed reading" methods.
+        The scope of the lock is for reading/writing a tiny "control info" file.
 
         See ``Upath.lock``.
-
-        Locking is used by several "concurrent distributed reading" methods.
-        The scope of the lock is for read/write a tiny "control info" file.
         """
         with file.lock(timeout=120):
             yield
@@ -319,11 +334,11 @@ class BiglistBase(Sequence[T]):
         """
         Parameters
         ----------
-        path:
+        path
             Directory that contains files written by an instance
             of this class.
 
-        thread_pool_executor:
+        thread_pool_executor
             Methods for reading and writing
             use worker threads. If this parameter is specified, then
             the provided thread pool will be used. This is useful
@@ -331,13 +346,13 @@ class BiglistBase(Sequence[T]):
             at the same time, because the provided thread pool
             controls the max number of threads.
 
-        require_exists:
+        require_exists
             When initializing an object of this class,
             contents of the directory ``path`` should be already in place.
             This is indicated by ``require_exists = True``. In the
             classmethod ``new`` of a subclass, when creating an instance
             before any file is written, ``require_exists=False`` is used.
-            User should always leave this parameter at its default value.
+            User should usually leave this parameter at its default value.
         """
         self.path = self.resolve_path(path)
 
@@ -405,11 +420,14 @@ class BiglistBase(Sequence[T]):
         raise NotImplementedError
 
     def __len__(self) -> int:
+        '''
+        Number of elements in this biglist.
+        '''
         # This assumes the current object is the only one
-        # that may be appending to the biglist (hence it has `append_buffer`).
+        # that may be appending to the biglist.
         # In other words, if the current object is one of
         # of a number of workers that are concurrently using
-        # the biglist, then all the other workers are reading only.
+        # this biglist, then all the other workers are reading only.
         _, data_files_cumlength = self._get_data_files()
         if data_files_cumlength:
             return data_files_cumlength[-1] + len(self._append_buffer)
@@ -419,14 +437,14 @@ class BiglistBase(Sequence[T]):
         """
         Element access by single index; negative index works as expected.
 
-        This is not optimized for speed. For example, ``self._get_data_files``
-        could be expensive involving directory crawl, maybe even in the cloud.
-        For better speed, use ``__iter__``.
-
         This does not support slicing. For slicing, see method ``view``.
         The object returned by ``view`` eventually also calls this method
         to access elements.
         """
+        # This is not optimized for speed. For example, ``self._get_data_files``
+        # could be expensive involving directory crawl, maybe even in the cloud.
+        # For better speed, use ``__iter__``.
+
         if not isinstance(idx, int):
             raise TypeError(
                 f"{self.__class__.__name__} indices must be integers, not {type(idx).__name__}"
@@ -493,6 +511,9 @@ class BiglistBase(Sequence[T]):
         return data[idx - n]
 
     def __iter__(self) -> Iterator[T]:
+        '''
+        Iterate over all the elements.
+        '''
         for f in self.iter_files():
             yield from f
 
@@ -501,14 +522,12 @@ class BiglistBase(Sequence[T]):
 
     def iter_files(self) -> Iterator[FileReader]:
         """
-        This is "eager" and not distributed, that is,
-        this call consumes the entire data. To distribute the iteration
-        to multiple workers, see ``concurrent_iter_files``.
+        Yield one data file at a time, in contrast to ``__iter__``,
+        which yields one element at a time.
 
-        This yields the content of one file at a time.
-        Specifically, it yields ``FileReader`` objects.
-
-        This exists mainly as the _engine_ for ``__iter__``.
+        See Also
+        --------
+        concurrent_iter_files: collectively iterate between multiple workers.        
         """
         # Assuming the biglist will not change (not being appended to)
         # during iteration.
@@ -560,10 +579,10 @@ class BiglistBase(Sequence[T]):
         One worker, such as a "coordinator", calls this method once.
         After that, one or more workers independently call ``concurrent_iter_files``,
         providing the task-ID returned by this method.
-        The content of the Biglist is split between the workers because
-        each data file will be obtained by exactly one worker.
+        Each data file will be obtained by exactly one worker,
+        thus content of the biglist is split between the workers.
 
-        During this iteration, the Biglist object should stay unchanged.
+        During this iteration, the biglist object should stay unchanged.
         """
         task_id = datetime.utcnow().isoformat()
         self._concurrent_file_iter_info_file(task_id).write_json(
@@ -575,8 +594,10 @@ class BiglistBase(Sequence[T]):
         """
         Parameters
         ----------
-        task_id:
-            Returned by ``new_concurrent_file_iter``.
+        task_id
+            The string returned by ``new_concurrent_file_iter``.
+            All workers that call this method using the same ``task_id``
+            will consume the biglist collectively.
         """
         datafiles, _ = self._get_data_files()
         while True:
@@ -596,38 +617,44 @@ class BiglistBase(Sequence[T]):
             yield self.file_reader(file)
 
     def concurrent_file_iter_stat(self, task_id: str) -> dict:
+        '''
+        Return status info of an ongoing "concurrent file iter".
+        '''
         info = self._concurrent_file_iter_info_file(task_id).read_json()
         return {**info, "n_files": len(self._get_data_files()[0])}
 
     def concurrent_file_iter_done(self, task_id: str) -> bool:
+        '''Return whether the "concurrent file iter" identified by ``task_id`` is finished.'''
         zz = self.concurrent_file_iter_stat(task_id)
         return zz["n_files_claimed"] >= zz["n_files"]
 
+    @deprecated(deprecated_in="0.7.1", removed_in="0.8.0", details="Use ``file_reader`` instead.")
     def file_view(self, file):
-        warnings.warn(
-            f"`{self.__class__.__name__}.file_view` is deprecated and will be removed in >=0.8.0; use `file_reader` instead"
-        )
         return self.file_reader(file)
 
     def file_reader(self, file: Union[Upath, int]) -> FileReader:
         """
         Parameters
         ----------
-        file:
-            The data file path or the index of the file
+        file
+            The data file path or the index of the file (0-based)
             in the list of data files.
         """
         raise NotImplementedError
 
+    @deprecated(deprecated_in="0.7.1", removed_in="0.8.0", details="Use ``file_readers`` instead.")
     def file_views(self):
-        warnings.warn(
-            f"`{self.__class__.__name__}.file_views` is deprecated and will be removed in >=0.8.0; use `file_readers` instead"
-        )
         return self.file_readers()
 
     def file_readers(self) -> List[FileReader]:
-        # This is intended to facilitate parallel processing,
-        # e.g. send views on diff files to diff processes.
+        '''
+        Return a list of all the data files wrapped in ``FileReader`` objects,
+        which are light weight, have not loaded data yet, and are friendly
+        to pickling.
+
+        This is intended to facilitate concurrent processing,
+        e.g. one may send the ``FileReader`` objects to different processes or threads.
+        '''
         datafiles, _ = self._get_data_files()
         return [
             self.file_reader(self._get_data_file(datafiles, i))
@@ -636,38 +663,41 @@ class BiglistBase(Sequence[T]):
 
     def view(self) -> ListView[T]:
         """
-        By convention, "slicing" should return an object of the same class
-        as the original object. This is not possible for the ``Biglist`` class,
+        By convention, a "slicing" method should return an object of the same class
+        as the original object. This is not possible for ``BiglistBase`` (or its subclasses),
         hence its ``__getitem__`` does not support slicing. Slicing is supported
-        by this "view" method---the object returned by this method can be
-        sliced, e.g.,
+        by the object returned from ``view``, e.g.,
 
         ::
 
             biglist = Biglist(...)
             v = biglist.view()
-            print(v[2:8])
-            print(v[3::2])
+            print(v[2:8].collect())
+            print(v[3::2].collect())
 
-        During the use of this view, the underlying Biglist should not change.
+        During the use of this view, the underlying biglist should not change.
         Multiple views may be used to view diff parts
-        of the ``Biglist``; they open and read files independent of other views.
+        of the biglist; they open and read files independent of other views.
         """
         return ListView(self)
 
     @property
     def num_datafiles(self) -> int:
+        '''Number of data files.'''
         return len(self._get_data_files()[0])
 
     @property
     def datafiles(self) -> List[str]:
         """
-        Return the list of file paths.
+        Return the list of data file paths.
         """
         raise NotImplementedError
 
     @property
     def datafiles_info(self) -> List[Tuple[str, int, int]]:
         """
-        Return the list of (file_path, item_count, cum_count)
+        Return a list of tuples for the data files.
+        Each tuple, representing one data file, consists of
+        "file path", "element count in the file",
+        and "cumulative element count in the data files so far".
         """

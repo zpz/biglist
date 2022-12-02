@@ -72,7 +72,7 @@ class Dumper:
 
     Parameters
     ----------
-    n_threads:
+    n_threads
         Max number of threads to use. There are at most
         this many submitted and unfinished file-dumping tasks
         at any time.
@@ -96,11 +96,11 @@ class Dumper:
         """
         Parameters
         ----------
-        file_dumper:
+        file_dumper
             This function takes a file path and the data as a list, and saves
             the data in the file named by the path.
 
-        data_file, data:
+        data_file, data
             Parameters to ``file_dumper``.
         """
         if self._sem is None:
@@ -258,7 +258,7 @@ class Biglist(BiglistBase[T]):
 
         Parameters
         ----------
-        path:
+        path
             A directory in which this ``Biglist`` will save data files
             as well as meta-info files. The directory must be non-existent.
             It is not necessary to pre-create the parent directory of this path.
@@ -266,7 +266,7 @@ class Biglist(BiglistBase[T]):
             If not specified, ``cls.get_temp_path``
             will be called to determine a temporary path.
 
-        batch_size:
+        batch_size
             max number of data elements in each persisted data file.
 
             There's no good default value for this parameter, although one is
@@ -281,17 +281,17 @@ class Biglist(BiglistBase[T]):
 
             The file size impacts a few things.
 
-            - It should not be so small that the file reading/writing is large
-              relative overhead. This is especially important when ``path`` is cloud storage.
+                - It should not be so small that the file reading/writing is large
+                  relative overhead. This is especially important when ``path`` is cloud storage.
 
-            - It should not be so large that it is "unwieldy", e.g. approaching 1GB.
+                - It should not be so large that it is "unwieldy", e.g. approaching 1GB.
 
-            - When iterating over a ``Biglist`` object, there can be up to (by default) 4
-              files-worth of data in memory at any time. See the method ``iter_files``.
+                - When iterating over a ``Biglist`` object, there can be up to (by default) 4
+                  files-worth of data in memory at any time. See the method ``iter_files``.
 
-            - When ``append``ing or ``extend``ing at high speed, there can be up to
-              (by default) 4 times ``batch_size`` data elements in memory at any time.
-              See ``_flush`` and ``Dumper``.
+                - When ``append``ing or ``extend``ing at high speed, there can be up to
+                  (by default) 4 times ``batch_size`` data elements in memory at any time.
+                  See ``_flush`` and ``Dumper``.
 
             Another consideration is access pattern of elements in the ``Biglist``. If
             there are many "jumping around" with random element access, large data files
@@ -305,7 +305,7 @@ class Biglist(BiglistBase[T]):
             Rule of thumb: it is recommended to keep the persisted files between 32-128MB
             in size. (Note: no benchmark was performed to back this recommendation.)
 
-        keep_files:
+        keep_files
             if not specified, the default behavior this the following:
 
             If ``path`` is ``None``, then this is ``False``---the temporary directory
@@ -316,16 +316,16 @@ class Biglist(BiglistBase[T]):
 
             User can pass in ``True`` or ``False`` to override the default behavior.
 
-        storage_format:
+        storage_format
             this should be a key in ``cls.registered_storage_formats``.
             If not specified, ``cls.DEFAULT_STORAGE_FORMAT`` is used.
 
-        kwargs:
+        kwargs
             additional arguments are passed on to ``__init__``.
 
         Returns
         -------
-        Biglist:
+        Biglist
             A new ``Biglist`` object.
         """
 
@@ -625,7 +625,7 @@ class Biglist(BiglistBase[T]):
         """
         Parameters
         ----------
-        task_id:
+        task_id
             Returned by ``new_multiplexer``.
         """
         if not worker_id:

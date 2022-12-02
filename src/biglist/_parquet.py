@@ -92,9 +92,16 @@ class ParquetBiglist(BiglistBase):
         **kwargs,
     ):
         """
+        This classmethod gathers info of the data files and saves it to facilitate
+        reading the data.
+
+        If the number of data files is small, it's entirely feasible to create a temporary
+        object of this class (by leaving ``path`` at the default ``None``) "on-the-fly"
+        for one-time use.
+
         Parameters
         ----------
-        data_path:
+        data_path
             Parquet file(s) for folder(s) containing Parquet files;
             folders are traversed recursively. The data files can represent a mix
             of locations, including a mix of local and cloud locations, as long
@@ -102,25 +109,18 @@ class ParquetBiglist(BiglistBase):
             you're tied to the particular machine for the use of the ``ParquetBiglist``
             object.
 
-        path:
+        path
             Folder to be used by this object is save whatever it needs to persist.
             If `None``, a temporary location will be used.
 
-        suffix:
+        suffix
             Files with this suffix in directories specified in ``data_path``
             will be included. To include all files, use ``suffix = '*'``.
 
-        keep_files:
+        keep_files
             Should files persisted by the current object (in ``path``)
             be deleted when this object is garbage collected?
             By default, this is ``True`` if ``path`` is specified, and ``False`` otherwise.
-
-        This classmethod gathers info of the data files and saves it to facilitate
-        reading the data.
-
-        If the number of data files is small, it's entirely feasible to create a temporary
-        object of this class (by leaving ``path`` at the default ``None``) "on-the-fly"
-        for one-time use.
         """
         if (
             isinstance(data_path, str)
@@ -356,7 +356,7 @@ class ParquetFileReader(FileReader):
 
         Parameters
         ----------
-        idx:
+        idx
             Row index in this file.
 
         See ``ParquetBatchData.__getitem__``.
@@ -531,7 +531,7 @@ class ParquetBatchData(collections.abc.Sequence):
 
         Parameters
         ----------
-        idx:
+        idx
             Row index in this file.
 
         Returns

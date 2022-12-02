@@ -10,6 +10,7 @@ authors = [
 ]
 dependencies = [
     "upathlib >= 0.6.8",
+    "deprecation",
 ]
 requires-python = ">=3.8"
 readme = "README.rst"
@@ -29,7 +30,8 @@ Source = "https://github.com/zpz/biglist"
 [project.optional-dependencies]
 doc = [
     "sphinx",
-    "furo",
+    "numpydoc",
+    "pydata-sphinx-theme",
 ]
 gcs = [
     "upathlib[gcs] >= 0.6.8",

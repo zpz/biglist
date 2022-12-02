@@ -14,13 +14,18 @@ author = 'Zepu Zhang'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
+# See numpydoc documentation for a numpy-style docstring style guide.
 
 extensions = [
+    "numpydoc",
     'sphinx.ext.autodoc',
-    'sphinx.ext.napoleon',
-    'sphinx.ext.todo',
     'sphinx.ext.viewcode',
     ]
+
+# Disable autosummary stuff, which is enabled by numpydoc by default.
+numpydoc_show_class_members = False
+numpydoc_show_inherited_class_members = False
+
 
 autodoc_default_options = {
     'members': True,
@@ -29,6 +34,7 @@ autodoc_default_options = {
     'member-order': 'bysource',
     'show-inheritance': True,
 }
+autodoc_class_signature = 'separated'
 
 
 templates_path = ['_templates']
@@ -49,7 +55,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 #   furo
 #  no toc panel
 #   scrolls  (good for very small, single-page doc)
-html_theme = 'furo'
+html_theme = 'pydata_sphinx_theme'
 
 
 html_static_path = ['_static']

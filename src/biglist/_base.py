@@ -8,7 +8,6 @@ import os
 import queue
 import tempfile
 import uuid
-import warnings
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager

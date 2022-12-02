@@ -47,7 +47,7 @@ class FileReader(collections.abc.Sequence):
     but performs the loading only when needed.
     In particular, upon initiation, file loading has not happened, and the object
     is light weight and friendly to pickling.
-    
+
     One use case of this class is to pass these objects around in
     ``multiprocessing`` code for concurrent data processing.
 
@@ -91,7 +91,7 @@ class FileReader(collections.abc.Sequence):
         return self.__len__() > 0
 
     def view(self) -> ListView:
-        '''Return a ``ListView`` object for facilitate slicing this biglist.'''
+        """Return a ``ListView`` object for facilitate slicing this biglist."""
         return ListView(self)
 
 
@@ -271,14 +271,14 @@ class BiglistBase(Sequence[T], ABC):
 
     @staticmethod
     def resolve_path(path: PathType) -> Upath:
-        '''
+        """
         Resolve ``path`` to a ``upathlib.Upath`` object.
 
         User may want to customize this method to provide
         credentials for cloud storages, if their application involves
         them, so that the code does not resort to default credential
         retrieval mechanisms, which may be slow.
-        '''
+        """
         return resolve_path(path)
 
     @classmethod
@@ -299,13 +299,13 @@ class BiglistBase(Sequence[T], ABC):
     @classmethod
     @abstractmethod
     def load_data_file(cls, path: Upath):
-        '''
+        """
         Load the data file given by ``path``.
-        
+
         This function is used as the argument ``loader`` to ``FileReader.__init__``.
         Its return type depends on the subclass.
         The value it returns is contained in ``FileReader`` for subsequent use.
-        '''
+        """
         raise NotImplementedError
 
     @classmethod
@@ -420,9 +420,9 @@ class BiglistBase(Sequence[T], ABC):
         raise NotImplementedError
 
     def __len__(self) -> int:
-        '''
+        """
         Number of elements in this biglist.
-        '''
+        """
         # This assumes the current object is the only one
         # that may be appending to the biglist.
         # In other words, if the current object is one of
@@ -511,9 +511,9 @@ class BiglistBase(Sequence[T], ABC):
         return data[idx - n]
 
     def __iter__(self) -> Iterator[T]:
-        '''
+        """
         Iterate over all the elements.
-        '''
+        """
         for f in self.iter_files():
             yield from f
 
@@ -527,7 +527,7 @@ class BiglistBase(Sequence[T], ABC):
 
         See Also
         --------
-        concurrent_iter_files: collectively iterate between multiple workers.        
+        concurrent_iter_files: collectively iterate between multiple workers.
         """
         # Assuming the biglist will not change (not being appended to)
         # during iteration.
@@ -617,18 +617,22 @@ class BiglistBase(Sequence[T], ABC):
             yield self.file_reader(file)
 
     def concurrent_file_iter_stat(self, task_id: str) -> dict:
-        '''
+        """
         Return status info of an ongoing "concurrent file iter".
-        '''
+        """
         info = self._concurrent_file_iter_info_file(task_id).read_json()
         return {**info, "n_files": len(self._get_data_files()[0])}
 
     def concurrent_file_iter_done(self, task_id: str) -> bool:
-        '''Return whether the "concurrent file iter" identified by ``task_id`` is finished.'''
+        """Return whether the "concurrent file iter" identified by ``task_id`` is finished."""
         zz = self.concurrent_file_iter_stat(task_id)
         return zz["n_files_claimed"] >= zz["n_files"]
 
-    @deprecated(deprecated_in="0.7.1", removed_in="0.8.0", details="Use ``file_reader`` instead.")
+    @deprecated(
+        deprecated_in="0.7.1",
+        removed_in="0.8.0",
+        details="Use ``file_reader`` instead.",
+    )
     def file_view(self, file):
         return self.file_reader(file)
 
@@ -642,19 +646,23 @@ class BiglistBase(Sequence[T], ABC):
         """
         raise NotImplementedError
 
-    @deprecated(deprecated_in="0.7.1", removed_in="0.8.0", details="Use ``file_readers`` instead.")
+    @deprecated(
+        deprecated_in="0.7.1",
+        removed_in="0.8.0",
+        details="Use ``file_readers`` instead.",
+    )
     def file_views(self):
         return self.file_readers()
 
     def file_readers(self) -> List[FileReader]:
-        '''
+        """
         Return a list of all the data files wrapped in ``FileReader`` objects,
         which are light weight, have not loaded data yet, and are friendly
         to pickling.
 
         This is intended to facilitate concurrent processing,
         e.g. one may send the ``FileReader`` objects to different processes or threads.
-        '''
+        """
         datafiles, _ = self._get_data_files()
         return [
             self.file_reader(self._get_data_file(datafiles, i))
@@ -683,7 +691,7 @@ class BiglistBase(Sequence[T], ABC):
 
     @property
     def num_datafiles(self) -> int:
-        '''Number of data files.'''
+        """Number of data files."""
         return len(self._get_data_files()[0])
 
     @property

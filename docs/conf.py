@@ -35,7 +35,7 @@ autodoc_default_options = {
     'show-inheritance': True,
 }
 autodoc_class_signature = 'separated'
-
+autodoc_typehints = 'signature'
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']

@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime
 from typing import (
+    Any,
     Callable,
     Iterator,
     Union,
@@ -50,15 +51,15 @@ class FileReader(collections.abc.Sequence):
     One use case of this class is to pass these objects around in
     ``multiprocessing`` code for concurrent data processing.
 
-    Once load have been loaded, this class provides various ways to navigate
-    the data. As a minimum requirement, a subclass must implement the
+    Once data have been loaded, this class provides various ways to navigate
+    the data. At a minimum, a subclass must implement the
     ``Sequence`` API, mainly random access and iteration.
 
     With loaded data and associated facilities, this object may no longer
     be pickle-able, depending on the specifics of the subclass.
     """
 
-    def __init__(self, path: PathType, loader: Callable):
+    def __init__(self, path: PathType, loader: Callable[[Upath], Any]):
         """
         Parameters
         ----------
@@ -86,27 +87,27 @@ class FileReader(collections.abc.Sequence):
         """
         raise NotImplementedError
 
+    def __len__(self) -> int:
+        '''Number of data elements in the file.'''
+        raise NotImplementedError
+
     def __bool__(self) -> bool:
         return self.__len__() > 0
 
     def view(self) -> ListView:
-        """Return a ``ListView`` object for facilitate slicing this biglist."""
+        """Return a ``ListView`` object to facilitate slicing this biglist."""
         return ListView(self)
 
 
 class ListView(Sequence[T]):
     """
-    This class wraps a sequence and gives it capabilities of
-    element access by slice or index array.
-
-    One use case is to provide slicing capabilities
-    to ``Biglist`` via a call to ``Biglist.view``.
+    This class wraps a sequence and enables access by slice or index array,
+    in addition to single-index access.
 
     A ``ListView`` object does "zero-copy"---it keeps track of
-    indices of elements in the window along with a reference to
-    the underlying sequence. One may slice a ``ListView`` object,
-    and this index-tracking continues. Only when a single-element
-    access or an iteration is performed, the relevant elements
+    indices of selected elements along with a reference to
+    the underlying sequence. This object may be sliced again in a repeated "zoom in" fashion.
+    Only when a single-element access or an iteration is performed, the relevant elements
     are retrieved from the underlying sequence.
     """
 
@@ -114,23 +115,23 @@ class ListView(Sequence[T]):
         """
         This provides a "window" into the sequence ``list_``,
         which may be another ``ListView`` (which *is* a sequence, hence
-        no special treatment).
+        no special treatment is needed).
 
-        During the use of this object, it is assumed that the underlying
-        ``list_`` is not changing. Otherwise the results may be incorrect.
+        During the use of this object, the underlying ``list_`` must remain unchanged.
 
-        As a sequence, ``list_`` must support random access by index.
-        It does not need to support slicing.
+        If ``range_`` is ``None``, the "window" covers the entire ``list_``.
         """
         self._list = list_
         self._range = range_
 
     @property
     def raw(self) -> Sequence[T]:
+        '''The underlying data ``Sequence``.'''
         return self._list
 
     @property
-    def range(self):
+    def range(self) -> Union[range, Sequence[int]]:
+        '''The current "window" represented by a ``range`` or a ``list`` of indices.'''
         return self._range
 
     def __repr__(self):
@@ -140,6 +141,7 @@ class ListView(Sequence[T]):
         return self.__repr__()
 
     def __len__(self) -> int:
+        '''Number of elements in the current window.'''
         if self._range is None:
             return len(self._list)
         return len(self._range)
@@ -150,9 +152,10 @@ class ListView(Sequence[T]):
     def __getitem__(self, idx: Union[int, slice, Sequence[int]]):
         """
         Element access by a single index, slice, or an index array.
-        Negative index and standard slice syntax both work as expected.
+        Negative index and standard slice syntax work as expected.
 
-        Slice and index-array access returns a new ``ListView`` object.
+        Single-index access returns the requested data element.
+        Slice and index-array access return a new ``ListView`` object.
         """
         if isinstance(idx, int):
             # Return a single element.
@@ -175,6 +178,7 @@ class ListView(Sequence[T]):
         return self.__class__(self._list, [self._range[i] for i in idx])
 
     def __iter__(self):
+        '''Iterate over the elements in the current window.'''
         if self._range is None:
             yield from self._list
         else:
@@ -184,22 +188,29 @@ class ListView(Sequence[T]):
                 yield self._list[i]
 
     def collect(self) -> List[T]:
-        # Warning: don't do this on "big" data!
+        '''
+        Return a ``list`` containing the elements in the current window.
+        This is equivalent to using the object to initialize a ``list``.
+
+        Warning: don't do this on "big" data!
+        '''
         return list(self)
 
 
-class ChainedList(Sequence[T]):
+class ChainedList(Sequence):
     """
-    This class tracks a series of ``Sequence``'s to provide
+    This class tracks a series of ``Sequence`` to provide
     random element access and iteration on the series as a whole.
-    A call to the method ``view`` further returns an object that
+    A call to the method ``view`` further returns an ``ListView`` that
     supports slicing.
 
-    Note that ``ListView`` is also a ``Sequence``, hence could be
-    a member of the series.
+    This class operates with zero-copy.
+
+    Note that ``ListView`` and ``ChainedList`` are ``Sequence``, hence could be
+    members of the series.
     """
 
-    def __init__(self, *lists: Sequence[T]):
+    def __init__(self, *lists: Sequence):
         self._lists = lists
         self._lists_len: List[int] = None
         self._lists_len_cumsum: List[int] = None
@@ -221,14 +232,14 @@ class ChainedList(Sequence[T]):
     def __str__(self):
         return self.__repr__()
 
-    def __len__(self):
+    def __len__(self) -> int:
         if self._len is None:
             if self._lists_len is None:
                 self._lists_len = [len(v) for v in self._lists]
             self._len = sum(self._lists_len)
         return self._len
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return len(self) > 0
 
     def __getitem__(self, idx: int):
@@ -246,17 +257,19 @@ class ChainedList(Sequence[T]):
         for v in self._lists:
             yield from v
 
-    def view(self):
+    def view(self) -> ListView:
         # The returned object supports slicing.
         return ListView(self)
 
     @property
-    def raw(self) -> Sequence[T]:
+    def raw(self) -> List[Sequence]:
         """
-        A member list could be a ``ListView```. The current method
+        Return the underlying list of ``Sequence``'s.
+
+        A member ``Sequence`` could be a ``ListView```. The current method
         does not follow a ``ListView`` to its "raw" component, b/c
-        that might not have the same elements as the view, hence
-        losing info.
+        that could represent a different set of elements than the ``ListView``
+        object.
         """
         return self._lists
 
@@ -409,13 +422,24 @@ class BiglistBase(Sequence[T], ABC):
         return len(self) > 0
 
     def _get_data_files(self) -> tuple:
-        # Return "data_files" and "data_files_cumlength".
-        # Subclass may choose to cache these results in instance attributes.
+        '''
+        Returns
+        -------
+        tuple
+            First element is "data_files"; second element is "data_files_cumlength".
+            Subclass may choose to cache these results in instance attributes.
+        '''
         raise NotImplementedError
 
     def _get_data_file(self, datafiles, idx):
-        # `datafiles` is the return of `get_datafiles`.
-        # `idx` is the index of the file of interest in `datafiles`.
+        '''
+        Parameters
+        ----------
+        datafiles
+            The first element returned by ``_get_data_files``.
+        idx
+            Index of the data file in the list of data files.
+        '''
         raise NotImplementedError
 
     def __len__(self) -> int:
@@ -616,9 +640,7 @@ class BiglistBase(Sequence[T], ABC):
             yield self.file_reader(file)
 
     def concurrent_file_iter_stat(self, task_id: str) -> dict:
-        """
-        Return status info of an ongoing "concurrent file iter".
-        """
+        """Return status info of an ongoing "concurrent file iter"."""
         info = self._concurrent_file_iter_info_file(task_id).read_json()
         return {**info, "n_files": len(self._get_data_files()[0])}
 

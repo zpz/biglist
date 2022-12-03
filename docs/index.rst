@@ -990,11 +990,19 @@ API reference
 
 .. autoclass:: biglist.ChainedList
 
+``read_parquet_file``
+---------------------
+
+.. autofunction:: biglist.read_parquet_file
+
+``write_parquet_file``
+----------------------
+
+.. autofunction:: biglist.write_parquet_file
 
 
-.. Indices and tables
-.. ==================
+Indices and tables
+==================
 
-.. * :ref:`genindex`
-.. * :ref:`modindex`
-.. * :ref:`search`
+* :ref:`genindex`
+* :ref:`search`

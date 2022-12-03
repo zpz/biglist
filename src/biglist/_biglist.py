@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import atexit
 import concurrent.futures
 import itertools
@@ -14,9 +16,13 @@ from typing import (
     Iterable,
     Iterator,
     Dict,
+    List,
+    Tuple,
     Type,
     Callable,
     Optional,
+    Union,
+    Any,
 )
 from uuid import uuid4
 
@@ -32,7 +38,7 @@ from upathlib.serializer import (
     ZOrjsonSerializer,
     ZstdOrjsonSerializer,
 )
-from ._base import BiglistBase, FileReader, Upath, PathType, T
+from ._base import BiglistBase, FileReader, Upath, PathType, T, ListView
 
 
 logger = logging.getLogger(__name__)
@@ -160,6 +166,29 @@ class Biglist(BiglistBase[T]):
         serializer: Type[ByteSerializer],
         overwrite: bool = False,
     ):
+        """
+        Register a new serializer to handle data file dumping and loading.
+
+        This class has a few serializers registered out of the box.
+        They should be adequate for most applications.
+
+        Parameters
+        ----------
+        name
+            Name of the format to be associated with the new serializer.
+
+            After registering the new serializer with name "xyz", one can use
+            ``storage_format='xyz'`` in calls to ``new``.
+            When reading the object back from persistence.
+            make sure this registry is also in place so that the correct
+            deserializer can be found.
+
+        serializer
+            A subclass of ``ByteSerializer``.
+
+        overwrite
+            Whether to overwrite an existent registrant by the same name.
+        """
         good = string.ascii_letters + string.digits + "-_"
         assert all(n in good for n in name)
         if name.replace("_", "-") in cls.registered_storage_formats:
@@ -174,20 +203,19 @@ class Biglist(BiglistBase[T]):
         This method persists a batch of data elements, always a list,
         to disk or cloud storage.
 
-        If a subclass wants to perform a transformation to each
-        element of the list, e.g. converting an object of a
-        custom class to that of a Python built-in type, it can override
-        this method to do the transformation prior to calling
-        the ``super()`` version.
-
         It is recommended to persist objects of Python built-in types only,
-        which is future-proof compared to custom classes.
-        One useful pattern is to dump result of ``instance.to_dict()``,
-        and use ``cls.from_dict(...)`` to transform persisted data
-        to user's custom type upon loading. Such conversions can be
-        achieved by customizing the methods ``dump_data_file`` and
-        ``load_data_file``. It may work just as well to leave these
-        conversions to application code.
+        unless the ``Biglist`` is being used on-the-fly temporarily.
+        One useful pattern is to ``append`` output of ``custom_instance.to_dict()``,
+        and use ``custom_class.from_dict(...)`` upon reading to transform
+        the persisted ``dict`` back to the custom type.
+
+        If a subclass wants to perform such ``to_dict``/``from_dict``
+        transformations for the user, it can customize ``dump_data_file``
+        and ``load_data_file``.
+
+        See Also
+        --------
+        load_data_file
         """
         serializer = cls.registered_storage_formats[
             path.suffix.lstrip(".").replace("_", "-")
@@ -195,17 +223,14 @@ class Biglist(BiglistBase[T]):
         path.write_bytes(serializer.serialize(data))
 
     @classmethod
-    def load_data_file(cls, path: Upath):
-        """
-        This method loads a data file.
+    def load_data_file(cls, path: Upath) -> List[T]:
+        """Load the data file given by ``path``.
 
-        If a subclass wants to perform a transformation to each
-        element of the list, e.g. converting an object of a
-        Python built-in type to that of a custom class, it can override
-        this method to do the transformation on the output of
-        the ``super()`` version. However, it may work just fine to
-        leave that transformation to the application code once it
-        has retrieved a data element.
+        This function is used as the argument ``loader`` to ``BiglistFileReader.__init__``.
+
+        See Also
+        --------
+        dump_data_file
         """
         deserializer = cls.registered_storage_formats[
             path.suffix.lstrip(".").replace("_", "-")
@@ -222,40 +247,8 @@ class Biglist(BiglistBase[T]):
         keep_files: bool = None,
         storage_format: str = None,
         **kwargs,
-    ):
+    ) -> Biglist:
         """
-        A Biglist object construction is in either of the two modes
-        below:
-
-        a) create a new Biglist to store new data.
-
-        b) create a Biglist object pointing to storage of
-           existing data, which was created by a previous call to ``Biglist.new``.
-
-        In case (a), one has called ``Biglist.new``. In case (b), one has called
-        ``Biglist(..)`` (i.e. ``__init__``).
-
-        Some settings are applicable only in mode (a), b/c in
-        mode (b) they can't be changed and, if needed, should only
-        use the value already set in mode (a).
-        Such settings should happen in this classmethod ``new``
-        and should not be parameters to the the method ``__init__``.
-        Examples include ``storage_format`` and ``batch_size``.
-
-        These settings typically should be taken care of in ``new`` after creating
-        the object with ``__init__``.
-
-        ``__init__`` should be defined in such a way that it works for
-        both a barebone object that is created in this ``new``, as well as a
-        fleshed out object that already has data.
-
-        Some settings may be applicable to an existing ``Biglist`` object,
-        i.e. they control ways to use the object, and are not an intrinsic
-        property of the object. Hence they can be set to diff values while
-        using an existing Biglist object. Such settings should be
-        parameters to ``__init__`` and not to ``new``. If specified in a call
-        to ``new``, these parameters will be passed on to ``__init__``.
-
         Parameters
         ----------
         path
@@ -263,70 +256,110 @@ class Biglist(BiglistBase[T]):
             as well as meta-info files. The directory must be non-existent.
             It is not necessary to pre-create the parent directory of this path.
 
+            This path can be either on local disk or in a cloud storage.
+
             If not specified, ``cls.get_temp_path``
             will be called to determine a temporary path.
 
         batch_size
-            max number of data elements in each persisted data file.
+            Max number of data elements in each persisted data file.
 
             There's no good default value for this parameter, although one is
-            provided, because the code doesn't know (at the beginning of ``new``)
+            provided (currently the default is 10000),
+            because the code of ``new`` doesn't know
             the typical size of the data elements. User is recommended to
             specify the value of this parameter.
 
-            In determining the value for ``batch_size``, the most important
+            In choosing a value for ``batch_size``, the most important
             consideration is the size of each data file, which is determined
-            by the typical size of the data elements as well as the the number
-            of elements in each file. ``batch_size`` is the upper bound for the latter.
+            by the typical size of the data elements as well as ``batch_size``,
+            which is the upper bound of the the number
+            of elements in each file.
 
-            The file size impacts a few things.
+            There are several considerations about the data file sizes:
 
-                - It should not be so small that the file reading/writing is large
-                  relative overhead. This is especially important when ``path`` is cloud storage.
+            - It should not be so small that the file reading/writing is a large
+              overhead relative to actual processing of the data.
+              This is especially important when ``path`` is cloud storage.
 
-                - It should not be so large that it is "unwieldy", e.g. approaching 1GB.
+            - It should not be so large that it is "unwieldy", e.g. approaching 1GB.
 
-                - When iterating over a ``Biglist`` object, there can be up to (by default) 4
-                  files-worth of data in memory at any time. See the method ``iter_files``.
+            - When ``__iter__``-ating over a ``Biglist`` object, there can be up to (by default) 4
+              files-worth of data in memory at any time. See the method ``iter_files``.
 
-                - When ``append``ing or ``extend``ing at high speed, there can be up to
-                  (by default) 4 times ``batch_size`` data elements in memory at any time.
-                  See ``_flush`` and ``Dumper``.
+            - When ``append``-ing or ``extend``-ing to a ``Biglist`` object at high speed,
+              there can be up to (by default) 4 times ``batch_size`` data elements in memory at any time.
+              See ``_flush`` and ``Dumper``.
 
             Another consideration is access pattern of elements in the ``Biglist``. If
             there are many "jumping around" with random element access, large data files
             will lead to very wasteful file loading, because to read any element,
-            its hosting file must be read into memory. (HOWEVER, if your use pattern is
-            heavy on random access, you SHOULD NOT use ``Biglist``.)
+            its hosting file must be read into memory. (After all, if the application is
+            heavy on random access, then ``Biglist`` is **not** the right tool.)
 
-            If the Biglist is consumed by end-to-end iteration, then ``batch_size`` is not
-            expected to be a sensitive setting, as long as it is in a reasonable range.
+            The performance of iteration is not expected to be highly sensitive to the value
+            of ``batch_size``, as long as it is in a reasonable range.
 
-            Rule of thumb: it is recommended to keep the persisted files between 32-128MB
+            A rule of thumb: it is recommended to keep the persisted files between 32-128MB
             in size. (Note: no benchmark was performed to back this recommendation.)
 
         keep_files
-            if not specified, the default behavior this the following:
+            If not specified, the default behavior is the following:
 
-            If ``path`` is ``None``, then this is ``False``---the temporary directory
-            will be deleted when this `Biglist` object goes away.
+                If ``path`` is ``None``, then this is ``False``---the temporary directory
+                will be deleted when this ``Biglist`` object goes away.
 
-            If ``path`` is not ``None``, i.e. user has deliberately specified a location,
-            then this is ``True``---files saved by this ``Biglist`` object will stay.
+                If ``path`` is not ``None``, i.e. user has deliberately specified a location,
+                then this is ``True``---files saved by this ``Biglist`` object will stay.
 
-            User can pass in ``True`` or ``False`` to override the default behavior.
+            User can pass in ``True`` or ``False`` explicitly to override the default behavior.
 
         storage_format
             this should be a key in ``cls.registered_storage_formats``.
             If not specified, ``cls.DEFAULT_STORAGE_FORMAT`` is used.
 
-        kwargs
+        **kwargs
             additional arguments are passed on to ``__init__``.
 
         Returns
         -------
         Biglist
             A new ``Biglist`` object.
+
+        Notes
+        -----
+        A ``Biglist`` object construction is in either of the two modes
+        below:
+
+        a) create a new ``Biglist`` to store new data.
+
+        b) create a ``Biglist`` object pointing to storage of
+           existing data, which was created by a previous call to ``new``.
+
+        In case (a), one has called ``Biglist.new``. In case (b), one has called
+        ``Biglist(..)`` (i.e. ``__init__``).
+
+        Some settings are applicable only in mode (a), b/c in
+        mode (b) they can't be changed and, if needed, should only
+        use the value already set in mode (a).
+        Such settings can be parameters to ``new``
+        but should not be parameters to ``__init__``.
+        Examples include ``storage_format`` and ``batch_size``.
+        These settings typically should be taken care of in ``new``,
+        before and/or after the object has been created by a call to ``__init__``
+        within ``new``.
+
+        ``__init__`` should be defined in such a way that it works for
+        both a barebone object that is created in this ``new``, as well as a
+        fleshed out object that already has data in persistence.
+
+        Some settings may be applicable to an existing ``Biglist`` object, e.g.,
+        they control styles of display and not intrinsic attributes persisted along
+        with the ``Biglist``.,
+        Such settings should be parameters to ``__init__`` but not to ``new``.
+        If provided in a call to ``new``, these parameters will be passed on to ``__init__``.
+
+        Subclass authors should keep these considerations in mind.
         """
 
         if not path:
@@ -369,6 +402,7 @@ class Biglist(BiglistBase[T]):
         return obj
 
     def __init__(self, *args, **kwargs):
+        """Please see doc of the base class."""
         super().__init__(*args, **kwargs)
         self._data_files: Optional[list] = None
         self._data_files_cumlength_ = []
@@ -392,32 +426,36 @@ class Biglist(BiglistBase[T]):
 
     @property
     def storage_format(self) -> str:
+        """The value of ``storage_format`` used in ``new``, either user-specified or the default value."""
         return self.info["storage_format"].replace("_", "-")
 
     @property
     def storage_version(self) -> int:
+        """The internal format used in persistence. This is a read-only attribute for information only."""
         return self.info.get("storage_version", 0)
 
     def append(self, x: T) -> None:
         """
-        Append a single element to the in-memory buffer.
-        Once the buffer size reaches ``self.batch_size``, the buffer's content
-        will be written to a file, and the buffer will re-start empty.
+        Append a single element to the ``Biglist``.
 
-        In other words, whenever ``self._append_buffer`` is non-empty,
-        its content is not written to disk yet.
+        In implementation, this appends to an in-memory buffer.
+        Once the buffer size reaches ``self.batch_size``, the buffer's content
+        will be persisted as a new data file, and the buffer will re-start empty.
+        In other words, whenever the buffer is non-empty,
+        its content is not yet persisted.
         However, at any time, the content of this buffer is included in
-        ``self.__len__`` and in element accesses, including iterations.
+        ``self.__len__`` as well as in element accesses by ``__getitem__`` and ``__iter__``.
         """
         self._append_buffer.append(x)
         if len(self._append_buffer) >= self.batch_size:
             self._flush()
 
     def extend(self, x: Iterable[T]) -> None:
+        """This simply calls ``append`` repeatedly."""
         for v in x:
             self.append(v)
 
-    def _flush(self, *, wait: bool = False):
+    def _flush(self, *, wait: bool = False) -> None:
         """
         Persist the content of the in-memory buffer to a file,
         reset the buffer, and update relevant book-keeping variables.
@@ -467,22 +505,21 @@ class Biglist(BiglistBase[T]):
                 n = int(n)
             (self.path / "_n_datafiles_.txt").write_text(str(n + 1), overwrite=True)
 
-    def flush(self):
+    def flush(self) -> None:
         """
         While ``_flush`` is called automatically whenever the "append buffer"
-        is full, this method is not called automatically, because this method
-        is expected to be called only when the user is done adding elements
-        to the list, yet the code has no way to know the user is "done".
-        When the user is done adding elements, the "append buffer" could be
-        only partially filled, hence ``_flush`` is not called, and the content
-        of the buffer is not persisted to disk.
+        is full, ``flush`` is not called automatically.
+        When the user is done adding elements to the biglist, the "append buffer" could be
+        partially filled, hence not yet persisted.
+        This is when the *user* should call ``flush`` to force dumping the content of the buffer.
+        (If user forgot to call ``flush`` and ``self.keep_files`` is ``True``,
+        it is auto called when this object goes away. However, user should call ``flush`` for the explicity.)
 
-        This is when the *user* should call this method.
-        (If user does not call, it is auto called when this object is going
-        out of scope, if ``self.keep_files`` is ``True``.)
-
-        In summary, call this method once the user is done with adding elements
-        to the list *in this session*, meaning in this run of the program.
+        After a call to ``flush``, there's no problem to add more elements again by
+        ``append`` or ``extend``. Data files created by ``flush`` with less than
+        ``batch_size`` elements will stay as is among larger files.
+        This is a legitimate case in parallel or distributed writing, or writing in
+        multiple sessions.
         """
         self._flush(wait=True)
 
@@ -553,12 +590,12 @@ class Biglist(BiglistBase[T]):
         return self._data_files, self._data_files_cumlength_  # type: ignore
 
     @property
-    def datafiles(self):
+    def datafiles(self) -> List[str]:
         df, _ = self._get_data_files()
         return [str(self._get_data_file(df, i)) for i in range(len(df))]
 
     @property
-    def datafiles_info(self):
+    def datafiles_info(self) -> List[Tuple[str, int, int]]:
         files = self.datafiles
         counts = (v[1] for v in self._data_files)
         cumcounts = self._data_files_cumlength_
@@ -568,17 +605,17 @@ class Biglist(BiglistBase[T]):
         # `datafiles` is the return of `_get_datafiles`.
         return self._data_dir / datafiles[idx][0]
 
-    def file_reader(self, file):
+    def file_reader(self, file: Union[Upath, int]) -> BiglistFileReader:
         if isinstance(file, int):
             datafiles, _ = self._get_data_files()
             file = self._get_data_file(datafiles, file)
         return BiglistFileReader(file, self.load_data_file)
 
-    def iter_files(self):
+    def iter_files(self) -> Iterator[BiglistFileReader]:
         self.flush()
         return super().iter_files()
 
-    def view(self):
+    def view(self) -> ListView:
         self.flush()
         return super().view()
 
@@ -592,21 +629,21 @@ class Biglist(BiglistBase[T]):
         """
         One worker, such as a "coordinator", calls this method once.
         After that, one or more workers independently call ``multiplex_iter``
-        to iterate over the Biglist. ``multiplex_iter`` takes the task-ID returned by
-        this method. The content of the Biglist is
-        split between the workers because each data item will be obtained
+        to iterate over the ``Biglist``. ``multiplex_iter`` takes the task-ID returned by
+        this method. The content of the ``Biglist`` is
+        split between the workers in that each data element will be obtained
         by exactly one worker.
 
-        During this iteration, the Biglist object should stay unchanged---no
+        During this iteration, the ``Biglist`` object should stay unchanged---no
         calls to ``append`` and ``extend``.
 
         Difference between ``concurrent_iter`` and ``multiplex_iter``: the former
         distributes files to workers, whereas the latter distributes individual
         data elements to workers.
 
-        Use case of multiplexer: each data element represents considerable amounts
+        The intended use case of multiplexer: each data element represents considerable amounts
         of work--it is a "hyper-parameter" or the like; ``multiplex_iter`` facilitates
-        splitting the work represented by different values of the "hyper-parameter"
+        splitting the work represented by different values of this "hyper-parameter"
         between multiple workers.
         """
         assert not self._append_buffer
@@ -626,7 +663,10 @@ class Biglist(BiglistBase[T]):
         Parameters
         ----------
         task_id
-            Returned by ``new_multiplexer``.
+            The string returned by ``new_multiplexer``.
+        worker_id
+            A string representing a particular worker. If missing,
+            a default is constructed based on thread name and process name of the worker.
         """
         if not worker_id:
             worker_id = "{} {}".format(
@@ -660,27 +700,41 @@ class Biglist(BiglistBase[T]):
             yield self[n]
 
     def multiplex_stat(self, task_id: str) -> dict:
+        """
+        Return status info of an ongoing "multiplex iter".
+        """
         return self._multiplex_info_file(task_id).read_json()
 
     def multiplex_done(self, task_id: str) -> bool:
+        """Return whether the "multiplex iter" identified by ``task_id`` is finished."""
         ss = self.multiplex_stat(task_id)
         return ss["next"] == ss["total"]
 
 
 class BiglistFileReader(FileReader):
-    def __init__(self, path, loader):
+    def __init__(self, path: PathType, loader: Callable[[Upath], Any]):
+        """
+        Parameters
+        ----------
+        path
+            Path of a Parquet file.
+        loader
+            Usually this is ``Biglist.load_data_file``.
+            If you customize this, please see the doc of ``FileReader.__init__``.
+        """
         self._data: list = None
         super().__init__(path, loader)
 
-    def load(self):
+    def load(self) -> None:
         if self._data is None:
             self._data = self.loader(self.path)
 
-    def data(self):
+    def data(self) -> list:
+        """Return the data loaded from the file."""
         self.load()
         return self._data
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.data())
 
     def __getitem__(self, idx: int):

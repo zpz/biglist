@@ -29,7 +29,7 @@ as well as "chaining up" a series of biglists. These utilities work not only for
 but also for any ``Sequence``.
 """
 # flake8: noqa
-__version__ = "0.7.1b3"
+__version__ = "0.7.1b4"
 
 from ._base import FileReader, ListView, ChainedList
 from ._biglist import Biglist, BiglistFileReader

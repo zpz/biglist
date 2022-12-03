@@ -166,9 +166,9 @@ class Biglist(BiglistBase[T]):
         serializer: Type[ByteSerializer],
         overwrite: bool = False,
     ):
-        '''
+        """
         Register a new serializer to handle data file dumping and loading.
-        
+
         This class has a few serializers registered out of the box.
         They should be adequate for most applications.
 
@@ -176,7 +176,7 @@ class Biglist(BiglistBase[T]):
         ----------
         name
             Name of the format to be associated with the new serializer.
-            
+
             After registering the new serializer with name "xyz", one can use
             ``storage_format='xyz'`` in calls to ``new``.
             When reading the object back from persistence.
@@ -185,10 +185,10 @@ class Biglist(BiglistBase[T]):
 
         serializer
             A subclass of ``ByteSerializer``.
-        
+
         overwrite
             Whether to overwrite an existent registrant by the same name.
-        '''
+        """
         good = string.ascii_letters + string.digits + "-_"
         assert all(n in good for n in name)
         if name.replace("_", "-") in cls.registered_storage_formats:
@@ -207,15 +207,15 @@ class Biglist(BiglistBase[T]):
         unless the ``Biglist`` is being used on-the-fly temporarily.
         One useful pattern is to ``append`` output of ``custom_instance.to_dict()``,
         and use ``custom_class.from_dict(...)`` upon reading to transform
-        the persisted ``dict`` back to the custom type. 
-        
+        the persisted ``dict`` back to the custom type.
+
         If a subclass wants to perform such ``to_dict``/``from_dict``
         transformations for the user, it can customize ``dump_data_file``
         and ``load_data_file``.
 
         See Also
         --------
-        load_data_file        
+        load_data_file
         """
         serializer = cls.registered_storage_formats[
             path.suffix.lstrip(".").replace("_", "-")
@@ -227,7 +227,7 @@ class Biglist(BiglistBase[T]):
         """Load the data file given by ``path``.
 
         This function is used as the argument ``loader`` to ``BiglistFileReader.__init__``.
-        
+
         See Also
         --------
         dump_data_file
@@ -318,7 +318,7 @@ class Biglist(BiglistBase[T]):
             this should be a key in ``cls.registered_storage_formats``.
             If not specified, ``cls.DEFAULT_STORAGE_FORMAT`` is used.
 
-        kwargs
+        **kwargs
             additional arguments are passed on to ``__init__``.
 
         Returns
@@ -358,7 +358,7 @@ class Biglist(BiglistBase[T]):
         with the ``Biglist``.,
         Such settings should be parameters to ``__init__`` but not to ``new``.
         If provided in a call to ``new``, these parameters will be passed on to ``__init__``.
-        
+
         Subclass authors should keep these considerations in mind.
         """
 
@@ -402,7 +402,7 @@ class Biglist(BiglistBase[T]):
         return obj
 
     def __init__(self, *args, **kwargs):
-        '''Please see doc of the base class.'''
+        """Please see doc of the base class."""
         super().__init__(*args, **kwargs)
         self._data_files: Optional[list] = None
         self._data_files_cumlength_ = []
@@ -426,18 +426,18 @@ class Biglist(BiglistBase[T]):
 
     @property
     def storage_format(self) -> str:
-        '''The value of ``storage_format`` used in ``new``, either user-specified or the default value.'''
+        """The value of ``storage_format`` used in ``new``, either user-specified or the default value."""
         return self.info["storage_format"].replace("_", "-")
 
     @property
     def storage_version(self) -> int:
-        '''The internal format used in persistence. This is a read-only attribute for information only.'''
+        """The internal format used in persistence. This is a read-only attribute for information only."""
         return self.info.get("storage_version", 0)
 
     def append(self, x: T) -> None:
         """
         Append a single element to the ``Biglist``.
-        
+
         In implementation, this appends to an in-memory buffer.
         Once the buffer size reaches ``self.batch_size``, the buffer's content
         will be persisted as a new data file, and the buffer will re-start empty.
@@ -451,7 +451,7 @@ class Biglist(BiglistBase[T]):
             self._flush()
 
     def extend(self, x: Iterable[T]) -> None:
-        '''This simply calls ``append`` repeatedly.'''
+        """This simply calls ``append`` repeatedly."""
         for v in x:
             self.append(v)
 
@@ -730,7 +730,7 @@ class BiglistFileReader(FileReader):
             self._data = self.loader(self.path)
 
     def data(self) -> list:
-        '''Return the data loaded from the file.'''
+        """Return the data loaded from the file."""
         self.load()
         return self._data
 

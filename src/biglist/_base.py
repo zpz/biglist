@@ -88,7 +88,7 @@ class FileReader(collections.abc.Sequence):
         raise NotImplementedError
 
     def __len__(self) -> int:
-        '''Number of data elements in the file.'''
+        """Number of data elements in the file."""
         raise NotImplementedError
 
     def __bool__(self) -> bool:
@@ -126,12 +126,12 @@ class ListView(Sequence[T]):
 
     @property
     def raw(self) -> Sequence[T]:
-        '''The underlying data ``Sequence``.'''
+        """The underlying data ``Sequence``."""
         return self._list
 
     @property
     def range(self) -> Union[range, Sequence[int]]:
-        '''The current "window" represented by a ``range`` or a ``list`` of indices.'''
+        """The current "window" represented by a ``range`` or a ``list`` of indices."""
         return self._range
 
     def __repr__(self):
@@ -141,7 +141,7 @@ class ListView(Sequence[T]):
         return self.__repr__()
 
     def __len__(self) -> int:
-        '''Number of elements in the current window.'''
+        """Number of elements in the current window."""
         if self._range is None:
             return len(self._list)
         return len(self._range)
@@ -178,7 +178,7 @@ class ListView(Sequence[T]):
         return self.__class__(self._list, [self._range[i] for i in idx])
 
     def __iter__(self):
-        '''Iterate over the elements in the current window.'''
+        """Iterate over the elements in the current window."""
         if self._range is None:
             yield from self._list
         else:
@@ -188,12 +188,12 @@ class ListView(Sequence[T]):
                 yield self._list[i]
 
     def collect(self) -> List[T]:
-        '''
+        """
         Return a ``list`` containing the elements in the current window.
         This is equivalent to using the object to initialize a ``list``.
 
         Warning: don't do this on "big" data!
-        '''
+        """
         return list(self)
 
 
@@ -422,24 +422,24 @@ class BiglistBase(Sequence[T], ABC):
         return len(self) > 0
 
     def _get_data_files(self) -> tuple:
-        '''
+        """
         Returns
         -------
         tuple
             First element is "data_files"; second element is "data_files_cumlength".
             Subclass may choose to cache these results in instance attributes.
-        '''
+        """
         raise NotImplementedError
 
     def _get_data_file(self, datafiles, idx):
-        '''
+        """
         Parameters
         ----------
         datafiles
             The first element returned by ``_get_data_files``.
         idx
             Index of the data file in the list of data files.
-        '''
+        """
         raise NotImplementedError
 
     def __len__(self) -> int:

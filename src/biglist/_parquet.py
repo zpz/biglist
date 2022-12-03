@@ -47,14 +47,14 @@ class ParquetBiglist(BiglistBase):
 
     @classmethod
     def get_gcsfs(cls, *, good_for_seconds=600) -> GcsFileSystem:
-        '''
+        """
         Obtain a ``GcsFileSystem`` object with credentials given so that
         the GCP default process of inferring credentials (which involves
         env vars and file reading etc) will not be triggered.
-        
+
         This is provided under the (un-verified) assumption that the
         default credential inference process is a high overhead.
-        '''
+        """
         # Import here b/c user may not be on GCP
         from datetime import datetime
         import google.auth
@@ -104,7 +104,7 @@ class ParquetBiglist(BiglistBase):
         The data files remain "external" to the ``ParquetBiglist`` object;
         the "data" persisted and managed by the ``ParquetBiglist`` object
         are the meta info about the Parquet data files.
-        
+
         If the number of data files is small, it's feasible to create a temporary
         object of this class (by leaving ``path`` at the default value``None``)
         "on-the-fly" for one-time use.
@@ -113,7 +113,7 @@ class ParquetBiglist(BiglistBase):
         ----------
         data_path
             Parquet file(s) or folder(s) containing Parquet files.
-            
+
             If this is a single path, then it's either a Parquet file or a directory.
             If this is a list, each element is either a Parquet file or a directory;
             there can be a mix of files and directories.
@@ -124,7 +124,7 @@ class ParquetBiglist(BiglistBase):
             their order is fixed as far as this ``ParquetBiglist`` is concerned.
             The data sequence represented by this ``ParquetBiglist`` follows this
             order of the files. The order is determined as follows:
-            
+
                 The order of the entries in ``data_path`` is preserved; if any entry is a
                 directory, the files therein (recursively) are sorted by the string
                 value of each file's full path.
@@ -150,7 +150,7 @@ class ParquetBiglist(BiglistBase):
 
             User can pass in ``True`` or ``False`` explicitly to override the default behavior.
 
-        kwargs
+        **kwargs
             additional arguments are passed on to ``__init__``.
         """
         if (
@@ -232,7 +232,7 @@ class ParquetBiglist(BiglistBase):
         return obj
 
     def __init__(self, *args, **kwargs):
-        '''Please see doc of the base class.'''
+        """Please see doc of the base class."""
         super().__init__(*args, **kwargs)
         self.keep_files = True
 
@@ -297,13 +297,13 @@ class ParquetFileReader(FileReader):
 
     @property
     def scalar_as_py(self) -> bool:
-        '''
+        """
         ``scalar_as_py`` controls whether the values returned by ``__getitem__``
         (or indirectly by ``__iter__``) are converted from a ``pyarrow.Scalar`` type
         such as ``pyarrow.lib.StringScalar`` to a Python builtin type such as ``str``.
-        
+
         This property can be toggled anytime to take effect until it is toggled again.
-        '''
+        """
         if self._scalar_as_py is None:
             self._scalar_as_py = True
         return self._scalar_as_py
@@ -334,13 +334,13 @@ class ParquetFileReader(FileReader):
 
     @property
     def file(self) -> ParquetFile:
-        '''Return a ``pyarrow.parquet.ParquetFile`` object.
-        
+        """Return a ``pyarrow.parquet.ParquetFile`` object.
+
         Upon initiation of a ``ParquetFileReader`` object,
         the file is not read at all. When this property is requested,
         the file is accessed to construct a ``ParquetFile`` object,
         but this only reads *meta* info; it does not read the *data*.
-        '''
+        """
         if self._file is None:
             self._file = self.loader(self.path)
         return self._file
@@ -370,7 +370,7 @@ class ParquetFileReader(FileReader):
         return self.metadata.schema.names
 
     def data(self) -> ParquetBatchData:
-        '''Return the entire data in the file.'''
+        """Return the entire data in the file."""
         self.load()
         return self._data
 
@@ -526,11 +526,11 @@ class ParquetFileReader(FileReader):
         return obj
 
     def column(self, idx_or_name: Union[int, str]) -> pyarrow.ChunkedArray:
-        '''Select a single column.
-        
+        """Select a single column.
+
         Note: while ``columns`` returns a new ``ParquetFileReader``,
         ``column`` returns a ``pyarrow.ChunkedArray``.
-        '''
+        """
         z = self._columns.get(idx_or_name)
         if z is not None:
             return z
@@ -552,7 +552,7 @@ class ParquetBatchData(collections.abc.Sequence):
     """
     ``ParquetBatchData`` wraps a ``pyarrow.Table`` or ``pyarrow.RecordBatch``.
     The data is already in memory; this class does not involve file reading.
-    
+
     ``ParquetFileReader.data`` and ``ParquetFileReader.iter_batches`` both
     return or yield ``ParquetBatchData``.
     In addition, the method ``columns`` of this class returns a new object
@@ -584,7 +584,7 @@ class ParquetBatchData(collections.abc.Sequence):
         return self.__repr__()
 
     def data(self) -> Union[pyarrow.Table, pyarrow.RecordBatch]:
-        '''Return the underlying ``pyarrow`` data.'''
+        """Return the underlying ``pyarrow`` data."""
         return self._data
 
     def __len__(self) -> int:
@@ -644,7 +644,7 @@ class ParquetBatchData(collections.abc.Sequence):
                     yield dict(zip(names, row))
 
     def view(self) -> ListView:
-        '''Return a ``ListView`` to gain slicing capabilities.'''
+        """Return a ``ListView`` to gain slicing capabilities."""
         return ListView(self)
 
     def columns(self, cols: Sequence[str]) -> ParquetBatchData:
@@ -657,7 +657,7 @@ class ParquetBatchData(collections.abc.Sequence):
         narrow down the selection of columns.
         (Note this returns a new ``ParquetBatchData``,
         hence one can call ``columns`` again on the returned object.)
-        
+
         This method "slices" the data by columns, in contrast to other
         data access methods that select rows.
 

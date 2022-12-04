@@ -133,7 +133,7 @@ class Dumper:
         This is for such a special need:
 
             Suppose 2 files are in the dump queue, hence not saved on disk yet,
-            however, they're already in the file-list of the ``Biglist``'s meta info.
+            however, they're already in the file-list of the ``Biglist``s meta info.
             Now if we access one element by index, and the code determines based on
             meta info that the element is in one of the files in-queue here.
             Then we can't load the file from disk (as it is not persisted yet);
@@ -284,10 +284,10 @@ class Biglist(BiglistBase[T]):
 
             - It should not be so large that it is "unwieldy", e.g. approaching 1GB.
 
-            - When ``__iter__``-ating over a ``Biglist`` object, there can be up to (by default) 4
+            - When ``__iter__``\\ating over a ``Biglist`` object, there can be up to (by default) 4
               files-worth of data in memory at any time. See the method ``iter_files``.
 
-            - When ``append``-ing or ``extend``-ing to a ``Biglist`` object at high speed,
+            - When ``append``\\ing or ``extend``\\ing to a ``Biglist`` object at high speed,
               there can be up to (by default) 4 times ``batch_size`` data elements in memory at any time.
               See ``_flush`` and ``Dumper``.
 

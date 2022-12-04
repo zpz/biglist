@@ -1,6 +1,6 @@
 """
 The package ``biglist`` provides persisted, out-of-memory Python data structures
-that implement the ``Sequence`` and ``Iterable`` interfaces with the capabilities of
+that implement the `Sequence`_ and `Iterable`_ interfaces with the capabilities of
 concurrent and distributed reading and writing.
 The main use case is processing large amounts of data that can not fit in memory.
 
@@ -26,10 +26,10 @@ Thanks to the package ``upathlib``, the user API is agnostic to the location of 
 
 Additional utilities provide mechanisms for "slicing and dicing" a biglist,
 as well as "chaining up" a series of biglists. These utilities work not only for biglist,
-but also for any ``Sequence``.
+but also for any `Sequence`_.
 """
 # flake8: noqa
-__version__ = "0.7.1b4"
+__version__ = "0.7.1"
 
 from ._base import FileReader, ListView, ChainedList
 from ._biglist import Biglist, BiglistFileReader

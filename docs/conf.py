@@ -8,7 +8,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'biglist'
-copyright = '2022, Zepu Zhang'
+copyright = '2020-, Zepu Zhang'
 author = 'Zepu Zhang'
 
 # -- General configuration ---------------------------------------------------

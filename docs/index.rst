@@ -5,8 +5,9 @@
 
 .. :tocdepth: 3
 
+.. |Sequence| replace:: ``Sequence``
 .. _Sequence: https://docs.python.org/3/library/collections.abc.html#collections.abc.Sequence
-
+.. |Iterable| replace:: ``Iterable``
 .. _Iterable: https://docs.python.org/3/library/collections.abc.html#collections.abc.Iterable
 
 
@@ -114,7 +115,7 @@ Reading a ``Biglist``
 Random element access
 ---------------------
 
-``Biglist`` implements the `Sequence`_ interface, hence we can access any element like we do a list::
+``Biglist`` implements the |Sequence|_ interface, hence we can access any element like we do a list::
 
    >>> mylist[18]
    18
@@ -139,7 +140,7 @@ Note that slicing the view does not return a list of values.
 Instead, it returns another ``ListView`` object, which, naturally, can be used the same way,
 including slicing further.
 
-A ``ListView`` object is a `Sequence`_, hence we can gather all of its elements in a list::
+A ``ListView`` object is a |Sequence|_, hence we can gather all of its elements in a list::
 
    >>> list(v[100:104])
    [100, 101, 102, 103]
@@ -283,7 +284,7 @@ Next, create a worker function to run in another process::
    ...         total += sum(batch)
    ...     return total
 
-Each ``batch`` above is a ``FileReader`` object, which implements the `Sequence`_ and `Iterable`_ APIs.
+Each ``batch`` above is a ``FileReader`` object, which implements the |Sequence|_ and |Iterable|_ APIs.
 
 Back in the main process::
 
@@ -388,8 +389,8 @@ Back in the main process,
    ...     t.join()
 
 
-Writing to a ``Biglist`` in multiple processes or machines
-==========================================================
+Writing to a ``Biglist`` in multiple workers
+============================================
 
 The flip side of distributed reading is distributed writing, and that is covered as well.
 If we have a biglist on the local disk, we can append to it from multiple processes or threads.
@@ -599,7 +600,7 @@ which yields ``ParquetFileReader`` objects.
    >>> f0.path
    LocalUpath('/tmp/a/b/c/e/ford.parquet')
 
-First of all, a ``FileReader`` object is a `Sequence`_, providing row-based view into the data::
+First of all, a ``FileReader`` object is a |Sequence|_, providing row-based view into the data::
 
    >>> len(f0)
    61
@@ -662,7 +663,7 @@ We can get info about the row-groups, or even retrieve a row-group as the unit o
 (We have specified ``row_group_size=10`` in the call to ``write_parquet_file`` for demonstration.
 In practice, a row-group tends to be much larger.)
 
-A ``ParquetBatchData`` object is again a `Sequence`_.
+A ``ParquetBatchData`` object is again a |Sequence|_.
 All our row access tools are available::
 
    >>> rg.num_rows
@@ -897,7 +898,7 @@ as demonstrated above, are ready for use::
 Other utilities
 ===============
 
-``ChainedList`` takes a series of ``Sequences`` and returns a combined `Sequence`_ without data copy.
+``ChainedList`` takes a series of |Sequence|_\s and returns a combined |Sequence|_ without data copy.
 For example,
 
 ::
@@ -917,7 +918,7 @@ For example,
    >>> car_data[0]
    {'make': 'ford', 'year': 1960, 'sales': 78}
 
-``ListView`` takes any `Sequence`_ and provides ``__getitem__`` that accepts
+``ListView`` takes any |Sequence|_ and provides ``__getitem__`` that accepts
 a single index, or a slice, or a list of indices. A single-index access will return
 the requested element; the other two scenarios return a new ``ListView`` via a zero-copy operation.
 To get all the elements out of a ``ListView``, either iterate it or call its method ``collect``.
@@ -933,9 +934,9 @@ by the one-liner
    def view(self):
       return ListView(self)
 
-because this ``self`` is a `Sequence`_.
+because this ``self`` is a |Sequence|_.
 
-We should emphasize that ``ChainedList`` and ``ListView`` work with any `Sequence`_,
+We should emphasize that ``ChainedList`` and ``ListView`` work with any |Sequence|_,
 hence they are useful independent of the other ``biglist`` classes.
 
 

@@ -53,7 +53,7 @@ class FileReader(collections.abc.Sequence):
 
     Once data have been loaded, this class provides various ways to navigate
     the data. At a minimum, a subclass must implement the
-    ``Sequence`` API, mainly random access and iteration.
+    |Sequence|_ API, mainly random access and iteration.
 
     With loaded data and associated facilities, this object may no longer
     be pickle-able, depending on the specifics of the subclass.
@@ -126,7 +126,7 @@ class ListView(Sequence[T]):
 
     @property
     def raw(self) -> Sequence[T]:
-        """The underlying data ``Sequence``."""
+        """The underlying data |Sequence|_."""
         return self._list
 
     @property
@@ -199,14 +199,14 @@ class ListView(Sequence[T]):
 
 class ChainedList(Sequence):
     """
-    This class tracks a series of ``Sequence`` to provide
+    This class tracks a series of |Sequence|_ to provide
     random element access and iteration on the series as a whole.
     A call to the method ``view`` further returns an ``ListView`` that
     supports slicing.
 
     This class operates with zero-copy.
 
-    Note that ``ListView`` and ``ChainedList`` are ``Sequence``, hence could be
+    Note that ``ListView`` and ``ChainedList`` are |Sequence|_, hence could be
     members of the series.
     """
 
@@ -264,9 +264,9 @@ class ChainedList(Sequence):
     @property
     def raw(self) -> List[Sequence]:
         """
-        Return the underlying list of ``Sequence``'s.
+        Return the underlying list of |Sequence|_\s.
 
-        A member ``Sequence`` could be a ``ListView```. The current method
+        A member sequence could be a ``ListView```. The current method
         does not follow a ``ListView`` to its "raw" component, b/c
         that could represent a different set of elements than the ``ListView``
         object.

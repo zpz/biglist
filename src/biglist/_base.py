@@ -264,7 +264,7 @@ class ChainedList(Sequence):
     @property
     def raw(self) -> List[Sequence]:
         """
-        Return the underlying list of |Sequence|_\s.
+        Return the underlying list of |Sequence|_\\s.
 
         A member sequence could be a ``ListView```. The current method
         does not follow a ``ListView`` to its "raw" component, b/c

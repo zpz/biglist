@@ -548,7 +548,7 @@ class ParquetFileReader(FileReader):
         return z
 
 
-class ParquetBatchData(collections.abc.Sequence):
+class ParquetBatchData(Sequence):
     """
     ``ParquetBatchData`` wraps a ``pyarrow.Table`` or ``pyarrow.RecordBatch``.
     The data is already in memory; this class does not involve file reading.

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import collections.abc
 import itertools
 import logging
 import os
+from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Union, Sequence, Iterator, List, Iterable, Any, Callable, Tuple
+from typing import Union, Any, Callable
 
 import pyarrow
 from pyarrow.parquet import ParquetFile, FileMetaData
@@ -256,11 +256,11 @@ class ParquetBiglist(BiglistBase):
         return ParquetFileReader(file, self.load_data_file)
 
     @property
-    def datafiles(self) -> List[str]:
+    def datafiles(self) -> list[str]:
         return [f["path"] for f in self.info["datafiles"]]
 
     @property
-    def datafiles_info(self) -> List[Tuple[str, int, int]]:
+    def datafiles_info(self) -> list[tuple[str, int, int]]:
         files = self.info["datafiles"]
         cumlen = self.info["datafiles_cumlength"]
         return [
@@ -284,7 +284,7 @@ class ParquetFileReader(FileReader):
 
         self._row_groups_num_rows = None
         self._row_groups_num_rows_cumsum = None
-        self._row_groups: List[ParquetBatchData] = None
+        self._row_groups: list[ParquetBatchData] = None
 
         self._column_names = None
         self._columns = {}
@@ -364,7 +364,7 @@ class ParquetFileReader(FileReader):
         return self.metadata.num_columns
 
     @property
-    def column_names(self) -> List[str]:
+    def column_names(self) -> list[str]:
         if self._column_names:
             return self._column_names
         return self.metadata.schema.names

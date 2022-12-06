@@ -10,15 +10,10 @@ import string
 import time
 import threading
 import weakref
+from collections.abc import Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor, Future
 from datetime import datetime
 from typing import (
-    Iterable,
-    Iterator,
-    Dict,
-    List,
-    Tuple,
-    Type,
     Callable,
     Optional,
     Union,
@@ -88,7 +83,7 @@ class Dumper:
         self._executor: executor = executor
         self._n_threads = n_threads
         self._sem: threading.Semaphore = None  # type: ignore
-        self._task_file_data: Dict[Future, tuple] = {}
+        self._task_file_data: dict[Future, tuple] = {}
 
     def _callback(self, t):
         self._sem.release()
@@ -163,7 +158,7 @@ class Biglist(BiglistBase[T]):
     def register_storage_format(
         cls,
         name: str,
-        serializer: Type[ByteSerializer],
+        serializer: type[ByteSerializer],
         overwrite: bool = False,
     ):
         """
@@ -223,7 +218,7 @@ class Biglist(BiglistBase[T]):
         path.write_bytes(serializer.serialize(data))
 
     @classmethod
-    def load_data_file(cls, path: Upath) -> List[T]:
+    def load_data_file(cls, path: Upath) -> list[T]:
         """Load the data file given by ``path``.
 
         This function is used as the argument ``loader`` to ``BiglistFileReader.__init__``.
@@ -590,12 +585,12 @@ class Biglist(BiglistBase[T]):
         return self._data_files, self._data_files_cumlength_  # type: ignore
 
     @property
-    def datafiles(self) -> List[str]:
+    def datafiles(self) -> list[str]:
         df, _ = self._get_data_files()
         return [str(self._get_data_file(df, i)) for i in range(len(df))]
 
     @property
-    def datafiles_info(self) -> List[Tuple[str, int, int]]:
+    def datafiles_info(self) -> list[tuple[str, int, int]]:
         files = self.datafiles
         counts = (v[1] for v in self._data_files)
         cumcounts = self._data_files_cumlength_

@@ -1,7 +1,5 @@
 from __future__ import annotations
-
 import bisect
-import collections.abc
 import itertools
 import logging
 import os
@@ -9,18 +7,15 @@ import queue
 import tempfile
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime
 from typing import (
     Any,
     Callable,
-    Iterator,
     Union,
-    Sequence,
-    List,
     Optional,
-    Tuple,
     TypeVar,
 )
 
@@ -33,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 T = TypeVar("T")
+SequenceType = type[Sequence]
 
 
 class FileLoaderMode:
@@ -40,7 +36,7 @@ class FileLoaderMode:
     RAND = 1
 
 
-class FileReader(collections.abc.Sequence):
+class FileReader(Sequence[T]):
     """
     A ``FileReader`` is a "lazy" loader of a data file.
     It keeps track of the path of a data file along with a loader function,
@@ -99,7 +95,7 @@ class FileReader(collections.abc.Sequence):
         return ListView(self)
 
 
-class ListView(Sequence[T]):
+class ListView(SequenceType):
     """
     This class wraps a sequence and enables access by slice or index array,
     in addition to single-index access.
@@ -111,7 +107,7 @@ class ListView(Sequence[T]):
     are retrieved from the underlying sequence.
     """
 
-    def __init__(self, list_: Sequence[T], range_: Union[range, Sequence[int]] = None):
+    def __init__(self, list_: SequenceType, range_: Union[range, Sequence[int]] = None):
         """
         This provides a "window" into the sequence ``list_``,
         which may be another ``ListView`` (which *is* a sequence, hence
@@ -125,7 +121,7 @@ class ListView(Sequence[T]):
         self._range = range_
 
     @property
-    def raw(self) -> Sequence[T]:
+    def raw(self) -> SequenceType:
         """The underlying data |Sequence|_."""
         return self._list
 
@@ -187,7 +183,7 @@ class ListView(Sequence[T]):
             for i in self._range:
                 yield self._list[i]
 
-    def collect(self) -> List[T]:
+    def collect(self) -> list:
         """
         Return a ``list`` containing the elements in the current window.
         This is equivalent to using the object to initialize a ``list``.
@@ -212,8 +208,8 @@ class ChainedList(Sequence):
 
     def __init__(self, *lists: Sequence):
         self._lists = lists
-        self._lists_len: List[int] = None
-        self._lists_len_cumsum: List[int] = None
+        self._lists_len: list[int] = None
+        self._lists_len_cumsum: list[int] = None
         self._len: int = None
 
         # Records info about the last call to `__getitem__`
@@ -262,7 +258,7 @@ class ChainedList(Sequence):
         return ListView(self)
 
     @property
-    def raw(self) -> List[Sequence]:
+    def raw(self) -> list[Sequence]:
         """
         Return the underlying list of |Sequence|_\\s.
 
@@ -370,11 +366,11 @@ class BiglistBase(Sequence[T], ABC):
 
         self._read_buffer: Optional[Sequence[T]] = None
         self._read_buffer_file_idx = None
-        self._read_buffer_item_range: Optional[Tuple[int, int]] = None
+        self._read_buffer_item_range: Optional[tuple[int, int]] = None
         # `self._read_buffer` contains the content of the file
         # indicated by `self._read_buffer_file_idx`.
 
-        self._append_buffer: List = []
+        self._append_buffer: list = []
         self._file_dumper = None
         # These are for writing, but are needed in some code for reading.
         # In a read-only subclass, they remain these default values and
@@ -675,7 +671,7 @@ class BiglistBase(Sequence[T], ABC):
     def file_views(self):
         return self.file_readers()
 
-    def file_readers(self) -> List[FileReader]:
+    def file_readers(self) -> list[FileReader]:
         """
         Return a list of all the data files wrapped in ``FileReader`` objects,
         which are light weight, have not loaded data yet, and are friendly
@@ -716,14 +712,14 @@ class BiglistBase(Sequence[T], ABC):
         return len(self._get_data_files()[0])
 
     @property
-    def datafiles(self) -> List[str]:
+    def datafiles(self) -> list[str]:
         """
         Return the list of data file paths.
         """
         raise NotImplementedError
 
     @property
-    def datafiles_info(self) -> List[Tuple[str, int, int]]:
+    def datafiles_info(self) -> list[tuple[str, int, int]]:
         """
         Return a list of tuples for the data files.
         Each tuple, representing one data file, consists of

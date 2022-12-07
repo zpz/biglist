@@ -49,6 +49,7 @@ test = [
     "pylint",
     "pytest",
     "pytest-asyncio",
+    "pytest-xdist",
 ]
 
 

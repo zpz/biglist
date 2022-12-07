@@ -943,66 +943,42 @@ hence they are useful independent of the other ``biglist`` classes.
 API reference
 =============
 
-``BiglistBase``
----------------
 
-.. autoclass:: biglist._base.BiglistBase
+.. autodata:: biglist._base.Element
 
 
-``FileReader``
---------------
+.. autodata:: biglist._base.SequenceType
 
-.. autoclass:: biglist.FileReader
-
-
-``ListView``
-------------
 
 .. autoclass:: biglist.ListView
 
 
-``Biglist``
------------
+.. autoclass:: biglist.ChainedList
+
+
+.. autoclass:: biglist.FileReader
+
+
+.. autoclass:: biglist._base.BiglistBase
+
 
 .. autoclass:: biglist.Biglist
 
 
-``BiglistFileReader``
----------------------
-
 .. autoclass:: biglist.BiglistFileReader
 
-
-``ParquetBiglist``
-------------------
 
 .. autoclass:: biglist.ParquetBiglist
 
 
-``ParquetFileReader``
----------------------
-
 .. autoclass:: biglist.ParquetFileReader
 
-
-``ParquetBatchData``
---------------------
 
 .. autoclass:: biglist.ParquetBatchData
 
 
-``ChainedList``
----------------
-
-.. autoclass:: biglist.ChainedList
-
-``read_parquet_file``
----------------------
-
 .. autofunction:: biglist.read_parquet_file
 
-``write_parquet_file``
-----------------------
 
 .. autofunction:: biglist.write_parquet_file
 

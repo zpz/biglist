@@ -1,9 +1,14 @@
+from __future__ import annotations
+
 import bisect
-from typing import Sequence, Tuple
+from collections.abc import Sequence
+from typing import Optional
 
 
 def locate_idx_in_chunked_seq(
-    idx: int, len_cumsum: Sequence[int], last_chunk: Tuple[int, int, int] = None
+    idx: int,
+    len_cumsum: Sequence[int],
+    last_chunk: Optional[tuple[int, int, int]] = None,
 ):
     """
     Suppose a sequence is composed of a number of member sequences.

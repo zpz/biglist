@@ -1,12 +1,12 @@
 from __future__ import annotations
-
-import collections.abc
+from datetime import datetime
 import itertools
 import logging
 import os
+from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Union, Sequence, Iterator, List, Iterable, Any, Callable, Tuple
+from typing import Union, Any, Callable, Optional
 
 import pyarrow
 from pyarrow.parquet import ParquetFile, FileMetaData
@@ -56,7 +56,6 @@ class ParquetBiglist(BiglistBase):
         default credential inference process is a high overhead.
         """
         # Import here b/c user may not be on GCP
-        from datetime import datetime
         import google.auth
 
         cred = getattr(cls, "_GCP_CREDENTIALS", None)
@@ -91,11 +90,11 @@ class ParquetBiglist(BiglistBase):
     def new(
         cls,
         data_path: Union[PathType, Sequence[PathType]],
-        path: PathType = None,
+        path: Optional[PathType] = None,
         *,
         suffix: str = ".parquet",
-        keep_files: bool = None,
-        thread_pool_executor: ThreadPoolExecutor = None,
+        keep_files: Optional[bool] = None,
+        thread_pool_executor: Optional[ThreadPoolExecutor] = None,
         **kwargs,
     ) -> ParquetBiglist:
         """
@@ -153,11 +152,7 @@ class ParquetBiglist(BiglistBase):
         **kwargs
             additional arguments are passed on to ``__init__``.
         """
-        if (
-            isinstance(data_path, str)
-            or isinstance(data_path, Path)
-            or isinstance(data_path, Upath)
-        ):
+        if isinstance(data_path, (str, Path, Upath)):
             #  TODO: in py 3.10, we will be able to do `isinstance(data_path, PathType)`
             data_path = [cls.resolve_path(data_path)]
         else:
@@ -256,11 +251,11 @@ class ParquetBiglist(BiglistBase):
         return ParquetFileReader(file, self.load_data_file)
 
     @property
-    def datafiles(self) -> List[str]:
+    def datafiles(self) -> list[str]:
         return [f["path"] for f in self.info["datafiles"]]
 
     @property
-    def datafiles_info(self) -> List[Tuple[str, int, int]]:
+    def datafiles_info(self) -> list[tuple[str, int, int]]:
         files = self.info["datafiles"]
         cumlen = self.info["datafiles_cumlength"]
         return [
@@ -279,12 +274,12 @@ class ParquetFileReader(FileReader):
             Usually this is ``ParquetBiglist.load_data_file``.
             If you customize this, please see the doc of ``FileReader.__init__``.
         """
-        self._file: ParquetFile = None
-        self._data: ParquetBatchData = None
+        self._file: Optional[ParquetFile] = None
+        self._data: Optional[ParquetBatchData] = None
 
         self._row_groups_num_rows = None
         self._row_groups_num_rows_cumsum = None
-        self._row_groups: List[ParquetBatchData] = None
+        self._row_groups: Optional[list[ParquetBatchData]] = None
 
         self._column_names = None
         self._columns = {}
@@ -364,7 +359,7 @@ class ParquetFileReader(FileReader):
         return self.metadata.num_columns
 
     @property
-    def column_names(self) -> List[str]:
+    def column_names(self) -> list[str]:
         if self._column_names:
             return self._column_names
         return self.metadata.schema.names
@@ -548,7 +543,7 @@ class ParquetFileReader(FileReader):
         return z
 
 
-class ParquetBatchData(collections.abc.Sequence):
+class ParquetBatchData(Sequence):
     """
     ``ParquetBatchData`` wraps a ``pyarrow.Table`` or ``pyarrow.RecordBatch``.
     The data is already in memory; this class does not involve file reading.
@@ -714,7 +709,7 @@ def write_parquet_file(
         pyarrow.Table, Sequence[Union[pyarrow.Array, pyarrow.ChunkedArray, Iterable]]
     ],
     *,
-    names: Sequence[str] = None,
+    names: Optional[Sequence[str]] = None,
     **kwargs,
 ) -> None:
     """

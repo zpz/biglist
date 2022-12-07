@@ -301,11 +301,10 @@ class Biglist(BiglistBase[Element]):
         keep_files
             If not specified, the default behavior is the following:
 
-                If ``path`` is ``None``, then this is ``False``---the temporary directory
-                will be deleted when this ``Biglist`` object goes away.
-
-                If ``path`` is not ``None``, i.e. user has deliberately specified a location,
-                then this is ``True``---files saved by this ``Biglist`` object will stay.
+            - If ``path`` is ``None``, then this is ``False``---the temporary directory
+              will be deleted when this ``Biglist`` object goes away.
+            - If ``path`` is not ``None``, i.e. user has deliberately specified a location,
+              then this is ``True``---files saved by this ``Biglist`` object will stay.
 
             User can pass in ``True`` or ``False`` explicitly to override the default behavior.
 

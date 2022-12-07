@@ -653,7 +653,9 @@ class Biglist(BiglistBase[Element]):
         )
         return task_id
 
-    def multiplex_iter(self, task_id: str, worker_id: Optional[str] = None) -> Iterator[Element]:
+    def multiplex_iter(
+        self, task_id: str, worker_id: Optional[str] = None
+    ) -> Iterator[Element]:
         """
         Parameters
         ----------

@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 Element = TypeVar("Element")
-SequenceType = TypeVar('SequenceType', bound=Sequence)
+SequenceType = TypeVar("SequenceType", bound=Sequence)
 
 
 # Can not use ``Sequence[T]`` as base class. See
@@ -127,7 +127,9 @@ class ListView(Generic[SequenceType]):
             ...
     """
 
-    def __init__(self, list_: SequenceType, range_: Union[None, range, Sequence[int]] = None):
+    def __init__(
+        self, list_: SequenceType, range_: Union[None, range, Sequence[int]] = None
+    ):
         """
         This provides a "window" into the sequence ``list_``,
         which may be another ``ListView`` (which *is* a sequence, hence

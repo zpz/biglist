@@ -33,7 +33,7 @@ from upathlib.serializer import (
     ZOrjsonSerializer,
     ZstdOrjsonSerializer,
 )
-from ._base import BiglistBase, FileReader, Upath, PathType, T, ListView
+from ._base import BiglistBase, FileReader, Upath, PathType, Element, ListView
 
 
 logger = logging.getLogger(__name__)
@@ -82,7 +82,7 @@ class Dumper:
     def __init__(self, executor: ThreadPoolExecutor, n_threads: int):
         self._executor: executor = executor
         self._n_threads = n_threads
-        self._sem: threading.Semaphore = None  # type: ignore
+        self._sem: Optional[threading.Semaphore] = None  # type: ignore
         self._task_file_data: dict[Future, tuple] = {}
 
     def _callback(self, t):
@@ -149,7 +149,7 @@ class Dumper:
         concurrent.futures.wait(list(self._task_file_data.keys()))
 
 
-class Biglist(BiglistBase[T]):
+class Biglist(BiglistBase[Element]):
     registered_storage_formats = {}
 
     DEFAULT_STORAGE_FORMAT = "pickle-zstd"
@@ -160,7 +160,7 @@ class Biglist(BiglistBase[T]):
         name: str,
         serializer: type[ByteSerializer],
         overwrite: bool = False,
-    ):
+    ) -> None:
         """
         Register a new serializer to handle data file dumping and loading.
 
@@ -193,7 +193,7 @@ class Biglist(BiglistBase[T]):
         cls.registered_storage_formats[name] = serializer
 
     @classmethod
-    def dump_data_file(cls, path: Upath, data: list):
+    def dump_data_file(cls, path: Upath, data: list[Element]) -> None:
         """
         This method persists a batch of data elements, always a list,
         to disk or cloud storage.
@@ -218,7 +218,7 @@ class Biglist(BiglistBase[T]):
         path.write_bytes(serializer.serialize(data))
 
     @classmethod
-    def load_data_file(cls, path: Upath) -> list[T]:
+    def load_data_file(cls, path: Upath) -> list[Element]:
         """Load the data file given by ``path``.
 
         This function is used as the argument ``loader`` to ``BiglistFileReader.__init__``.
@@ -236,11 +236,11 @@ class Biglist(BiglistBase[T]):
     @classmethod
     def new(
         cls,
-        path: PathType = None,
+        path: Optional[PathType] = None,
         *,
-        batch_size: int = None,
-        keep_files: bool = None,
-        storage_format: str = None,
+        batch_size: Optional[int] = None,
+        keep_files: Optional[bool] = None,
+        storage_format: Optional[str] = None,
         **kwargs,
     ) -> Biglist:
         """
@@ -367,7 +367,7 @@ class Biglist(BiglistBase[T]):
                 keep_files = True
         if path.is_dir():
             raise Exception(f'directory "{path}" already exists')
-        elif path.is_file():
+        if path.is_file():
             raise FileExistsError(path)
 
         obj = cls(path, require_exists=False, **kwargs)  # type: ignore
@@ -429,7 +429,7 @@ class Biglist(BiglistBase[T]):
         """The internal format used in persistence. This is a read-only attribute for information only."""
         return self.info.get("storage_version", 0)
 
-    def append(self, x: T) -> None:
+    def append(self, x: Element) -> None:
         """
         Append a single element to the ``Biglist``.
 
@@ -445,7 +445,7 @@ class Biglist(BiglistBase[T]):
         if len(self._append_buffer) >= self.batch_size:
             self._flush()
 
-    def extend(self, x: Iterable[T]) -> None:
+    def extend(self, x: Iterable[Element]) -> None:
         """This simply calls ``append`` repeatedly."""
         for v in x:
             self.append(v)
@@ -600,17 +600,17 @@ class Biglist(BiglistBase[T]):
         # `datafiles` is the return of `_get_datafiles`.
         return self._data_dir / datafiles[idx][0]
 
-    def file_reader(self, file: Union[Upath, int]) -> BiglistFileReader:
+    def file_reader(self, file: Union[Upath, int]) -> BiglistFileReader[Element]:
         if isinstance(file, int):
             datafiles, _ = self._get_data_files()
             file = self._get_data_file(datafiles, file)
         return BiglistFileReader(file, self.load_data_file)
 
-    def iter_files(self) -> Iterator[BiglistFileReader]:
+    def iter_files(self) -> Iterator[BiglistFileReader[Element]]:
         self.flush()
         return super().iter_files()
 
-    def view(self) -> ListView:
+    def view(self) -> ListView[Biglist[Element]]:
         self.flush()
         return super().view()
 
@@ -653,7 +653,7 @@ class Biglist(BiglistBase[T]):
         )
         return task_id
 
-    def multiplex_iter(self, task_id: str, worker_id: str = None) -> Iterator[T]:
+    def multiplex_iter(self, task_id: str, worker_id: Optional[str] = None) -> Iterator[Element]:
         """
         Parameters
         ----------
@@ -706,7 +706,7 @@ class Biglist(BiglistBase[T]):
         return ss["next"] == ss["total"]
 
 
-class BiglistFileReader(FileReader):
+class BiglistFileReader(FileReader[Element]):
     def __init__(self, path: PathType, loader: Callable[[Upath], Any]):
         """
         Parameters
@@ -717,14 +717,14 @@ class BiglistFileReader(FileReader):
             Usually this is ``Biglist.load_data_file``.
             If you customize this, please see the doc of ``FileReader.__init__``.
         """
-        self._data: list = None
+        self._data: Optional[list] = None
         super().__init__(path, loader)
 
     def load(self) -> None:
         if self._data is None:
             self._data = self.loader(self.path)
 
-    def data(self) -> list:
+    def data(self) -> list[Element]:
         """Return the data loaded from the file."""
         self.load()
         return self._data
@@ -732,10 +732,10 @@ class BiglistFileReader(FileReader):
     def __len__(self) -> int:
         return len(self.data())
 
-    def __getitem__(self, idx: int):
+    def __getitem__(self, idx: int) -> Element:
         return self.data()[idx]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Element]:
         return iter(self.data())
 
 

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from biglist import ListView, Biglist, ChainedList
 
 
@@ -52,7 +53,7 @@ def test_BigListView():
 
 def test_ListView2():
     x = list(range(20))
-    z = ListView(x, [2, 3, 5, 6, 13])
+    z: ListView[list[int]] = ListView(x, [2, 3, 5, 6, 13])
     print(z)
     assert z[3] == 6
     assert list(z[1:4]) == [3, 5, 6]
@@ -62,7 +63,7 @@ def test_chainedlist():
     mylist1 = list(range(0, 8))
     mylist2 = list(range(8, 18))
     mylist3 = list(range(18, 32))
-    mylist = ChainedList(mylist1, mylist2, mylist3)
+    mylist: ChainedList[list[int]] = ChainedList(mylist1, mylist2, mylist3)
     data = list(range(32))
     
     assert list(mylist) == data

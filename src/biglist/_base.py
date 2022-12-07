@@ -17,6 +17,7 @@ from typing import (
     Union,
     Optional,
     TypeVar,
+    Generic,
 )
 
 from deprecation import deprecated
@@ -27,16 +28,15 @@ from ._util import locate_idx_in_chunked_seq
 logger = logging.getLogger(__name__)
 
 
-T = TypeVar("T")
-SequenceType = type[Sequence]
+Element = TypeVar("Element")
+SequenceType = TypeVar('SequenceType', bound=Sequence)
 
 
-class FileLoaderMode:
-    ITER = 0
-    RAND = 1
+# Can not use ``Sequence[T]`` as base class. See
+# https://github.com/python/mypy/issues/5264
 
 
-class FileReader(Sequence[T]):
+class FileReader(Sequence, Generic[Element], ABC):
     """
     A ``FileReader`` is a "lazy" loader of a data file.
     It keeps track of the path of a data file along with a loader function,
@@ -53,6 +53,12 @@ class FileReader(Sequence[T]):
 
     With loaded data and associated facilities, this object may no longer
     be pickle-able, depending on the specifics of the subclass.
+
+    This class is generic with a parameter indicating the type of the data elements.
+    For example you can write::
+
+        def func(file_reader: FileReader[int]):
+            ...
     """
 
     def __init__(self, path: PathType, loader: Callable[[Upath], Any]):
@@ -90,12 +96,20 @@ class FileReader(Sequence[T]):
     def __bool__(self) -> bool:
         return self.__len__() > 0
 
-    def view(self) -> ListView:
+    @abstractmethod
+    def __getitem__(self, idx: int) -> Element:
+        raise NotImplementedError
+
+    @abstractmethod
+    def __iter__(self) -> Iterator[Element]:
+        raise NotImplementedError
+
+    def view(self) -> ListView[FileReader[Element]]:
         """Return a ``ListView`` object to facilitate slicing this biglist."""
         return ListView(self)
 
 
-class ListView(SequenceType):
+class ListView(Generic[SequenceType]):
     """
     This class wraps a sequence and enables access by slice or index array,
     in addition to single-index access.
@@ -105,9 +119,15 @@ class ListView(SequenceType):
     the underlying sequence. This object may be sliced again in a repeated "zoom in" fashion.
     Only when a single-element access or an iteration is performed, the relevant elements
     are retrieved from the underlying sequence.
+
+    This class is generic with a parameter indicating the type of the underlying sequence.
+    For example, you can write::
+
+        def func(x: ListView[Biglist[int]]):
+            ...
     """
 
-    def __init__(self, list_: SequenceType, range_: Union[range, Sequence[int]] = None):
+    def __init__(self, list_: SequenceType, range_: Union[None, range, Sequence[int]] = None):
         """
         This provides a "window" into the sequence ``list_``,
         which may be another ``ListView`` (which *is* a sequence, hence
@@ -193,7 +213,7 @@ class ListView(SequenceType):
         return list(self)
 
 
-class ChainedList(Sequence):
+class ChainedList(Generic[SequenceType]):
     """
     This class tracks a series of |Sequence|_ to provide
     random element access and iteration on the series as a whole.
@@ -204,13 +224,21 @@ class ChainedList(Sequence):
 
     Note that ``ListView`` and ``ChainedList`` are |Sequence|_, hence could be
     members of the series.
+
+    This class is generic with a parameter indicating the type of the member sequences.
+    For example,
+
+    ::
+
+        def func(x: ChainedList[Union[list[int], Biglist[int]]]):
+            ...
     """
 
-    def __init__(self, *lists: Sequence):
+    def __init__(self, *lists: SequenceType):
         self._lists = lists
-        self._lists_len: list[int] = None
-        self._lists_len_cumsum: list[int] = None
-        self._len: int = None
+        self._lists_len: Optional[list[int]] = None
+        self._lists_len_cumsum: Optional[list[int]] = None
+        self._len: Optional[int] = None
 
         # Records info about the last call to `__getitem__`
         # to hopefully speed up the next call, under the assumption
@@ -253,12 +281,12 @@ class ChainedList(Sequence):
         for v in self._lists:
             yield from v
 
-    def view(self) -> ListView:
+    def view(self) -> ListView[ChainedList[SequenceType]]:
         # The returned object supports slicing.
         return ListView(self)
 
     @property
-    def raw(self) -> list[Sequence]:
+    def raw(self) -> tuple[SequenceType, ...]:
         """
         Return the underlying list of |Sequence|_\\s.
 
@@ -270,11 +298,15 @@ class ChainedList(Sequence):
         return self._lists
 
 
-class BiglistBase(Sequence[T], ABC):
+class BiglistBase(Sequence, ABC, Generic[Element]):
     """
     This base class contains code mainly concerning *reading* only.
     The subclass ``Biglist`` adds functionalities for writing.
     Other subclasses, such as ``ParquetBiglist``, may be read-only.
+
+    This class is generic with a parameter indicating the type of the data elements,
+    but this is useful only for the subclass ``Biglist``.
+    For the subclass ``ParquetBiglist``, this parameter is essentially ``Any``.
     """
 
     @staticmethod
@@ -336,7 +368,7 @@ class BiglistBase(Sequence[T], ABC):
         self,
         path: PathType,
         *,
-        thread_pool_executor: ThreadPoolExecutor = None,
+        thread_pool_executor: Optional[ThreadPoolExecutor] = None,
         require_exists: bool = True,
     ):
         """
@@ -364,7 +396,7 @@ class BiglistBase(Sequence[T], ABC):
         """
         self.path = self.resolve_path(path)
 
-        self._read_buffer: Optional[Sequence[T]] = None
+        self._read_buffer: Optional[Sequence[Element]] = None
         self._read_buffer_file_idx = None
         self._read_buffer_item_range: Optional[tuple[int, int]] = None
         # `self._read_buffer` contains the content of the file
@@ -382,11 +414,11 @@ class BiglistBase(Sequence[T], ABC):
             # Instantiate a Biglist object pointing to
             # existing data.
             self.info = self._info_file.read_json()
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             if require_exists:
                 raise RuntimeError(
                     f"Cat not find {self.__class__.__name__} at path '{self.path}'"
-                )
+                ) from e
             self.info = {}
 
         self._n_read_threads = 3
@@ -452,7 +484,7 @@ class BiglistBase(Sequence[T], ABC):
             return data_files_cumlength[-1] + len(self._append_buffer)
         return len(self._append_buffer)
 
-    def __getitem__(self, idx: int) -> T:
+    def __getitem__(self, idx: int) -> Element:
         """
         Element access by single index; negative index works as expected.
 
@@ -529,7 +561,7 @@ class BiglistBase(Sequence[T], ABC):
         self._read_buffer = data
         return data[idx - n]
 
-    def __iter__(self) -> Iterator[T]:
+    def __iter__(self) -> Iterator[Element]:
         """
         Iterate over all the elements.
         """
@@ -539,7 +571,7 @@ class BiglistBase(Sequence[T], ABC):
         if self._append_buffer:
             yield from self._append_buffer
 
-    def iter_files(self) -> Iterator[FileReader]:
+    def iter_files(self) -> Iterator[FileReader[Element]]:
         """
         Yield one data file at a time, in contrast to ``__iter__``,
         which yields one element at a time.
@@ -609,7 +641,7 @@ class BiglistBase(Sequence[T], ABC):
         )
         return task_id
 
-    def concurrent_iter_files(self, task_id: str) -> Iterator[FileReader]:
+    def concurrent_iter_files(self, task_id: str) -> Iterator[FileReader[Element]]:
         """
         Parameters
         ----------
@@ -653,7 +685,7 @@ class BiglistBase(Sequence[T], ABC):
     def file_view(self, file):
         return self.file_reader(file)
 
-    def file_reader(self, file: Union[Upath, int]) -> FileReader:
+    def file_reader(self, file: Union[Upath, int]) -> FileReader[Element]:
         """
         Parameters
         ----------
@@ -671,7 +703,7 @@ class BiglistBase(Sequence[T], ABC):
     def file_views(self):
         return self.file_readers()
 
-    def file_readers(self) -> list[FileReader]:
+    def file_readers(self) -> list[FileReader[Element]]:
         """
         Return a list of all the data files wrapped in ``FileReader`` objects,
         which are light weight, have not loaded data yet, and are friendly
@@ -686,7 +718,7 @@ class BiglistBase(Sequence[T], ABC):
             for i in range(len(datafiles))
         ]
 
-    def view(self) -> ListView[T]:
+    def view(self) -> ListView[BiglistBase[Element]]:
         """
         By convention, a "slicing" method should return an object of the same class
         as the original object. This is not possible for ``BiglistBase`` (or its subclasses),

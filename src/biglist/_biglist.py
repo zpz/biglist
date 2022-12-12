@@ -405,7 +405,7 @@ class Biglist(BiglistBase[Element]):
         _biglist_objs.add(self)
 
     def __del__(self) -> None:
-        if getattr(self, 'keep_files'):
+        if getattr(self, "keep_files"):
             if self.keep_files:
                 self.flush()
             else:

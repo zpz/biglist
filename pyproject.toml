@@ -41,14 +41,7 @@ parquet = [
     "pyarrow >= 10.0.0",
 ]
 test = [
-    "bandit",
     "boltons",
-    "coverage[toml]",
-    "flake8",
-    "mypy",
-    "pylint",
-    "pytest",
-    "pytest-asyncio",
 ]
 
 
@@ -62,6 +55,10 @@ asyncio_mode = "auto"
 fail_under = 80
 show_missing = true
 skip_empty = true
+
+
+[tool.flake8]
+ignore = ["E203", "E231", "E501", "W503"]
 
 
 [tool.pylint.messages_control]

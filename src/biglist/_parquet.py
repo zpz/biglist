@@ -687,9 +687,7 @@ class ParquetBatchData(Sequence):
         z.scalar_as_py = self.scalar_as_py
         return z
 
-    def column(
-        self, idx_or_name: int | str
-    ) -> pyarrow.Array | pyarrow.ChunkedArray:
+    def column(self, idx_or_name: int | str) -> pyarrow.Array | pyarrow.ChunkedArray:
         """
         Select a single column specified by name or index.
 

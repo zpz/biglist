@@ -6,7 +6,7 @@ import os
 from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Union, Any, Callable, Optional
+from typing import Any, Callable, Optional
 
 import pyarrow
 from pyarrow.parquet import ParquetFile, FileMetaData
@@ -89,7 +89,7 @@ class ParquetBiglist(BiglistBase):
     @classmethod
     def new(
         cls,
-        data_path: Union[PathType, Sequence[PathType]],
+        data_path: PathType | Sequence[PathType],
         path: Optional[PathType] = None,
         *,
         suffix: str = ".parquet",
@@ -244,7 +244,7 @@ class ParquetBiglist(BiglistBase):
     def _get_data_file(self, datafiles, idx):
         return self.resolve_path(datafiles[idx]["path"])
 
-    def file_reader(self, file: Union[Upath, int]) -> ParquetFileReader:
+    def file_reader(self, file: Upath | int) -> ParquetFileReader:
         if isinstance(file, int):
             datafiles, _ = self._get_data_files()
             file = self._get_data_file(datafiles, file)
@@ -520,7 +520,7 @@ class ParquetFileReader(FileReader):
         obj._column_names = cols
         return obj
 
-    def column(self, idx_or_name: Union[int, str]) -> pyarrow.ChunkedArray:
+    def column(self, idx_or_name: int | str) -> pyarrow.ChunkedArray:
         """Select a single column.
 
         Note: while ``columns`` returns a new ``ParquetFileReader``,
@@ -558,7 +558,7 @@ class ParquetBatchData(Sequence):
 
     def __init__(
         self,
-        data: Union[pyarrow.Table, pyarrow.RecordBatch],
+        data: pyarrow.Table | pyarrow.RecordBatch,
     ):
         # `self.scalar_as_py` may be toggled anytime
         # and have its effect right away.
@@ -578,7 +578,7 @@ class ParquetBatchData(Sequence):
     def __str__(self):
         return self.__repr__()
 
-    def data(self) -> Union[pyarrow.Table, pyarrow.RecordBatch]:
+    def data(self) -> pyarrow.Table | pyarrow.RecordBatch:
         """Return the underlying ``pyarrow`` data."""
         return self._data
 
@@ -688,8 +688,8 @@ class ParquetBatchData(Sequence):
         return z
 
     def column(
-        self, idx_or_name: Union[int, str]
-    ) -> Union[pyarrow.Array, pyarrow.ChunkedArray]:
+        self, idx_or_name: int | str
+    ) -> pyarrow.Array | pyarrow.ChunkedArray:
         """
         Select a single column specified by name or index.
 
@@ -705,9 +705,7 @@ def read_parquet_file(path: PathType, **kwargs) -> ParquetFileReader:
 
 def write_parquet_file(
     path: PathType,
-    data: Union[
-        pyarrow.Table, Sequence[Union[pyarrow.Array, pyarrow.ChunkedArray, Iterable]]
-    ],
+    data: pyarrow.Table | Sequence[pyarrow.Array | pyarrow.ChunkedArray | Iterable],
     *,
     names: Optional[Sequence[str]] = None,
     **kwargs,

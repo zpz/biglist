@@ -14,7 +14,6 @@ from datetime import datetime
 from typing import (
     Any,
     Callable,
-    Union,
     Optional,
     TypeVar,
     Generic,
@@ -128,7 +127,7 @@ class ListView(Generic[SequenceType]):
     """
 
     def __init__(
-        self, list_: SequenceType, range_: Union[None, range, Sequence[int]] = None
+        self, list_: SequenceType, range_: Optional[range | Sequence[int]] = None
     ):
         """
         This provides a "window" into the sequence ``list_``,
@@ -148,7 +147,7 @@ class ListView(Generic[SequenceType]):
         return self._list
 
     @property
-    def range(self) -> Union[range, Sequence[int]]:
+    def range(self) -> range | Sequence[int]:
         """The current "window" represented by a ``range`` or a ``list`` of indices."""
         return self._range
 
@@ -167,7 +166,7 @@ class ListView(Generic[SequenceType]):
     def __bool__(self) -> bool:
         return len(self) > 0
 
-    def __getitem__(self, idx: Union[int, slice, Sequence[int]]):
+    def __getitem__(self, idx: int | slice | Sequence[int]):
         """
         Element access by a single index, slice, or an index array.
         Negative index and standard slice syntax work as expected.
@@ -232,7 +231,7 @@ class ChainedList(Generic[SequenceType]):
 
     ::
 
-        def func(x: ChainedList[Union[list[int], Biglist[int]]]):
+        def func(x: ChainedList[list[int] | Biglist[int]]):
             ...
     """
 
@@ -687,7 +686,7 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
     def file_view(self, file):
         return self.file_reader(file)
 
-    def file_reader(self, file: Union[Upath, int]) -> FileReader[Element]:
+    def file_reader(self, file: Upath | int) -> FileReader[Element]:
         """
         Parameters
         ----------

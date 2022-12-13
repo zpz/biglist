@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import atexit
 import concurrent.futures
 import itertools
@@ -16,7 +15,6 @@ from datetime import datetime
 from typing import (
     Callable,
     Optional,
-    Union,
     Any,
 )
 from uuid import uuid4
@@ -600,7 +598,7 @@ class Biglist(BiglistBase[Element]):
         # `datafiles` is the return of `_get_datafiles`.
         return self._data_dir / datafiles[idx][0]
 
-    def file_reader(self, file: Union[Upath, int]) -> BiglistFileReader[Element]:
+    def file_reader(self, file: Upath | int) -> BiglistFileReader[Element]:
         if isinstance(file, int):
             datafiles, _ = self._get_data_files()
             file = self._get_data_file(datafiles, file)

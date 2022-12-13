@@ -56,6 +56,9 @@ fail_under = 80
 show_missing = true
 skip_empty = true
 
+[tool.coverage.run]
+data_file = "/tmp/.coverage"
+
 
 [tool.flake8]
 ignore = ["E203", "E231", "E501", "W503"]

@@ -399,7 +399,7 @@ class Biglist(BiglistBase[Element]):
         self._data_files: Optional[list] = None
         self._data_files_cumlength_ = []
         self.keep_files: bool = True
-        '''Indicates whether the persisted files should be kept or deleted when the object is garbage-collected.'''
+        """Indicates whether the persisted files should be kept or deleted when the object is garbage-collected."""
 
         _biglist_objs.add(self)
 

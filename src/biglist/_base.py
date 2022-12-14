@@ -74,9 +74,9 @@ class FileReader(Sequence, Generic[Element], ABC):
             with ``multiprocessing``, hence must be pickle-friendly.
         """
         self.path: Upath = BiglistBase.resolve_path(path)
-        '''Path of the file.'''
+        """Path of the file."""
         self.loader: Callable[[Upath], Any] = loader
-        '''A function that will be used to read the file.'''
+        """A function that will be used to read the file."""
 
     def __repr__(self):
         return f"{self.__class__.__name__}('{self.path}', {self.loader})"
@@ -398,7 +398,7 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
             User should usually leave this parameter at its default value.
         """
         self.path: Upath = self.resolve_path(path)
-        '''Root directory of the storage space for this object.'''
+        """Root directory of the storage space for this object."""
 
         self._read_buffer: Optional[Sequence[Element]] = None
         self._read_buffer_file_idx = None
@@ -415,7 +415,7 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
         self._thread_pool_ = thread_pool_executor
 
         self.info: dict
-        '''Various meta info.'''
+        """Various meta info."""
 
         try:
             # Instantiate a Biglist object pointing to

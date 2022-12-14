@@ -230,10 +230,10 @@ class ParquetBiglist(BiglistBase):
         """Please see doc of the base class."""
         super().__init__(*args, **kwargs)
         self.keep_files: bool = True
-        '''Indicates whether the meta info persisted by this object should be kept or deleted when this object is garbage-collected.
+        """Indicates whether the meta info persisted by this object should be kept or deleted when this object is garbage-collected.
         
         This does *not* affect the external Parquet data files.
-        '''
+        """
 
     def __del__(self) -> None:
         if not self.keep_files:
@@ -571,7 +571,7 @@ class ParquetBatchData(Sequence):
         # and have its effect right away.
         self._data = data
         self.scalar_as_py = True
-        '''Indicates whether scalar values should be converted to Python types from `pyarrow`_ types.'''
+        """Indicates whether scalar values should be converted to Python types from `pyarrow`_ types."""
         self.num_rows = data.num_rows
         self.num_columns = data.num_columns
         self.column_names = data.schema.names
@@ -706,12 +706,12 @@ class ParquetBatchData(Sequence):
 
 
 def read_parquet_file(path: PathType) -> ParquetFileReader:
-    '''
+    """
     Parameters
     ----------
     path
         Path of the file.
-    '''
+    """
     return ParquetFileReader(path, ParquetBiglist.load_data_file)
 
 

@@ -177,7 +177,7 @@ class Biglist(BiglistBase[Element]):
             deserializer can be found.
 
         serializer
-            A subclass of ``ByteSerializer``.
+            A subclass of `upathlib.serializer.ByteSerializer <https://github.com/zpz/upathlib/blob/main/src/upathlib/serializer.py>`_.
 
         overwrite
             Whether to overwrite an existent registrant by the same name.
@@ -197,14 +197,14 @@ class Biglist(BiglistBase[Element]):
         to disk or cloud storage.
 
         It is recommended to persist objects of Python built-in types only,
-        unless the ``Biglist`` is being used on-the-fly temporarily.
-        One useful pattern is to ``append`` output of ``custom_instance.to_dict()``,
+        unless the :class:`Biglist` is being used on-the-fly temporarily.
+        One useful pattern is to :meth:`append` output of ``custom_instance.to_dict()``,
         and use ``custom_class.from_dict(...)`` upon reading to transform
-        the persisted ``dict`` back to the custom type.
+        the persisted dict back to the custom type.
 
         If a subclass wants to perform such ``to_dict``/``from_dict``
-        transformations for the user, it can customize ``dump_data_file``
-        and ``load_data_file``.
+        transformations for the user, it can customize :meth:`dump_data_file`
+        and :meth:`load_data_file`.
 
         See Also
         --------
@@ -219,7 +219,7 @@ class Biglist(BiglistBase[Element]):
     def load_data_file(cls, path: Upath) -> list[Element]:
         """Load the data file given by ``path``.
 
-        This function is used as the argument ``loader`` to ``BiglistFileReader.__init__``.
+        This function is used as the argument ``loader`` to :meth:`BiglistFileReader.__init__`.
 
         See Also
         --------
@@ -245,13 +245,13 @@ class Biglist(BiglistBase[Element]):
         Parameters
         ----------
         path
-            A directory in which this ``Biglist`` will save data files
+            A directory in which this :class:`Biglist` will save data files
             as well as meta-info files. The directory must be non-existent.
             It is not necessary to pre-create the parent directory of this path.
 
             This path can be either on local disk or in a cloud storage.
 
-            If not specified, ``cls.get_temp_path``
+            If not specified, :meth:`biglist._base.BiglistBase..get_temp_path`
             will be called to determine a temporary path.
 
         batch_size
@@ -259,7 +259,7 @@ class Biglist(BiglistBase[Element]):
 
             There's no good default value for this parameter, although one is
             provided (currently the default is 10000),
-            because the code of ``new`` doesn't know
+            because the code of :meth:`new` doesn't know
             the typical size of the data elements. User is recommended to
             specify the value of this parameter.
 
@@ -277,18 +277,18 @@ class Biglist(BiglistBase[Element]):
 
             - It should not be so large that it is "unwieldy", e.g. approaching 1GB.
 
-            - When ``__iter__``\\ating over a ``Biglist`` object, there can be up to (by default) 4
-              files-worth of data in memory at any time. See the method ``iter_files``.
+            - When :meth:`~_base.BiglistBase.__iter__`\\ating over a :class:`Biglist` object, there can be up to (by default) 4
+              files-worth of data in memory at any time. See the method :meth:`iter_files`.
 
-            - When ``append``\\ing or ``extend``\\ing to a ``Biglist`` object at high speed,
+            - When :meth:`append`\\ing or :meth:`extend`\\ing to a :class:`Biglist` object at high speed,
               there can be up to (by default) 4 times ``batch_size`` data elements in memory at any time.
-              See ``_flush`` and ``Dumper``.
+              See :meth:`_flush` and :class:`Dumper`.
 
-            Another consideration is access pattern of elements in the ``Biglist``. If
+            Another consideration is access pattern of elements in the :class:`Biglist`. If
             there are many "jumping around" with random element access, large data files
             will lead to very wasteful file loading, because to read any element,
             its hosting file must be read into memory. (After all, if the application is
-            heavy on random access, then ``Biglist`` is **not** the right tool.)
+            heavy on random access, then :class:`Biglist` is **not** the right tool.)
 
             The performance of iteration is not expected to be highly sensitive to the value
             of ``batch_size``, as long as it is in a reasonable range.
@@ -300,9 +300,9 @@ class Biglist(BiglistBase[Element]):
             If not specified, the default behavior is the following:
 
             - If ``path`` is ``None``, then this is ``False``---the temporary directory
-              will be deleted when this ``Biglist`` object goes away.
+              will be deleted when this :class:`Biglist` object goes away.
             - If ``path`` is not ``None``, i.e. user has deliberately specified a location,
-              then this is ``True``---files saved by this ``Biglist`` object will stay.
+              then this is ``True``---files saved by this :class:`Biglist` object will stay.
 
             User can pass in ``True`` or ``False`` explicitly to override the default behavior.
 
@@ -311,45 +311,45 @@ class Biglist(BiglistBase[Element]):
             If not specified, ``cls.DEFAULT_STORAGE_FORMAT`` is used.
 
         **kwargs
-            additional arguments are passed on to ``__init__``.
+            additional arguments are passed on to :meth:`__init__`.
 
         Returns
         -------
         Biglist
-            A new ``Biglist`` object.
+            A new :class:`Biglist` object.
 
         Notes
         -----
-        A ``Biglist`` object construction is in either of the two modes
+        A :class:`Biglist` object construction is in either of the two modes
         below:
 
-        a) create a new ``Biglist`` to store new data.
+        a) create a new :class:`Biglist` to store new data.
 
-        b) create a ``Biglist`` object pointing to storage of
-           existing data, which was created by a previous call to ``new``.
+        b) create a :class:`Biglist` object pointing to storage of
+           existing data, which was created by a previous call to :meth:`new`.
 
-        In case (a), one has called ``Biglist.new``. In case (b), one has called
-        ``Biglist(..)`` (i.e. ``__init__``).
+        In case (a), one has called :meth:`Biglist.new`. In case (b), one has called
+        ``Biglist(..)`` (i.e. :meth:`__init__`).
 
         Some settings are applicable only in mode (a), b/c in
         mode (b) they can't be changed and, if needed, should only
         use the value already set in mode (a).
-        Such settings can be parameters to ``new``
-        but should not be parameters to ``__init__``.
+        Such settings can be parameters to :meth:`new`
+        but should not be parameters to :meth:`__init__`.
         Examples include ``storage_format`` and ``batch_size``.
-        These settings typically should be taken care of in ``new``,
-        before and/or after the object has been created by a call to ``__init__``
-        within ``new``.
+        These settings typically should be taken care of in :meth:`new`,
+        before and/or after the object has been created by a call to :meth:`__init__`
+        within :meth:`new`.
 
-        ``__init__`` should be defined in such a way that it works for
-        both a barebone object that is created in this ``new``, as well as a
+        :meth:`__init__` should be defined in such a way that it works for
+        both a barebone object that is created in this :meth:`new`, as well as a
         fleshed out object that already has data in persistence.
 
-        Some settings may be applicable to an existing ``Biglist`` object, e.g.,
+        Some settings may be applicable to an existing :class:`Biglist` object, e.g.,
         they control styles of display and not intrinsic attributes persisted along
-        with the ``Biglist``.,
-        Such settings should be parameters to ``__init__`` but not to ``new``.
-        If provided in a call to ``new``, these parameters will be passed on to ``__init__``.
+        with the :class:`Biglist`.
+        Such settings should be parameters to :meth:`__init__` but not to :meth:`new`.
+        If provided in a call to :meth:`new`, these parameters will be passed on to :meth:`__init__`.
 
         Subclass authors should keep these considerations in mind.
         """
@@ -398,7 +398,8 @@ class Biglist(BiglistBase[Element]):
         super().__init__(*args, **kwargs)
         self._data_files: Optional[list] = None
         self._data_files_cumlength_ = []
-        self.keep_files = True
+        self.keep_files: bool = True
+        """Indicates whether the persisted files should be kept or deleted when the object is garbage-collected."""
 
         _biglist_objs.add(self)
 
@@ -419,7 +420,7 @@ class Biglist(BiglistBase[Element]):
 
     @property
     def storage_format(self) -> str:
-        """The value of ``storage_format`` used in ``new``, either user-specified or the default value."""
+        """The value of ``storage_format`` used in :meth:`new`, either user-specified or the default value."""
         return self.info["storage_format"].replace("_", "-")
 
     @property
@@ -429,22 +430,22 @@ class Biglist(BiglistBase[Element]):
 
     def append(self, x: Element) -> None:
         """
-        Append a single element to the ``Biglist``.
+        Append a single element to the :class:`Biglist`.
 
         In implementation, this appends to an in-memory buffer.
-        Once the buffer size reaches ``self.batch_size``, the buffer's content
+        Once the buffer size reaches :data:`batch_size <self.batch_size>`, the buffer's content
         will be persisted as a new data file, and the buffer will re-start empty.
         In other words, whenever the buffer is non-empty,
         its content is not yet persisted.
         However, at any time, the content of this buffer is included in
-        ``self.__len__`` as well as in element accesses by ``__getitem__`` and ``__iter__``.
+        :meth:`~_base.BiglistBase.__len__` as well as in element accesses by :meth:`~_base.BiglistBase.__getitem__` and :meth:`__iter__`.
         """
         self._append_buffer.append(x)
         if len(self._append_buffer) >= self.batch_size:
             self._flush()
 
     def extend(self, x: Iterable[Element]) -> None:
-        """This simply calls ``append`` repeatedly."""
+        """This simply calls :meth:`append` repeatedly."""
         for v in x:
             self.append(v)
 
@@ -505,11 +506,11 @@ class Biglist(BiglistBase[Element]):
         When the user is done adding elements to the biglist, the "append buffer" could be
         partially filled, hence not yet persisted.
         This is when the *user* should call ``flush`` to force dumping the content of the buffer.
-        (If user forgot to call ``flush`` and ``self.keep_files`` is ``True``,
+        (If user forgot to call ``flush`` and :data:`keep_files` is ``True``,
         it is auto called when this object goes away. However, user should call ``flush`` for the explicity.)
 
         After a call to ``flush``, there's no problem to add more elements again by
-        ``append`` or ``extend``. Data files created by ``flush`` with less than
+        :meth:`append` or :meth:`extend`. Data files created by ``flush`` with less than
         ``batch_size`` elements will stay as is among larger files.
         This is a legitimate case in parallel or distributed writing, or writing in
         multiple sessions.
@@ -608,34 +609,40 @@ class Biglist(BiglistBase[Element]):
         self.flush()
         return super().iter_files()
 
+    def __iter__(self) -> Iterator[Element]:
+        yield from super().__iter__()
+
+        if self._append_buffer:
+            yield from self._append_buffer
+
     def view(self) -> ListView[Biglist[Element]]:
         self.flush()
         return super().view()
 
     def _multiplex_info_file(self, task_id: str) -> Upath:
         """
-        `task_id`: returned by `new_multiplexer`.
+        `task_id`: returned by :meth:`new_multiplexer`.
         """
         return self.path / ".multiplexer" / task_id / "info.json"
 
     def new_multiplexer(self) -> str:
         """
         One worker, such as a "coordinator", calls this method once.
-        After that, one or more workers independently call ``multiplex_iter``
-        to iterate over the ``Biglist``. ``multiplex_iter`` takes the task-ID returned by
-        this method. The content of the ``Biglist`` is
+        After that, one or more workers independently call :meth:`multiplex_iter`
+        to iterate over the :class:`Biglist`. :meth:`multiplex_iter` takes the task-ID returned by
+        this method. The content of the :class:`Biglist` is
         split between the workers in that each data element will be obtained
         by exactly one worker.
 
-        During this iteration, the ``Biglist`` object should stay unchanged---no
-        calls to ``append`` and ``extend``.
+        During this iteration, the :class:`Biglist` object should stay unchanged---no
+        calls to :meth:`append` and :meth:`extend`.
 
-        Difference between ``concurrent_iter`` and ``multiplex_iter``: the former
+        Difference between :meth:`~_base.BiglistBase.concurrent_iter_files` and :meth:`multiplex_iter`: the former
         distributes files to workers, whereas the latter distributes individual
         data elements to workers.
 
         The intended use case of multiplexer: each data element represents considerable amounts
-        of work--it is a "hyper-parameter" or the like; ``multiplex_iter`` facilitates
+        of work--it is a "hyper-parameter" or the like; :meth:`multiplex_iter` facilitates
         splitting the work represented by different values of this "hyper-parameter"
         between multiple workers.
         """
@@ -658,7 +665,7 @@ class Biglist(BiglistBase[Element]):
         Parameters
         ----------
         task_id
-            The string returned by ``new_multiplexer``.
+            The string returned by :meth:`new_multiplexer`.
         worker_id
             A string representing a particular worker. If missing,
             a default is constructed based on thread name and process name of the worker.
@@ -714,8 +721,8 @@ class BiglistFileReader(FileReader[Element]):
         path
             Path of a Parquet file.
         loader
-            Usually this is ``Biglist.load_data_file``.
-            If you customize this, please see the doc of ``FileReader.__init__``.
+            Usually this is :meth:`Biglist.load_data_file`.
+            If you customize this, please see the doc of :meth:`FileReader.__init__`.
         """
         self._data: Optional[list] = None
         super().__init__(path, loader)

@@ -74,7 +74,9 @@ class FileReader(Sequence, Generic[Element], ABC):
             with ``multiprocessing``, hence must be pickle-friendly.
         """
         self.path: Upath = BiglistBase.resolve_path(path)
-        self.loader = loader
+        '''Path of the file.'''
+        self.loader: Callable[[Upath], Any] = loader
+        '''A function that will be used to read the file.'''
 
     def __repr__(self):
         return f"{self.__class__.__name__}('{self.path}', {self.loader})"
@@ -104,7 +106,7 @@ class FileReader(Sequence, Generic[Element], ABC):
         raise NotImplementedError
 
     def view(self) -> ListView[FileReader[Element]]:
-        """Return a ``ListView`` object to facilitate slicing this biglist."""
+        """Return a :class:`ListView` object to facilitate slicing this biglist."""
         return ListView(self)
 
 
@@ -148,7 +150,7 @@ class ListView(Generic[SequenceType]):
 
     @property
     def range(self) -> range | Sequence[int]:
-        """The current "window" represented by a ``range`` or a ``list`` of indices."""
+        """The current "window" represented by a ``range`` or a list of indices."""
         return self._range
 
     def __repr__(self):
@@ -172,7 +174,7 @@ class ListView(Generic[SequenceType]):
         Negative index and standard slice syntax work as expected.
 
         Single-index access returns the requested data element.
-        Slice and index-array access return a new ``ListView`` object.
+        Slice and index-array access return a new :class:`ListView` object.
         """
         if isinstance(idx, int):
             # Return a single element.
@@ -206,8 +208,8 @@ class ListView(Generic[SequenceType]):
 
     def collect(self) -> list:
         """
-        Return a ``list`` containing the elements in the current window.
-        This is equivalent to using the object to initialize a ``list``.
+        Return a list containing the elements in the current window.
+        This is equivalent to using the object to initialize a list.
 
         Warning: don't do this on "big" data!
         """
@@ -218,12 +220,12 @@ class ChainedList(Generic[SequenceType]):
     """
     This class tracks a series of |Sequence|_ to provide
     random element access and iteration on the series as a whole.
-    A call to the method ``view`` further returns an ``ListView`` that
+    A call to the method :meth:`view` further returns an :class:`ListView` that
     supports slicing.
 
     This class operates with zero-copy.
 
-    Note that ``ListView`` and ``ChainedList`` are |Sequence|_, hence could be
+    Note that :class:`ListView` and :class:`ChainedList` are |Sequence|_, hence could be
     members of the series.
 
     This class is generic with a parameter indicating the type of the member sequences.
@@ -291,9 +293,9 @@ class ChainedList(Generic[SequenceType]):
         """
         Return the underlying list of |Sequence|_\\s.
 
-        A member sequence could be a ``ListView```. The current method
-        does not follow a ``ListView`` to its "raw" component, b/c
-        that could represent a different set of elements than the ``ListView``
+        A member sequence could be a :class:`ListView`. The current method
+        does not follow a :class:`ListView` to its "raw" component, b/c
+        that could represent a different set of elements than the :class:`ListView`
         object.
         """
         return self._lists
@@ -302,18 +304,18 @@ class ChainedList(Generic[SequenceType]):
 class BiglistBase(Sequence, ABC, Generic[Element]):
     """
     This base class contains code mainly concerning *reading* only.
-    The subclass ``Biglist`` adds functionalities for writing.
-    Other subclasses, such as ``ParquetBiglist``, may be read-only.
+    The subclass :class:`Biglist` adds functionalities for writing.
+    Other subclasses, such as :class:`ParquetBiglist`, may be read-only.
 
     This class is generic with a parameter indicating the type of the data elements,
-    but this is useful only for the subclass ``Biglist``.
-    For the subclass ``ParquetBiglist``, this parameter is essentially ``Any``.
+    but this is useful only for the subclass :class:`Biglist`.
+    For the subclass :class:`ParquetBiglist`, this parameter is essentially ``Any``.
     """
 
     @staticmethod
     def resolve_path(path: PathType) -> Upath:
         """
-        Resolve ``path`` to a ``upathlib.Upath`` object.
+        Resolve ``path`` to a `upathlib.Upath`_ object.
 
         User may want to customize this method to provide
         credentials for cloud storages, if their application involves
@@ -325,7 +327,7 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
     @classmethod
     def get_temp_path(cls) -> Upath:
         """
-        If user does not specify ``path`` when calling ``new``,
+        If user does not specify ``path`` when calling ``new()``,
         this method is used to determine a temporary directory.
 
         Subclass may want to customize this if they prefer other ways
@@ -343,9 +345,9 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
         """
         Load the data file given by ``path``.
 
-        This function is used as the argument ``loader`` to ``FileReader.__init__``.
+        This function is used as the argument ``loader`` to :meth:`FileReader.__init__`.
         Its return type depends on the subclass.
-        The value it returns is contained in ``FileReader`` for subsequent use.
+        The value it returns is contained in :class:`FileReader` for subsequent use.
         """
         raise NotImplementedError
 
@@ -360,7 +362,7 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
         This method is used by several "distributed reading" methods.
         The scope of the lock is for reading/writing a tiny "control info" file.
 
-        See ``Upath.lock``.
+        See `Upath.lock <https://github.com/zpz/upathlib/blob/main/src/upathlib/_upath.py>`_.
         """
         with file.lock(timeout=120):
             yield
@@ -395,7 +397,8 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
             before any file is written, ``require_exists=False`` is used.
             User should usually leave this parameter at its default value.
         """
-        self.path = self.resolve_path(path)
+        self.path: Upath = self.resolve_path(path)
+        '''Root directory of the storage space for this object.'''
 
         self._read_buffer: Optional[Sequence[Element]] = None
         self._read_buffer_file_idx = None
@@ -410,6 +413,9 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
         # behave correctly.
 
         self._thread_pool_ = thread_pool_executor
+
+        self.info: dict
+        '''Various meta info.'''
 
         try:
             # Instantiate a Biglist object pointing to
@@ -489,8 +495,8 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
         """
         Element access by single index; negative index works as expected.
 
-        This does not support slicing. For slicing, see method ``view``.
-        The object returned by ``view`` eventually also calls this method
+        This does not support slicing. For slicing, see method :meth:`view`.
+        The object returned by :meth:`view` eventually also calls this method
         to access elements.
         """
         # This is not optimized for speed. For example, ``self._get_data_files``
@@ -574,12 +580,12 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
 
     def iter_files(self) -> Iterator[FileReader[Element]]:
         """
-        Yield one data file at a time, in contrast to ``__iter__``,
+        Yield one data file at a time, in contrast to :meth:`__iter__`,
         which yields one element at a time.
 
         See Also
         --------
-        concurrent_iter_files: collectively iterate between multiple workers.
+        :meth:`concurrent_iter_files`: collectively iterate between multiple workers.
         """
         # Assuming the biglist will not change (not being appended to)
         # during iteration.
@@ -622,14 +628,14 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
 
     def _concurrent_file_iter_info_file(self, task_id: str) -> Upath:
         """
-        `task_id`: returned by `new_concurrent_file_iter`.
+        `task_id`: returned by :meth:`new_concurrent_file_iter`.
         """
         return self.path / ".concurrent_file_iter" / task_id / "info.json"
 
     def new_concurrent_file_iter(self) -> str:
         """
         One worker, such as a "coordinator", calls this method once.
-        After that, one or more workers independently call ``concurrent_iter_files``,
+        After that, one or more workers independently call :meth:`concurrent_iter_files`,
         providing the task-ID returned by this method.
         Each data file will be obtained by exactly one worker,
         thus content of the biglist is split between the workers.
@@ -647,7 +653,7 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
         Parameters
         ----------
         task_id
-            The string returned by ``new_concurrent_file_iter``.
+            The string returned by :meth:`new_concurrent_file_iter`.
             All workers that call this method using the same ``task_id``
             will consume the biglist collectively.
         """
@@ -706,12 +712,12 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
 
     def file_readers(self) -> list[FileReader[Element]]:
         """
-        Return a list of all the data files wrapped in ``FileReader`` objects,
+        Return a list of all the data files wrapped in :class:`FileReader` objects,
         which are light weight, have not loaded data yet, and are friendly
         to pickling.
 
         This is intended to facilitate concurrent processing,
-        e.g. one may send the ``FileReader`` objects to different processes or threads.
+        e.g. one may send the :class:`FileReader` objects to different processes or threads.
         """
         datafiles, _ = self._get_data_files()
         return [
@@ -722,8 +728,8 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
     def view(self) -> ListView[BiglistBase[Element]]:
         """
         By convention, a "slicing" method should return an object of the same class
-        as the original object. This is not possible for ``BiglistBase`` (or its subclasses),
-        hence its ``__getitem__`` does not support slicing. Slicing is supported
+        as the original object. This is not possible for :class:`BiglistBase` (or its subclasses),
+        hence its :meth:`__getitem__` does not support slicing. Slicing is supported
         by the object returned from ``view``, e.g.,
 
         ::

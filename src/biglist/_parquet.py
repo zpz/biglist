@@ -231,7 +231,7 @@ class ParquetBiglist(BiglistBase):
         super().__init__(*args, **kwargs)
         self.keep_files: bool = True
         """Indicates whether the meta info persisted by this object should be kept or deleted when this object is garbage-collected.
-        
+
         This does *not* affect the external Parquet data files.
         """
 

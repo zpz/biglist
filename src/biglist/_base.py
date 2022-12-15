@@ -37,14 +37,14 @@ SequenceType = TypeVar("SequenceType", bound=Sequence)
 
 class FileReader(Sequence, Generic[Element], ABC):
     """
-    A ``FileReader`` is a "lazy" loader of a data file.
+    A FileReader is a "lazy" loader of a data file.
     It keeps track of the path of a data file along with a loader function,
     but performs the loading only when needed.
     In particular, upon initiation, file loading has not happened, and the object
     is light weight and friendly to pickling.
 
     One use case of this class is to pass these objects around in
-    ``multiprocessing`` code for concurrent data processing.
+    `multiprocessing <https://docs.python.org/3/library/multiprocessing.html>`_ code for concurrent data processing.
 
     Once data have been loaded, this class provides various ways to navigate
     the data. At a minimum, a subclass must implement the
@@ -70,8 +70,8 @@ class FileReader(Sequence, Generic[Element], ABC):
             A function that will load the data file.
             This could be a classmethod, staticmethod,
             or a standalone function, but can't be a lambda
-            function, because a ``FileReader`` object is often used
-            with ``multiprocessing``, hence must be pickle-friendly.
+            function, because a FileReader object is often used
+            with `multiprocessing <https://docs.python.org/3/library/multiprocessing.html>`_, hence must be pickle-friendly.
         """
         self.path: Upath = BiglistBase.resolve_path(path)
         """Path of the file."""
@@ -115,7 +115,7 @@ class ListView(Generic[SequenceType]):
     This class wraps a sequence and enables access by slice or index array,
     in addition to single-index access.
 
-    A ``ListView`` object does "zero-copy"---it keeps track of
+    A ListView object does "zero-copy"---it keeps track of
     indices of selected elements along with a reference to
     the underlying sequence. This object may be sliced again in a repeated "zoom in" fashion.
     Only when a single-element access or an iteration is performed, the relevant elements
@@ -133,7 +133,7 @@ class ListView(Generic[SequenceType]):
     ):
         """
         This provides a "window" into the sequence ``list_``,
-        which may be another ``ListView`` (which *is* a sequence, hence
+        which may be another :class:`ListView` (which *is* a sequence, hence
         no special treatment is needed).
 
         During the use of this object, the underlying ``list_`` must remain unchanged.
@@ -150,7 +150,7 @@ class ListView(Generic[SequenceType]):
 
     @property
     def range(self) -> range | Sequence[int]:
-        """The current "window" represented by a ``range`` or a list of indices."""
+        """The current "window" represented by a `range <https://docs.python.org/3/library/stdtypes.html#range>`_ or a list of indices."""
         return self._range
 
     def __repr__(self):
@@ -294,8 +294,8 @@ class ChainedList(Generic[SequenceType]):
         Return the underlying list of |Sequence|_\\s.
 
         A member sequence could be a :class:`ListView`. The current method
-        does not follow a :class:`ListView` to its "raw" component, b/c
-        that could represent a different set of elements than the :class:`ListView`
+        does not follow a ListView to its "raw" component, b/c
+        that could represent a different set of elements than the ListView
         object.
         """
         return self._lists
@@ -304,12 +304,12 @@ class ChainedList(Generic[SequenceType]):
 class BiglistBase(Sequence, ABC, Generic[Element]):
     """
     This base class contains code mainly concerning *reading* only.
-    The subclass :class:`Biglist` adds functionalities for writing.
-    Other subclasses, such as :class:`ParquetBiglist`, may be read-only.
+    The subclass :class:`~biglist.Biglist` adds functionalities for writing.
+    Other subclasses, such as :class:`~biglist.ParquetBiglist`, may be read-only.
 
     This class is generic with a parameter indicating the type of the data elements,
-    but this is useful only for the subclass :class:`Biglist`.
-    For the subclass :class:`ParquetBiglist`, this parameter is essentially ``Any``.
+    but this is useful only for the subclass :class:`~biglist.Biglist`.
+    For the subclass :class:`~biglist.ParquetBiglist`, this parameter is essentially ``Any``.
     """
 
     @staticmethod
@@ -327,7 +327,7 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
     @classmethod
     def get_temp_path(cls) -> Upath:
         """
-        If user does not specify ``path`` when calling ``new()``,
+        If user does not specify ``path`` when calling :meth:`new` (in a subclass),
         this method is used to determine a temporary directory.
 
         Subclass may want to customize this if they prefer other ways
@@ -345,7 +345,7 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
         """
         Load the data file given by ``path``.
 
-        This function is used as the argument ``loader`` to :meth:`FileReader.__init__`.
+        This function is used as the argument ``loader`` to :meth:`biglist.FileReader.__init__`.
         Its return type depends on the subclass.
         The value it returns is contained in :class:`FileReader` for subsequent use.
         """
@@ -367,12 +367,100 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
         with file.lock(timeout=120):
             yield
 
+    @classmethod
+    def new(cls,
+            path: Optional[PathType] = None,
+            *,
+            keep_files: Optional[bool] = None,
+            **kwargs) -> BiglistBase:
+        """
+        Create a new object of this class (of a subclass, to be precise) and then add data to it.
+
+        Parameters
+        ----------
+        path
+            A directory in which this :class:`BiglistBase` will save whatever it needs to save.
+            (The subclass :class:`~biglist.Biglist` saves both data and meta-info.
+            The subclass :class:`~biglist.ParquetBiglist` saves meta-info only.)
+            The directory must be non-existent.
+            It is not necessary to pre-create the parent directory of this path.
+
+            This path can be either on local disk or in a cloud storage.
+
+            If not specified, :meth:`~biglist._base.BiglistBase.get_temp_path`
+            will be called to determine a temporary path.
+
+        keep_files
+            If not specified, the default behavior is the following:
+
+            - If ``path`` is ``None``, then this is ``False``---the temporary directory
+              will be deleted when this :class:`~biglist._base.BiglistBase` object goes away.
+            - If ``path`` is not ``None``, i.e. user has deliberately specified a location,
+              then this is ``True``---files saved by this :class:`~biglist._base.BiglistBase` object will stay.
+
+            User can pass in ``True`` or ``False`` explicitly to override the default behavior.
+
+        **kwargs
+            additional arguments are passed on to :meth:`__init__`.
+
+        Notes
+        -----
+        A :class:`~biglist._base.BiglistBase` object construction is in either of the two modes
+        below:
+
+        a) create a new :class:`~biglist._base.BiglistBase` to store new data.
+
+        b) create a :class:`~biglist._base.BiglistBase` object pointing to storage of
+           existing data, which was created by a previous call to :meth:`new`.
+
+        In case (a), one has called :meth:`new`. In case (b), one has called
+        ``BiglistBase(..)`` (i.e. :meth:`__init__`).
+
+        Some settings are applicable only in mode (a), b/c in
+        mode (b) they can't be changed and, if needed, should only
+        use the value already set in mode (a).
+        Such settings can be parameters to :meth:`new`
+        but should not be parameters to :meth:`__init__`.
+        Examples include ``storage_format`` and ``batch_size`` for the subclass :class:`~biglist.Biglist`.
+        These settings typically should be taken care of in :meth:`new`,
+        before and/or after the object has been created by a call to :meth:`__init__`
+        within :meth:`new`.
+
+        :meth:`__init__` should be defined in such a way that it works for
+        both a barebone object that is created in this :meth:`new`, as well as a
+        fleshed out object that already has data in persistence.
+
+        Some settings may be applicable to an existing :class:`~biglist._base.BiglistBase` object, e.g.,
+        they control styles of display and not intrinsic attributes persisted along
+        with the BiglistBase.
+        Such settings should be parameters to :meth:`__init__` but not to :meth:`new`.
+        If provided in a call to :meth:`new`, these parameters will be passed on to :meth:`__init__`.
+
+        Subclass authors should keep these considerations in mind.
+        """
+
+        if not path:
+            path = cls.get_temp_path()
+            if keep_files is None:
+                keep_files = False
+        else:
+            path = cls.resolve_path(path)
+            if keep_files is None:
+                keep_files = True
+        if path.is_dir():
+            raise Exception(f'directory "{path}" already exists')
+        if path.is_file():
+            raise FileExistsError(path)
+        obj = cls(path, require_exists=False, **kwargs)
+        obj.keep_files = keep_files
+        return obj
+
     def __init__(
         self,
         path: PathType,
         *,
-        thread_pool_executor: Optional[ThreadPoolExecutor] = None,
         require_exists: bool = True,
+        thread_pool_executor: Optional[ThreadPoolExecutor] = None,
     ):
         """
         Parameters
@@ -393,7 +481,7 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
             When initializing an object of this class,
             contents of the directory ``path`` should be already in place.
             This is indicated by ``require_exists = True``. In the
-            classmethod ``new`` of a subclass, when creating an instance
+            classmethod :meth:`new` of a subclass, when creating an instance
             before any file is written, ``require_exists=False`` is used.
             User should usually leave this parameter at its default value.
         """
@@ -728,9 +816,9 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
     def view(self) -> ListView[BiglistBase[Element]]:
         """
         By convention, a "slicing" method should return an object of the same class
-        as the original object. This is not possible for :class:`BiglistBase` (or its subclasses),
-        hence its :meth:`__getitem__` does not support slicing. Slicing is supported
-        by the object returned from ``view``, e.g.,
+        as the original object. This is not possible for :class:`~biglist._base.BiglistBase` (or its subclasses),
+        hence its :meth:`~biglist._base.BiglistBase.__getitem__` does not support slicing. Slicing is supported
+        by the object returned from this method, e.g.,
 
         ::
 

@@ -1,5 +1,5 @@
 """
-The package ``biglist`` provides persisted, out-of-memory Python data structures
+The package `biglist <https://github.com/zpz/biglist>`_ provides persisted, out-of-memory Python data structures
 that implement the |Sequence|_ and |Iterable|_ interfaces with the capabilities of
 concurrent and distributed reading and writing.
 The main use case is processing large amounts of data that can not fit in memory.
@@ -33,7 +33,7 @@ from __future__ import annotations
 from ._base import FileReader, ListView, ChainedList
 from ._biglist import Biglist, BiglistFileReader
 
-__version__ = "0.7.2b1"
+__version__ = "0.7.2"
 
 # Back compat; will be removed >=0.8.0
 FileView = FileReader

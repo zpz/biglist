@@ -208,7 +208,7 @@ class Biglist(BiglistBase[Element]):
 
         See Also
         --------
-        load_data_file
+        :meth:`load_data_file`
         """
         serializer = cls.registered_storage_formats[
             path.suffix.lstrip(".").replace("_", "-")
@@ -237,7 +237,6 @@ class Biglist(BiglistBase[Element]):
         path: Optional[PathType] = None,
         *,
         batch_size: Optional[int] = None,
-        keep_files: Optional[bool] = None,
         storage_format: Optional[str] = None,
         **kwargs,
     ) -> Biglist:
@@ -245,15 +244,7 @@ class Biglist(BiglistBase[Element]):
         Parameters
         ----------
         path
-            A directory in which this :class:`Biglist` will save data files
-            as well as meta-info files. The directory must be non-existent.
-            It is not necessary to pre-create the parent directory of this path.
-
-            This path can be either on local disk or in a cloud storage.
-
-            If not specified, :meth:`biglist._base.BiglistBase..get_temp_path`
-            will be called to determine a temporary path.
-
+            Passed on to :meth:`~biglist._base.BiglistBase.new` of ``BiglistBase``.
         batch_size
             Max number of data elements in each persisted data file.
 
@@ -296,80 +287,19 @@ class Biglist(BiglistBase[Element]):
             A rule of thumb: it is recommended to keep the persisted files between 32-128MB
             in size. (Note: no benchmark was performed to back this recommendation.)
 
-        keep_files
-            If not specified, the default behavior is the following:
-
-            - If ``path`` is ``None``, then this is ``False``---the temporary directory
-              will be deleted when this :class:`Biglist` object goes away.
-            - If ``path`` is not ``None``, i.e. user has deliberately specified a location,
-              then this is ``True``---files saved by this :class:`Biglist` object will stay.
-
-            User can pass in ``True`` or ``False`` explicitly to override the default behavior.
-
         storage_format
-            this should be a key in ``cls.registered_storage_formats``.
-            If not specified, ``cls.DEFAULT_STORAGE_FORMAT`` is used.
+            This should be a key in :data:`registered_storage_formats`.
+            If not specified, :data:`DEFAULT_STORAGE_FORMAT` is used.
 
         **kwargs
-            additional arguments are passed on to :meth:`__init__`.
+            additional arguments are passed on to :meth:`~biglist._base.BiglistBase.new`.
 
         Returns
         -------
         Biglist
             A new :class:`Biglist` object.
-
-        Notes
-        -----
-        A :class:`Biglist` object construction is in either of the two modes
-        below:
-
-        a) create a new :class:`Biglist` to store new data.
-
-        b) create a :class:`Biglist` object pointing to storage of
-           existing data, which was created by a previous call to :meth:`new`.
-
-        In case (a), one has called :meth:`Biglist.new`. In case (b), one has called
-        ``Biglist(..)`` (i.e. :meth:`__init__`).
-
-        Some settings are applicable only in mode (a), b/c in
-        mode (b) they can't be changed and, if needed, should only
-        use the value already set in mode (a).
-        Such settings can be parameters to :meth:`new`
-        but should not be parameters to :meth:`__init__`.
-        Examples include ``storage_format`` and ``batch_size``.
-        These settings typically should be taken care of in :meth:`new`,
-        before and/or after the object has been created by a call to :meth:`__init__`
-        within :meth:`new`.
-
-        :meth:`__init__` should be defined in such a way that it works for
-        both a barebone object that is created in this :meth:`new`, as well as a
-        fleshed out object that already has data in persistence.
-
-        Some settings may be applicable to an existing :class:`Biglist` object, e.g.,
-        they control styles of display and not intrinsic attributes persisted along
-        with the :class:`Biglist`.
-        Such settings should be parameters to :meth:`__init__` but not to :meth:`new`.
-        If provided in a call to :meth:`new`, these parameters will be passed on to :meth:`__init__`.
-
-        Subclass authors should keep these considerations in mind.
         """
-
-        if not path:
-            path = cls.get_temp_path()
-            if keep_files is None:
-                keep_files = False
-        else:
-            path = cls.resolve_path(path)
-            if keep_files is None:
-                keep_files = True
-        if path.is_dir():
-            raise Exception(f'directory "{path}" already exists')
-        if path.is_file():
-            raise FileExistsError(path)
-
-        obj = cls(path, require_exists=False, **kwargs)  # type: ignore
-
-        obj.keep_files = keep_files
+        obj = super().new(path, **kwargs)  # type: ignore
 
         if not batch_size:
             batch_size = 10000
@@ -433,7 +363,7 @@ class Biglist(BiglistBase[Element]):
         Append a single element to the :class:`Biglist`.
 
         In implementation, this appends to an in-memory buffer.
-        Once the buffer size reaches :data:`batch_size <self.batch_size>`, the buffer's content
+        Once the buffer size reaches :data:`batch_size`, the buffer's content
         will be persisted as a new data file, and the buffer will re-start empty.
         In other words, whenever the buffer is non-empty,
         its content is not yet persisted.
@@ -501,17 +431,17 @@ class Biglist(BiglistBase[Element]):
 
     def flush(self) -> None:
         """
-        While ``_flush`` is called automatically whenever the "append buffer"
-        is full, ``flush`` is not called automatically.
+        While ``_flush()`` is called automatically whenever the "append buffer"
+        is full, ``flush()`` is not called automatically.
         When the user is done adding elements to the biglist, the "append buffer" could be
         partially filled, hence not yet persisted.
-        This is when the *user* should call ``flush`` to force dumping the content of the buffer.
-        (If user forgot to call ``flush`` and :data:`keep_files` is ``True``,
-        it is auto called when this object goes away. However, user should call ``flush`` for the explicity.)
+        This is when the *user* should call ``flush()`` to force dumping the content of the buffer.
+        (If user forgot to call ``flush()`` and :data:`keep_files` is ``True``,
+        it is auto called when this object goes away. However, user should call ``flush()`` for the explicity.)
 
-        After a call to ``flush``, there's no problem to add more elements again by
-        :meth:`append` or :meth:`extend`. Data files created by ``flush`` with less than
-        ``batch_size`` elements will stay as is among larger files.
+        After a call to ``flush()``, there's no problem to add more elements again by
+        :meth:`append` or :meth:`extend`. Data files created by ``flush()`` with less than
+        :data:`batch_size` elements will stay as is among larger files.
         This is a legitimate case in parallel or distributed writing, or writing in
         multiple sessions.
         """

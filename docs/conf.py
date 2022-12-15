@@ -19,6 +19,7 @@ author = 'Zepu Zhang'
 extensions = [
     "numpydoc",
     'sphinx.ext.autodoc',
+    # "sphinx_autodoc_typehints",
     'sphinx.ext.viewcode',
     ]
 
@@ -35,7 +36,7 @@ autodoc_default_options = {
     'show-inheritance': True,
 }
 autodoc_class_signature = 'separated'
-autodoc_typehints = 'signature'
+autodoc_typehints = 'description'
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']

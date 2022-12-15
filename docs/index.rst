@@ -65,7 +65,7 @@ or even
 Creating a Biglist
 ==================
 
-Create a new :class:`Biglist` object via the classmethod :meth:`Biglist.new`::
+Create a new :class:`Biglist` object via the classmethod :meth:`~Biglist.new`::
 
    >>> from biglist import Biglist
    >>> mylist = Biglist.new(batch_size=100)
@@ -81,12 +81,12 @@ This saves a new data file for every 100 elements
 accumulated. In the end, there are 23 elements in a memory buffer that are
 not yet persisted to disk. The code has no way to know whether we will append
 more elements, hence it does not save this partial batch.
-Suppose we're done with adding data, we call :meth:`Biglist.flush` to persist
+Suppose we're done with adding data, we call :meth:`~Biglist.flush` to persist
 the content of the buffer to disk::
 
    >>> mylist.flush()
 
-If, after a while, we decide to append more data to ``mylist``, we just call :meth:`Biglist.append` again.
+If, after a while, we decide to append more data to ``mylist``, we just call :meth:`~Biglist.append` again.
 We can continue to add more data as long as the disk has space.
 New data files will be saved. The smaller file containing 23 elements will stay there
 among larger files with no problem.
@@ -103,10 +103,10 @@ Now let's take a look::
    101
 
 The data have been saved in the directory ``/tmp/19f88a17-3e78-430f-aad0-a35d39485f80``,
-which is a temporary one because we did not tell :meth:`Biglist.new` where to save data.
+which is a temporary one because we did not tell :meth:`~Biglist.new` where to save data.
 When the object ``mylist`` dies, this directory will be deleted automatically.
 This has its uses, but often we want to save the data for future use. In that case, just pass 
-a non-existent directory to :meth:`Biglist.new`, e.g.
+a non-existent directory to :meth:`~Biglist.new`, e.g.
 
    >>> yourlist = Biglist.new('/project/data/store-a', batch_size=10_000)
 
@@ -132,7 +132,7 @@ Random element access
    10020
 
 It does not support slicing directly.
-However, the method :meth:`Biglist.view` returns an object that supports element access by a single index, by a slice, or by a list of indices::
+However, the method :meth:`~Biglist.view` returns an object that supports element access by a single index, by a slice, or by a list of indices::
 
    >>> v = mylist.view()
    >>> len(v)
@@ -154,7 +154,7 @@ A :class:`ListView` object is a |Sequence|_, hence we can gather all of its elem
    >>> list(v[100:104])
    [100, 101, 102, 103]
 
-:class:`ListView` provides a convenience method :meth:`ListView.collect` to do the same::
+:class:`ListView` provides a convenience method :meth:`~ListView.collect` to do the same::
 
    >>> v[100:104].collect()
    [100, 101, 102, 103]
@@ -217,7 +217,7 @@ is implemented by
    ...     for x in batch:
    ...         print(x)
 
-There are cases where we want to use :meth:`Biglist.iter_files` directly and handle the yielded :class:`FileReader` objects.
+There are cases where we want to use :meth:`~Biglist.iter_files` directly and handle the yielded :class:`FileReader` objects.
 
 
 Reading from a Biglist in multiple processes
@@ -562,7 +562,7 @@ The location given by ``car_data.path`` is the directory where :class:`ParquetBi
 and not where the actual data are.
 As is the case with :class:`Biglist`, this directory is a temporary one, which will be deleted once the object
 ``car_data`` goes away. If we wanted to keep the directory for future use, we should have specified a location
-when calling :meth:`ParquetBiglist.new`.
+when calling :meth:`~ParquetBiglist.new`.
 
 
 Reading a ParquetBiglist
@@ -836,7 +836,7 @@ We have seen :data:`ParquetFileReader.scalar_as_py`
 
 There are several ways to get to a `pyarrow`_ object quickly and proceed with it.
 A newly initiated :class:`ParquetFileReader` has not loaded any data yet.
-Its :data:`ParquetFileReader.file` property initiates a 
+Its property :data:`~ParquetFileReader.file` initiates a 
 `pyarrow.parquet.ParquetFile`_ object (reading meta data during initiation)
 and returns it. We may take it and go all the way down the `pyarrow`_ path::
 
@@ -854,7 +854,7 @@ and returns it. We may take it and go all the way down the `pyarrow`_ path::
 We have seen that :meth:`ParquetFileReader.row_group` and :meth:`ParquetFileReader.iter_batches` both
 return :class:`ParquetBatchData` objects. In contrast to :class:`ParquetFileReader`, which is "lazy" in terms of data loading,
 a ParquetBatchData already has its data in memory. ParquetFileReader has another method,
-namely :meth:`ParquetFileReader.data`, that
+namely :meth:`~ParquetFileReader.data`, that
 eagerly loads the entire data of the file and wraps it in a ParquetBatchData object::
 
    >>> data = f1.data()

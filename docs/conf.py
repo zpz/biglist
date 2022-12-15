@@ -17,9 +17,8 @@ author = 'Zepu Zhang'
 # See numpydoc documentation for a numpy-style docstring style guide.
 
 extensions = [
-    "numpydoc",
+    'numpydoc',
     'sphinx.ext.autodoc',
-    # "sphinx_autodoc_typehints",
     'sphinx.ext.viewcode',
     ]
 
@@ -36,7 +35,7 @@ autodoc_default_options = {
     'show-inheritance': True,
 }
 autodoc_class_signature = 'separated'
-autodoc_typehints = 'description'
+autodoc_typehints = 'signature'
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']

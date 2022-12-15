@@ -40,7 +40,7 @@ class ParquetBiglist(BiglistBase):
     """
     ``ParquetBiglist`` defines a kind of "external biglist", that is,
     it points to pre-existing Parquet files and provides facilities to read them.
-    As long as you use a ``ParquetBiglist`` object to read, it is assumed that
+    As long as you use a ParquetBiglist object to read, it is assumed that
     the dataset (all the data files) have not changed since the object was created
     by :meth:`new`.
     """
@@ -93,7 +93,6 @@ class ParquetBiglist(BiglistBase):
         path: Optional[PathType] = None,
         *,
         suffix: str = ".parquet",
-        keep_files: Optional[bool] = None,
         thread_pool_executor: Optional[ThreadPoolExecutor] = None,
         **kwargs,
     ) -> ParquetBiglist:
@@ -101,7 +100,7 @@ class ParquetBiglist(BiglistBase):
         This classmethod gathers info of the specified data files and
         saves the info to facilitate reading the data files.
         The data files remain "external" to the :class:`ParquetBiglist` object;
-        the "data" persisted and managed by the :class:`ParquetBiglist` object
+        the "data" persisted and managed by the ParquetBiglist object
         are the meta info about the Parquet data files.
 
         If the number of data files is small, it's feasible to create a temporary
@@ -110,6 +109,8 @@ class ParquetBiglist(BiglistBase):
 
         Parameters
         ----------
+        path
+            Passed on to :meth:`~biglist._base.BiglistBase.new` of ``BiglistBase``.
         data_path
             Parquet file(s) or folder(s) containing Parquet files.
 
@@ -121,33 +122,16 @@ class ParquetBiglist(BiglistBase):
 
             Once the info of all Parquet files are gathered,
             their order is fixed as far as this :class:`ParquetBiglist` is concerned.
-            The data sequence represented by this :class:`ParquetBiglist` follows this
+            The data sequence represented by this ParquetBiglist follows this
             order of the files. The order is determined as follows:
 
                 The order of the entries in ``data_path`` is preserved; if any entry is a
                 directory, the files therein (recursively) are sorted by the string
                 value of each file's full path.
 
-        path
-            Directory to be used by this object to save whatever it needs to persist
-            (i.e. the meta info about the data files).
-            This directory must be non-existent at the time of this call.
-            If ``None``, a temporary location will be determined by :meth:`~_base.BiglistBase.get_temp_path`.
-
         suffix
             Only files with this suffix will be included.
             To include all files, use ``suffix='*'``.
-
-        keep_files
-            If not specified, the default behavior is the following:
-
-                If ``path`` is ``None``, then this is ``False``---the temporary directory
-                will be deleted when this :class:`ParquetBiglist` object goes away.
-
-                If ``path`` is not ``None``, i.e. user has deliberately specified a location,
-                then this is ``True``---files saved by this :class:`ParquetBiglist` object will stay.
-
-            User can pass in ``True`` or ``False`` explicitly to override the default behavior.
 
         **kwargs
             additional arguments are passed on to ``__init__``.
@@ -157,19 +141,6 @@ class ParquetBiglist(BiglistBase):
             data_path = [cls.resolve_path(data_path)]
         else:
             data_path = [cls.resolve_path(p) for p in data_path]
-
-        if not path:
-            path = cls.get_temp_path()
-            if keep_files is None:
-                keep_files = False
-        else:
-            path = cls.resolve_path(path)
-            if keep_files is None:
-                keep_files = True
-        if path.is_dir():
-            raise Exception(f'directory "{path}" already exists')
-        elif path.is_file():
-            raise FileExistsError(path)
 
         def get_file_meta(f, p: Upath):
             meta = f(p).metadata
@@ -216,8 +187,7 @@ class ParquetBiglist(BiglistBase):
             itertools.accumulate(v["num_rows"] for v in datafiles)
         )
 
-        obj = cls(path, require_exists=False, thread_pool_executor=thread_pool_executor, **kwargs)  # type: ignore
-        obj.keep_files = keep_files
+        obj = super().new(path, thread_pool_executor=thread_pool_executor, **kwargs)  # type: ignore
         obj.info["datapath"] = [str(p) for p in data_path]
         obj.info["datafiles"] = datafiles
         obj.info["datafiles_cumlength"] = datafiles_cumlength
@@ -276,7 +246,7 @@ class ParquetFileReader(FileReader):
             Path of a Parquet file.
         loader
             Usually this is :meth:`ParquetBiglist.load_data_file`.
-            If you customize this, please see the doc of :meth:`FileReader.__init__``.
+            If you customize this, please see the doc of :meth:`FileReader.__init__`.
         """
         self._file: Optional[ParquetFile] = None
         self._data: Optional[ParquetBatchData] = None
@@ -531,7 +501,7 @@ class ParquetFileReader(FileReader):
         """Select a single column.
 
         Note: while :meth:`columns` returns a new :class:`ParquetFileReader`,
-        ``column`` returns a `pyarrow.ChunkedArray`_.
+        :meth:`column` returns a `pyarrow.ChunkedArray`_.
         """
         z = self._columns.get(idx_or_name)
         if z is not None:
@@ -556,7 +526,7 @@ class ParquetBatchData(Sequence):
     The data is already in memory; this class does not involve file reading.
 
     :meth:`ParquetFileReader.data` and :meth:`ParquetFileReader.iter_batches` both
-    return or yield ``ParquetBatchData``.
+    return or yield ParquetBatchData.
     In addition, the method :meth:`columns` of this class returns a new object
     of this class.
 
@@ -571,7 +541,7 @@ class ParquetBatchData(Sequence):
         # and have its effect right away.
         self._data = data
         self.scalar_as_py = True
-        """Indicates whether scalar values should be converted to Python types from `pyarrow`_ types."""
+        """Indicate whether scalar values should be converted to Python types from `pyarrow`_ types."""
         self.num_rows = data.num_rows
         self.num_columns = data.num_columns
         self.column_names = data.schema.names

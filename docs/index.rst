@@ -225,7 +225,7 @@ Reading from a Biglist in multiple processes
 
 To *collectively* consume a :class:`Biglist` object from multiple processes,
 we can distribute :class:`FileReader`\s to the processes. The method :meth:`~biglist._base.BiglistBase.file_readers` returns
-a list of :class:`FileReader` objects::
+a list of FileReader objects::
 
    >>> file_readers = mylist.file_readers()
    >>> len(file_readers)
@@ -235,7 +235,7 @@ a list of :class:`FileReader` objects::
 
 (:class:`BiglistFileReader` inherits from :class:`FileReader`.)
 A :class:`FileReader` object is light-weight. Upon initiation, it has not loaded the file yet---it merely records the file path along with the function that will be used to load the file.
-In addition, :class:`FileReader` objects are friendly to pickling, hence lend themselves to multiprocessing code.
+In addition, FileReader objects are friendly to pickling, hence lend themselves to multiprocessing code.
 Let's design a small experiment to consume this dataset in multiple processes::
 
    >>> def worker(file_reader):
@@ -573,9 +573,9 @@ random access, slicing/dicing via :meth:`~biglist._base.BiglistBase.view`, itera
 via :meth:`~biglist._base.BiglistBase.file_readers`, distributed reading via :meth:`~_base.BiglistBase.concurrent_iter_files`---these are all used the same way.
 
 However, the structures of the data files are very different between :class:`Biglist` and :class:`ParquetBiglist`.
-For :class:`Biglist`, each data file contains a straight Python list, elements of which being whatever have been
+For Biglist, each data file contains a straight Python list, elements of which being whatever have been
 passed into :meth:`Biglist.append`.
-For :class:`ParquetBiglist`, each data file is in a sophisticated columnar format, which is publicly documented.
+For ParquetBiglist, each data file is in a sophisticated columnar format, which is publicly documented.
 A variety of ways are provided to get data out of the Parquet format;
 some favor convenience, some others favor efficiency. Let's see some examples.
 
@@ -600,7 +600,7 @@ This is the most basic iteration, :class:`Biglist`-style, one row (or "record") 
 When there are multiple columns, each row is presented as a dict with column names as keys.
 
 Remember that ``car_data.__iter__`` is just further iteration on top of ``car_data.iter_files``,
-which yields :class:`ParquetFileReader` objects.
+which yields ParquetFileReader objects.
 :class:`ParquetFileReader`, a subclass of :class:`FileReader`, is the fundamental unit for Parquet data reading.
 
 ::
@@ -635,7 +635,7 @@ First of all, a :class:`FileReader` object is a |Sequence|_, providing row-based
 
 :class:`ParquetFileReader` uses `pyarrow`_ to read the Parquet files.
 The values above are nice and simple Python types, but they are not the original
-`pyarrow`_ types;
+pyarrow types;
 they have undergone a conversion. This conversion can be toggled by the property
 :data:`ParquetFileReader.scalar_as_py`::
 
@@ -720,10 +720,10 @@ Finally, if the file is large, we may choose to iterate over it by batches inste
    <ParquetBatchData with 1 rows, 3 columns>
 
 The batches are again :class:`ParquetBatchData` objects.
-At the core of a :class:`ParquetBatchData` is
+At the core of a ParquetBatchData is
 a `pyarrow.Table`_
 or `pyarrow.RecordBatch`_.
-:class:`ParquetBatchData` is friendly to `pickle <https://docs.python.org/3/library/pickle.html>`_ and,
+ParquetBatchData is friendly to `pickle <https://docs.python.org/3/library/pickle.html>`_ and,
 I suppose, pickling `pyarrow`_ objects are very efficient.
 So, the batches could be useful in `multiprocessing <https://docs.python.org/3/library/multiprocessing.html>`_ code.
 
@@ -736,8 +736,8 @@ not be loaded from disk (or cloud, as it may be).
 
 Both :class:`ParquetFileReader` and :class:`ParquetBatchData` provide the method ``columns`` to return a new object
 with only the selected columns.
-For :class:`ParquetFileReader`, if data have not been loaded, reading of the new object will only load the selected columns.
-For :class:`ParquetBatchData`, its data is already in memory, hence column selection leads to a data subset.
+For ParquetFileReader, if data have not been loaded, reading of the new object will only load the selected columns.
+For ParquetBatchData, its data is already in memory, hence column selection leads to a data subset.
 
    >>> f0.column_names
    ['make', 'year', 'sales']
@@ -821,7 +821,7 @@ and returns a
 :meth:`ParquetFileReader.column` returns a 
 `pyarrow.ChunkedArray`_, whereas
 :meth:`ParquetBatchData.column` returns either a 
-`pyarrow.ChunkedArray`_ or a 
+pyarrow.ChunkedArray or a 
 `pyarrow.Array`_.
 
 
@@ -853,9 +853,9 @@ and returns it. We may take it and go all the way down the `pyarrow`_ path::
 
 We have seen that :meth:`ParquetFileReader.row_group` and :meth:`ParquetFileReader.iter_batches` both
 return :class:`ParquetBatchData` objects. In contrast to :class:`ParquetFileReader`, which is "lazy" in terms of data loading,
-a :class:`ParquetBatchData` already has its data in memory. :class:`ParquetFileReader` has another method,
+a ParquetBatchData already has its data in memory. ParquetFileReader has another method,
 namely :meth:`ParquetFileReader.data`, that
-eagerly loads the entire data of the file and wraps it in a :class:`ParquetBatchData` object::
+eagerly loads the entire data of the file and wraps it in a ParquetBatchData object::
 
    >>> data = f1.data()
    >>> data
@@ -926,7 +926,7 @@ as demonstrated above, are ready for use::
 Other utilities
 ===============
 
-:class:`ChainedList` takes a series of |Sequence|_\s and returns a combined |Sequence|_ without data copy.
+:class:`ChainedList` takes a series of |Sequence|_\s and returns a combined Sequence without data copy.
 For example,
 
 ::
@@ -948,8 +948,8 @@ For example,
 
 :class:`ListView` takes any |Sequence|_ and provides :meth:`~ListView.__getitem__` that accepts
 a single index, or a slice, or a list of indices. A single-index access will return
-the requested element; the other two scenarios return a new :class:`ListView` via a zero-copy operation.
-To get all the elements out of a :class:`ListView`, either iterate it or call its method :meth:`~ListView.collect`.
+the requested element; the other two scenarios return a new ListView via a zero-copy operation.
+To get all the elements out of a ListView, either iterate it or call its method :meth:`~ListView.collect`.
 
 :class:`~_base.BiglistBase` (including :class:`Biglist` and :class:`ParquetBiglist`),
 :class:`FileReader` (including :class:`BiglistFileReader` and :class:`ParquetFileReader`),

@@ -368,11 +368,13 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
             yield
 
     @classmethod
-    def new(cls,
-            path: Optional[PathType] = None,
-            *,
-            keep_files: Optional[bool] = None,
-            **kwargs) -> BiglistBase:
+    def new(
+        cls,
+        path: Optional[PathType] = None,
+        *,
+        keep_files: Optional[bool] = None,
+        **kwargs,
+    ) -> BiglistBase:
         """
         Create a new object of this class (of a subclass, to be precise) and then add data to it.
 

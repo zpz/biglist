@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.7.3] - 2022-12-27
+
+- Upgrade dependency `upathlib`, removing formats 'json-z' and 'json-zstd'.
+
+
 ## [0.7.2] - 2022-12-14
 
 ## Enhanced

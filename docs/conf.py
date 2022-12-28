@@ -3,6 +3,7 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+import biglist
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
@@ -10,6 +11,10 @@
 project = 'biglist'
 copyright = '2020-, Zepu Zhang'
 author = 'Zepu Zhang'
+version = str(biglist.__version__)
+
+today_fmt = '%b %d %Y'
+
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

@@ -24,6 +24,9 @@
 ``biglist``
 ===========
 
+(Generated on |today| for biglist version |version|.)
+
+
 .. automodule:: biglist
 
 
@@ -677,7 +680,7 @@ We can get info about the row-groups, or even retrieve a row-group as the unit o
 In practice, a row-group tends to be much larger.)
 
 A :class:`ParquetBatchData` object is again a |Sequence|_.
-All our row access tools are available::
+All of our row access tools are available::
 
    >>> rg.num_rows
    10

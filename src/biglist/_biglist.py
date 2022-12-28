@@ -22,8 +22,6 @@ from uuid import uuid4
 from upathlib.serializer import (
     ByteSerializer,
     _loads,
-    ZJsonSerializer,
-    ZstdJsonSerializer,
     PickleSerializer,
     ZPickleSerializer,
     ZstdPickleSerializer,
@@ -687,8 +685,6 @@ class JsonByteSerializer(ByteSerializer):
 
 
 Biglist.register_storage_format("json", JsonByteSerializer)
-Biglist.register_storage_format("json-z", ZJsonSerializer)
-Biglist.register_storage_format("json-zstd", ZstdJsonSerializer)
 Biglist.register_storage_format("pickle", PickleSerializer)
 Biglist.register_storage_format("pickle-z", ZPickleSerializer)
 Biglist.register_storage_format("pickle-zstd", ZstdPickleSerializer)

@@ -367,6 +367,16 @@ class Biglist(BiglistBase[Element]):
         its content is not yet persisted.
         However, at any time, the content of this buffer is included in
         :meth:`~_base.BiglistBase.__len__` as well as in element accesses by :meth:`~_base.BiglistBase.__getitem__` and :meth:`__iter__`.
+
+        You can append data to a common biglist from multiple processes.
+        In the processes, use independent ``Biglist`` objects that point to the same "path".
+        Each of the objects will maintain its own in-memory buffer and save its own files once the buffer
+        fills up. Remember to :meth:`flush` at the end of work in each process.
+
+        .. note:: Use the "spawn" method to start processes.
+            In ``multiprocessing``, look for the method `get_context <https://docs.python.org/3/library/multiprocessing.html#multiprocessing.get_context>`_.
+            In ``concurrent.futures.ProcessPoolExecutor``, look for the parameter `mp_context <https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ProcessPoolExecutor>`_.
+            Also check out `mpservice.util.MP_SPAWN_CTX <https://mpservice.readthedocs.io/en/latest/util.html#mpservice.util.MP_SPAWN_CTX>`_.
         """
         self._append_buffer.append(x)
         if len(self._append_buffer) >= self.batch_size:
@@ -402,7 +412,7 @@ class Biglist(BiglistBase[Element]):
 
         data_file = self._data_dir / filename
         if self._file_dumper is None:
-            self._file_dumper = Dumper(self._thread_pool, self._n_write_threads)
+            self._file_dumper = Dumper(self._get_thread_pool(), self._n_write_threads)
         if wait:
             self._file_dumper.wait()
             self.dump_data_file(data_file, buffer)

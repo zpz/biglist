@@ -2,9 +2,7 @@ from __future__ import annotations
 from datetime import datetime
 import itertools
 import logging
-import os
 from collections.abc import Iterable, Iterator, Sequence
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -93,7 +91,6 @@ class ParquetBiglist(BiglistBase):
         path: Optional[PathType] = None,
         *,
         suffix: str = ".parquet",
-        thread_pool_executor: Optional[ThreadPoolExecutor] = None,
         **kwargs,
     ) -> ParquetBiglist:
         """
@@ -152,10 +149,7 @@ class ParquetBiglist(BiglistBase):
                 ],
             }
 
-        if thread_pool_executor is not None:
-            pool = thread_pool_executor
-        else:
-            pool = ThreadPoolExecutor(min(32, (os.cpu_count() or 1) + 4))
+        pool = cls._get_thread_pool()
         tasks = []
         read_parquet = cls.load_data_file
         for p in data_path:
@@ -180,14 +174,11 @@ class ParquetBiglist(BiglistBase):
             if (k + 1) % 1000 == 0:
                 logger.info("processed %d files", k + 1)
 
-        if thread_pool_executor is None:
-            pool.shutdown()
-
         datafiles_cumlength = list(
             itertools.accumulate(v["num_rows"] for v in datafiles)
         )
 
-        obj = super().new(path, thread_pool_executor=thread_pool_executor, **kwargs)  # type: ignore
+        obj = super().new(path, **kwargs)  # type: ignore
         obj.info["datapath"] = [str(p) for p in data_path]
         obj.info["datafiles"] = datafiles
         obj.info["datafiles_cumlength"] = datafiles_cumlength
@@ -720,7 +711,10 @@ def write_parquet_file(
         assert names is None
     path = ParquetBiglist.resolve_path(path)
     if isinstance(path, LocalUpath):
-        path.parent.localpath.mkdir(exist_ok=True, parents=True)
+        Path(path.parent.path).mkdir(exist_ok=True, parents=True)
+        # TODO: in upathlib 0.6.9, we'll be able to use the following:
+        # path.parent.path.mkdir(exist_ok=True, parents=True)
+
     ff, pp = FileSystem.from_uri(str(path))
     if isinstance(ff, GcsFileSystem):
         ff = ParquetBiglist.get_gcsfs()

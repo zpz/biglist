@@ -439,7 +439,8 @@ Then we can tell workers, "here is the location, add data to it." Let's design a
 
 From the main process, let's instruct the workers to write data to the same :class:`Biglist`::
 
-   >>> with ProcessPoolExecutor(10) as pool:
+   >>> import multiprocessing
+   >>> with ProcessPoolExecutor(10, mp_context=multiprocessing.get_context('spawn')) as pool:
    ...     tasks = [pool.submit(worker, path, idx) for idx in range(10)]
    ...     for t in tasks:
    ...         _ = t.result()

@@ -332,7 +332,7 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
 
     @classmethod
     def _get_thread_pool(cls):
-        '''
+        """
         This method is called in three places:
 
         - :meth:`iter_files` when there are more than one data files.
@@ -350,7 +350,7 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
         I do not know whether it is possible to detect such corrupt thread pools.
         If there is a way to do that, then it can be used in this method to make
         things work with forked processes.
-        '''
+        """
         if cls._thread_pool is None:
             cls._thread_pool = ThreadPoolExecutor(min(32, (os.cpu_count() or 1) + 4))
         return cls._thread_pool
@@ -537,8 +537,11 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
         # behave correctly.
 
         if thread_pool_executor is not _unspecified:
-            warnings.warn("`thread_pool_executor` is deprecated and ignored; will be removed in 0.7.6",
-                          DeprecationWarning, stacklevel=2)
+            warnings.warn(
+                "`thread_pool_executor` is deprecated and ignored; will be removed in 0.7.6",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
         self.info: dict
         """Various meta info."""

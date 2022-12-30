@@ -336,14 +336,14 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
         This method is called in three places:
 
         - :meth:`iter_files` when there are more than one data files.
-        - :meth:`biglist.Biglist.append` (and ``extend``).
+        - :meth:`biglist.Biglist.append` (and :meth:`~biglist.Biglist.extend`).
         - :meth:`biglist.ParquetBiglist.new`.
 
         Once any of these has been called, the class object :class:`BiglistBase`
         gets a ``concurrent.futures.ThreadPoolExecutor`` as an attribute.
         After that, if you start using other processes, and in other processes
-        any of these methods is called again, you must use the "spawn" method
-        to start the processes. This is related to data copying in "fork" processes
+        any of these methods is called again, **you must use the "spawn" method
+        to start the processes**. This is related to data copying in "fork" processes
         (the default on Linux), and a ``ThreadPoolExecutor`` copied into
         the new processes is malfunctional.
 

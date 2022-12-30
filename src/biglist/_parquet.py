@@ -107,7 +107,7 @@ class ParquetBiglist(BiglistBase):
         Parameters
         ----------
         path
-            Passed on to :meth:`~biglist._base.BiglistBase.new` of ``BiglistBase``.
+            Passed on to :meth:`~biglist._base.BiglistBase.new` of :class:`~biglist._base.BiglistBase`.
         data_path
             Parquet file(s) or folder(s) containing Parquet files.
 

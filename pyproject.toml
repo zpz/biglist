@@ -9,7 +9,7 @@ authors = [
     {name = "Zepu Zhang", email = "zepu.zhang@gmail.com"},
 ]
 dependencies = [
-    "upathlib >= 0.6.9b3",
+    "upathlib >= 0.6.9b4",
     "deprecation",
 ]
 requires-python = ">=3.8"
@@ -29,12 +29,12 @@ Source = "https://github.com/zpz/biglist"
 
 [project.optional-dependencies]
 doc = [
-    "sphinx",
+    "sphinx < 6.0.0",
     "numpydoc",
     "pydata-sphinx-theme",
 ]
 gcs = [
-    "upathlib[gcs] >= 0.6.9b2",
+    "upathlib[gcs] >= 0.6.9b5",
     "google-auth",
 ]
 parquet = [

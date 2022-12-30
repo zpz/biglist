@@ -3,6 +3,7 @@ import os
 import os.path
 import multiprocessing
 import random
+import threading
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed, wait
 from shutil import rmtree
 from time import sleep
@@ -98,11 +99,14 @@ def test_iter_cancel():
 
 
 def add_to_biglist(path, prefix, length):
+    name = f"{multiprocessing.current_process().name} {threading.current_thread().name}"
+    print('entering', name)
     try:
         bl = Biglist(path)
         for i in range(length):
             bl.append(f'{prefix}-{i}')
         bl.flush()
+        print('leaving', name)
         return prefix, length
     except Exception as e:
         print('error:', repr(e), str(e))
@@ -124,7 +128,7 @@ def test_multi_appenders():
     pool1 = ThreadPoolExecutor(2)
     t1 = pool1.submit(add_to_biglist, bl.path, *sets[1])
     t2 = pool1.submit(add_to_biglist, bl.path, *sets[2])
-    pool2 = ProcessPoolExecutor(2)
+    pool2 = ProcessPoolExecutor(2, mp_context=multiprocessing.get_context('spawn'))
     t3 = pool2.submit(add_to_biglist, bl.path, *sets[3])
     t4 = pool2.submit(add_to_biglist, bl.path, *sets[4])
 
@@ -194,7 +198,7 @@ def test_mp1():
     for batch in iterutils.chunked_iter(biglist, biglist.batch_size):
         results.append(square_sum(batch))
 
-    with ProcessPoolExecutor(3) as pool:
+    with ProcessPoolExecutor(3, mp_context=multiprocessing.get_context('spawn')) as pool:
         jobs = [
             pool.submit(square_sum, v)
             for v in biglist.file_readers()
@@ -219,7 +223,7 @@ def test_mp2():
     biglist.flush()
 
     yourlist = Biglist.new(batch_size=33)
-    with multiprocessing.Pool(10) as pool:
+    with multiprocessing.get_context('spawn').Pool(10) as pool:
         for path in pool.imap_unordered(find_big, biglist.file_readers()):
             z = Biglist(path)
             yourlist.extend(z)

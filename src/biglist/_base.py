@@ -6,6 +6,7 @@ import os
 import queue
 import tempfile
 import uuid
+import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -301,6 +302,9 @@ class ChainedList(Generic[SequenceType]):
         return self._lists
 
 
+_unspecified = object()
+
+
 class BiglistBase(Sequence, ABC, Generic[Element]):
     """
     This base class contains code mainly concerning *reading* only.
@@ -311,6 +315,8 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
     but this is useful only for the subclass :class:`~biglist.Biglist`.
     For the subclass :class:`~biglist.ParquetBiglist`, this parameter is essentially ``Any``.
     """
+
+    _thread_pool: ThreadPoolExecutor = None
 
     @staticmethod
     def resolve_path(path: PathType) -> Upath:
@@ -323,6 +329,31 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
         retrieval mechanisms, which may be slow.
         """
         return resolve_path(path)
+
+    @classmethod
+    def _get_thread_pool(cls):
+        '''
+        This method is called in three places:
+
+        - :meth:`iter_files` when there are more than one data files.
+        - :meth:`biglist.Biglist.append` (and ``extend``).
+        - :meth:`biglist.ParquetBiglist.new`.
+
+        Once any of these has been called, the class object :class:`BiglistBase`
+        gets a ``concurrent.futures.ThreadPoolExecutor`` as an attribute.
+        After that, if you start using other processes, and in other processes
+        any of these methods is called again, you must use the "spawn" method
+        to start the processes. This is related to data copying in "fork" processes
+        (the default on Linux), and a ``ThreadPoolExecutor`` copied into
+        the new processes is malfunctional.
+
+        I do not know whether it is possible to detect such corrupt thread pools.
+        If there is a way to do that, then it can be used in this method to make
+        things work with forked processes.
+        '''
+        if cls._thread_pool is None:
+            cls._thread_pool = ThreadPoolExecutor(min(32, (os.cpu_count() or 1) + 4))
+        return cls._thread_pool
 
     @classmethod
     def get_temp_path(cls) -> Upath:
@@ -462,7 +493,7 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
         path: PathType,
         *,
         require_exists: bool = True,
-        thread_pool_executor: Optional[ThreadPoolExecutor] = None,
+        thread_pool_executor: Optional[ThreadPoolExecutor] = _unspecified,
     ):
         """
         Parameters
@@ -478,6 +509,9 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
             when a large number of Biglist instances are active
             at the same time, because the provided thread pool
             controls the max number of threads.
+
+            .. deprecated:: 0.7.4
+                The input is ignored. Will be removed in 0.7.6.
 
         require_exists
             When initializing an object of this class,
@@ -502,7 +536,9 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
         # In a read-only subclass, they remain these default values and
         # behave correctly.
 
-        self._thread_pool_ = thread_pool_executor
+        if thread_pool_executor is not _unspecified:
+            warnings.warn("`thread_pool_executor` is deprecated and ignored; will be removed in 0.7.6",
+                          DeprecationWarning, stacklevel=2)
 
         self.info: dict
         """Various meta info."""
@@ -520,8 +556,6 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
 
         self._n_read_threads = 3
         self._n_write_threads = 3
-        # You may assign these to other values right upon creation
-        # of the `Biglist` object.
 
     def __repr__(self):
         return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} elements in {self.num_datafiles} data file(s)>"
@@ -532,16 +566,6 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
     @property
     def _info_file(self) -> Upath:
         return self.path / "info.json"
-
-    @property
-    def _thread_pool(self):
-        if self._thread_pool_ is None:
-            executor = ThreadPoolExecutor(
-                max(self._n_read_threads, self._n_write_threads)
-            )
-            self._thread_pool_ = executor
-
-        return self._thread_pool_
 
     def __bool__(self) -> bool:
         return len(self) > 0
@@ -690,7 +714,7 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
         elif ndatafiles > 1:
             max_workers = min(self._n_read_threads, ndatafiles)
             tasks = queue.Queue(max_workers)
-            executor = self._thread_pool
+            executor = self._get_thread_pool()
 
             def _read_file(idx):
                 z = self.file_reader(self._get_data_file(datafiles, idx))

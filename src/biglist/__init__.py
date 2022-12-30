@@ -33,7 +33,7 @@ from __future__ import annotations
 from ._base import FileReader, ListView, ChainedList
 from ._biglist import Biglist, BiglistFileReader
 
-__version__ = "0.7.3"
+__version__ = "0.7.4b1"
 
 # Back compat; will be removed >=0.8.0
 FileView = FileReader

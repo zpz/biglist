@@ -1,5 +1,4 @@
 import random
-from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 import pyarrow
@@ -64,8 +63,7 @@ def test_idx_locator():
 def test_big_parquet_list():
     path = LocalUpath('/tmp/test-biglist/parquet')
     path.rmrf(quiet=True)
-    Path(path.path).mkdir(parents=True)
-    # TODO: in upathlib 0.6.9, we can simply use `path.path.mkdir(...)`.
+    path.path.mkdir(parents=True)
 
     N = 10000
 
@@ -86,8 +84,7 @@ def test_big_parquet_list():
     # key = pyarrow.array([random.randint(0, 10000) for _ in range(N)])
     # val = pyarrow.array([str(uuid4()) for _ in range(N)])
     # tab = pyarrow.Table.from_arrays([key, val], names=['key', 'value'])
-    Path((path / 'd2').path).mkdir()
-    # TODO: in upathlib 0.6.9, we can simply use `(path / 'd2').path.mkdir(...)`.
+    (path / 'd2').path.mkdir()
 
     # parquet.write_table(tab, str(path / 'd2' / 'data_2.parquet'))
 

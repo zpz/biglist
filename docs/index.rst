@@ -992,6 +992,7 @@ API reference
 
 
 .. autoclass:: biglist._base.BiglistBase
+   :private-members: _get_thread_pool
 
 
 .. autoclass:: biglist.Biglist

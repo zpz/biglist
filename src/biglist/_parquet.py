@@ -107,7 +107,7 @@ class ParquetBiglist(BiglistBase):
         Parameters
         ----------
         path
-            Passed on to :meth:`~biglist._base.BiglistBase.new` of ``BiglistBase``.
+            Passed on to :meth:`~biglist._base.BiglistBase.new` of :class:`~biglist._base.BiglistBase`.
         data_path
             Parquet file(s) or folder(s) containing Parquet files.
 
@@ -711,9 +711,7 @@ def write_parquet_file(
         assert names is None
     path = ParquetBiglist.resolve_path(path)
     if isinstance(path, LocalUpath):
-        Path(path.parent.path).mkdir(exist_ok=True, parents=True)
-        # TODO: in upathlib 0.6.9, we'll be able to use the following:
-        # path.parent.path.mkdir(exist_ok=True, parents=True)
+        path.parent.path.mkdir(exist_ok=True, parents=True)
 
     ff, pp = FileSystem.from_uri(str(path))
     if isinstance(ff, GcsFileSystem):

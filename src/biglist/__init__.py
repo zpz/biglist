@@ -30,7 +30,7 @@ but also for any |Sequence|_.
 """
 # flake8: noqa
 from __future__ import annotations
-from ._base import FileReader, ListView, ChainedList
+from ._base import FileReader, ListView, ChainedList, Seq
 from ._biglist import Biglist, BiglistFileReader
 
 __version__ = "0.7.4b1"

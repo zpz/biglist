@@ -10,7 +10,7 @@ import pyarrow
 from pyarrow.parquet import ParquetFile, FileMetaData
 from pyarrow.fs import FileSystem, GcsFileSystem
 from upathlib import LocalUpath
-from ._base import BiglistBase, Upath, PathType, ListView, FileReader
+from ._base import BiglistBase, Upath, PathType, ListView, FileReader, Seq
 from ._util import locate_idx_in_chunked_seq
 
 
@@ -511,7 +511,7 @@ class ParquetFileReader(FileReader):
         return z
 
 
-class ParquetBatchData(Sequence):
+class ParquetBatchData(Seq):
     """
     ``ParquetBatchData`` wraps a `pyarrow.Table`_ or `pyarrow.RecordBatch`_.
     The data is already in memory; this class does not involve file reading.
@@ -553,9 +553,6 @@ class ParquetBatchData(Sequence):
 
     def __len__(self) -> int:
         return self.num_rows
-
-    def __bool__(self) -> bool:
-        return self.num_rows > 0
 
     def __getitem__(self, idx: int):
         """

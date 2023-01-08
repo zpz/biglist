@@ -7,8 +7,8 @@ import queue
 import tempfile
 import uuid
 import warnings
-from abc import ABC, abstractmethod
-from collections.abc import Iterator, Sequence
+from abc import abstractmethod
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime
@@ -18,6 +18,8 @@ from typing import (
     Optional,
     TypeVar,
     Generic,
+    Protocol,
+    runtime_checkable,
 )
 
 from deprecation import deprecated
@@ -29,14 +31,162 @@ logger = logging.getLogger(__name__)
 
 
 Element = TypeVar("Element")
-SequenceType = TypeVar("SequenceType", bound=Sequence)
+'''
+This type variable is used to annotate the type of a data element.
+'''
+
+
+@runtime_checkable
+class Seq(Protocol[Element]):
+    '''
+    The protocol ``Seq`` is simpler and broader than the standard ``collections.abc.Sequence``.
+    The former requires only ``__len__``, ``__getitem__``, and ``__iter__``,
+    whereas the latter would add ``__contains__``, ``__reversed__``, ``index`` and ``count``
+    to these three. Although the extra methods can be implemented using the three basic methods,
+    they could be massively inefficient in particular cases, and that is the case
+    in the applications targeted by ``biglist``.
+    For this reason, the classes defined in this package implement the protocol ``Seq``
+    rather than ``Sequence``, to prevent the illusion that methods ``__contains__``, etc.,
+    are usable.
+
+    A class that implements this protocol is sized, iterable, and subscriptable.
+    This is a subset of the methods provided by Sequence.
+    In particular, Sequence implements this protocol, hence is considered a subclass
+    of this protocol class for type checking purposes:
+
+    >>> from biglist import Seq
+    >>> from collections.abc import Sequence
+    >>> issubclass(Sequence, Seq)
+    True
+
+    The type parameter ``Element`` indicates the type of each data element.
+    '''
+    def __len__(self) -> int:
+        ...
+
+    def __getitem__(self, idx: int) -> Element:
+        ...
+
+    def __iter__(self) -> Iterator[Element]:
+        ...
+
+
+SeqType = TypeVar("SeqType", bound=Seq)
 
 
 # Can not use ``Sequence[T]`` as base class. See
 # https://github.com/python/mypy/issues/5264
 
 
-class FileReader(Sequence, Generic[Element], ABC):
+class ListView(Generic[SeqType]):
+    """
+    This class wraps a :class:`Seq` and enables access by slice or index array,
+    in addition to single-index access.
+
+    A ListView object does "zero-copy"---it keeps track of
+    indices of selected elements along with a reference to
+    the underlying Seq. This object may be sliced again in a repeated "zoom in" fashion.
+    Only when a single-element access or an iteration is performed, the relevant elements
+    are retrieved from the underlying Seq.
+
+    This class is generic with a parameter indicating the type of the underlying Seq.
+    For example, you can write::
+
+        def func(x: ListView[Biglist[int]]):
+            ...
+    """
+
+    def __init__(
+        self, list_: SeqType, range_: Optional[range | Seq[int]] = None
+    ):
+        """
+        This provides a "window" into the Seq ``list_``,
+        which may be another :class:`ListView` (which *is* a Seq, hence
+        no special treatment is needed).
+
+        During the use of this object, the underlying ``list_`` must remain unchanged.
+
+        If ``range_`` is ``None``, the "window" covers the entire ``list_``.
+        """
+        self._list = list_
+        self._range = range_
+
+    @property
+    def raw(self) -> SeqType:
+        """The underlying data :class:`Seq`_."""
+        return self._list
+
+    @property
+    def range(self) -> range | Seq[int]:
+        """The current "window" represented by a `range <https://docs.python.org/3/library/stdtypes.html#range>`_ or a list of indices."""
+        return self._range
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} into {self.__len__()}/{len(self._list)} of {self._list}>"
+
+    def __str__(self):
+        return self.__repr__()
+
+    def __len__(self) -> int:
+        """Number of elements in the current window."""
+        if self._range is None:
+            return len(self._list)
+        return len(self._range)
+
+    def __getitem__(self, idx: int | slice | Seq[int]):
+        """
+        Element access by a single index, slice, or an index array.
+        Negative index and standard slice syntax work as expected.
+
+        Single-index access returns the requested data element.
+        Slice and index-array access return a new :class:`ListView` object.
+        """
+        if isinstance(idx, int):
+            # Return a single element.
+            if self._range is None:
+                return self._list[idx]
+            return self._list[self._range[idx]]
+
+        # Return a new `ListView` object below.
+
+        if isinstance(idx, slice):
+            if self._range is None:
+                range_ = range(len(self._list))[idx]
+            else:
+                range_ = self._range[idx]
+            return self.__class__(self._list, range_)
+
+        # `idx` is a list of indices.
+        if self._range is None:
+            return self.__class__(self._list, idx)
+        return self.__class__(self._list, [self._range[i] for i in idx])
+
+    def __iter__(self):
+        """Iterate over the elements in the current window."""
+        if self._range is None:
+            yield from self._list
+        else:
+            # This could be inefficient, depending on
+            # the random-access performance of `self._list`.
+            for i in self._range:
+                yield self._list[i]
+
+    def collect(self) -> list:
+        """
+        Return a list containing the elements in the current window.
+        This is equivalent to using the object to initialize a list.
+
+        Warning: don't do this on "big" data!
+        """
+        return list(self)
+
+
+class Viewable:
+    def view(self: Seq[Element]) -> ListView[Seq[Element]]:
+        return ListView(self)
+
+
+class FileReader(Viewable, Seq[Element]):
     """
     A FileReader is a "lazy" loader of a data file.
     It keeps track of the path of a data file along with a loader function,
@@ -91,133 +241,12 @@ class FileReader(Sequence, Generic[Element], ABC):
         """
         raise NotImplementedError
 
-    def __len__(self) -> int:
-        """Number of data elements in the file."""
-        raise NotImplementedError
-
-    def __bool__(self) -> bool:
-        return self.__len__() > 0
-
-    @abstractmethod
-    def __getitem__(self, idx: int) -> Element:
-        raise NotImplementedError
-
-    @abstractmethod
-    def __iter__(self) -> Iterator[Element]:
-        raise NotImplementedError
-
-    def view(self) -> ListView[FileReader[Element]]:
-        """Return a :class:`ListView` object to facilitate slicing this biglist."""
-        return ListView(self)
+    # def view(self) -> ListView[FileReader[Element]]:
+    #     """Return a :class:`ListView` object to facilitate slicing this biglist."""
+    #     return ListView(self)
 
 
-class ListView(Generic[SequenceType]):
-    """
-    This class wraps a sequence and enables access by slice or index array,
-    in addition to single-index access.
-
-    A ListView object does "zero-copy"---it keeps track of
-    indices of selected elements along with a reference to
-    the underlying sequence. This object may be sliced again in a repeated "zoom in" fashion.
-    Only when a single-element access or an iteration is performed, the relevant elements
-    are retrieved from the underlying sequence.
-
-    This class is generic with a parameter indicating the type of the underlying sequence.
-    For example, you can write::
-
-        def func(x: ListView[Biglist[int]]):
-            ...
-    """
-
-    def __init__(
-        self, list_: SequenceType, range_: Optional[range | Sequence[int]] = None
-    ):
-        """
-        This provides a "window" into the sequence ``list_``,
-        which may be another :class:`ListView` (which *is* a sequence, hence
-        no special treatment is needed).
-
-        During the use of this object, the underlying ``list_`` must remain unchanged.
-
-        If ``range_`` is ``None``, the "window" covers the entire ``list_``.
-        """
-        self._list = list_
-        self._range = range_
-
-    @property
-    def raw(self) -> SequenceType:
-        """The underlying data |Sequence|_."""
-        return self._list
-
-    @property
-    def range(self) -> range | Sequence[int]:
-        """The current "window" represented by a `range <https://docs.python.org/3/library/stdtypes.html#range>`_ or a list of indices."""
-        return self._range
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} into {self.__len__()}/{len(self._list)} of {self._list}>"
-
-    def __str__(self):
-        return self.__repr__()
-
-    def __len__(self) -> int:
-        """Number of elements in the current window."""
-        if self._range is None:
-            return len(self._list)
-        return len(self._range)
-
-    def __bool__(self) -> bool:
-        return len(self) > 0
-
-    def __getitem__(self, idx: int | slice | Sequence[int]):
-        """
-        Element access by a single index, slice, or an index array.
-        Negative index and standard slice syntax work as expected.
-
-        Single-index access returns the requested data element.
-        Slice and index-array access return a new :class:`ListView` object.
-        """
-        if isinstance(idx, int):
-            # Return a single element.
-            if self._range is None:
-                return self._list[idx]
-            return self._list[self._range[idx]]
-
-        # Return a new `ListView` object below.
-
-        if isinstance(idx, slice):
-            if self._range is None:
-                range_ = range(len(self._list))[idx]
-            else:
-                range_ = self._range[idx]
-            return self.__class__(self._list, range_)
-
-        # `idx` is a list of indices.
-        if self._range is None:
-            return self.__class__(self._list, idx)
-        return self.__class__(self._list, [self._range[i] for i in idx])
-
-    def __iter__(self):
-        """Iterate over the elements in the current window."""
-        if self._range is None:
-            yield from self._list
-        else:
-            # This could be inefficient, depending on
-            # the random-access performance of `self._list`.
-            for i in self._range:
-                yield self._list[i]
-
-    def collect(self) -> list:
-        """
-        Return a list containing the elements in the current window.
-        This is equivalent to using the object to initialize a list.
-
-        Warning: don't do this on "big" data!
-        """
-        return list(self)
-
-
-class ChainedList(Generic[SequenceType]):
+class ChainedList(Generic[SeqType]):
     """
     This class tracks a series of |Sequence|_ to provide
     random element access and iteration on the series as a whole.
@@ -238,7 +267,7 @@ class ChainedList(Generic[SequenceType]):
             ...
     """
 
-    def __init__(self, *lists: SequenceType):
+    def __init__(self, *lists: SeqType):
         self._lists = lists
         self._lists_len: Optional[list[int]] = None
         self._lists_len_cumsum: Optional[list[int]] = None
@@ -267,9 +296,6 @@ class ChainedList(Generic[SequenceType]):
             self._len = sum(self._lists_len)
         return self._len
 
-    def __bool__(self) -> bool:
-        return len(self) > 0
-
     def __getitem__(self, idx: int):
         if self._lists_len_cumsum is None:
             if self._lists_len is None:
@@ -285,12 +311,12 @@ class ChainedList(Generic[SequenceType]):
         for v in self._lists:
             yield from v
 
-    def view(self) -> ListView[ChainedList[SequenceType]]:
-        # The returned object supports slicing.
-        return ListView(self)
+    # def view(self) -> ListView[ChainedList[SeqType]]:
+    #     # The returned object supports slicing.
+    #     return ListView(self)
 
     @property
-    def raw(self) -> tuple[SequenceType, ...]:
+    def raw(self) -> tuple[SeqType, ...]:
         """
         Return the underlying list of |Sequence|_\\s.
 
@@ -305,7 +331,7 @@ class ChainedList(Generic[SequenceType]):
 _unspecified = object()
 
 
-class BiglistBase(Sequence, ABC, Generic[Element]):
+class BiglistBase(Seq[Element]):
     """
     This base class contains code mainly concerning *reading* only.
     The subclass :class:`~biglist.Biglist` adds functionalities for writing.
@@ -524,7 +550,7 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
         self.path: Upath = self.resolve_path(path)
         """Root directory of the storage space for this object."""
 
-        self._read_buffer: Optional[Sequence[Element]] = None
+        self._read_buffer: Optional[Seq[Element]] = None
         self._read_buffer_file_idx = None
         self._read_buffer_item_range: Optional[tuple[int, int]] = None
         # `self._read_buffer` contains the content of the file
@@ -569,9 +595,6 @@ class BiglistBase(Sequence, ABC, Generic[Element]):
     @property
     def _info_file(self) -> Upath:
         return self.path / "info.json"
-
-    def __bool__(self) -> bool:
-        return len(self) > 0
 
     def _get_data_files(self) -> tuple:
         """

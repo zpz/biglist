@@ -979,7 +979,10 @@ API reference
 .. autodata:: biglist._base.Element
 
 
-.. autodata:: biglist._base.SequenceType
+.. autoclass:: biglist.Seq
+
+
+.. autodata:: biglist._base.SeqType
 
 
 .. autoclass:: biglist.ListView

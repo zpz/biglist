@@ -31,14 +31,14 @@ logger = logging.getLogger(__name__)
 
 
 Element = TypeVar("Element")
-'''
+"""
 This type variable is used to annotate the type of a data element.
-'''
+"""
 
 
 @runtime_checkable
 class Seq(Protocol[Element]):
-    '''
+    """
     The protocol ``Seq`` is simpler and broader than the standard ``collections.abc.Sequence``.
     The former requires only ``__len__``, ``__getitem__``, and ``__iter__``,
     whereas the latter would add ``__contains__``, ``__reversed__``, ``index`` and ``count``
@@ -60,7 +60,8 @@ class Seq(Protocol[Element]):
     True
 
     The type parameter ``Element`` indicates the type of each data element.
-    '''
+    """
+
     def __len__(self) -> int:
         ...
 
@@ -96,9 +97,7 @@ class ListView(Generic[SeqType]):
             ...
     """
 
-    def __init__(
-        self, list_: SeqType, range_: Optional[range | Seq[int]] = None
-    ):
+    def __init__(self, list_: SeqType, range_: Optional[range | Seq[int]] = None):
         """
         This provides a "window" into the Seq ``list_``,
         which may be another :class:`ListView` (which *is* a Seq, hence

@@ -1,6 +1,5 @@
 from __future__ import annotations
 import bisect
-import itertools
 import logging
 import os
 import queue
@@ -18,171 +17,14 @@ from typing import (
     Optional,
     TypeVar,
     Generic,
-    Protocol,
-    runtime_checkable,
 )
 
 from deprecation import deprecated
 from upathlib import LocalUpath, Upath, PathType, resolve_path
-from ._util import locate_idx_in_chunked_seq
+from ._util import Seq, Element, ListView, Viewable
 
 
 logger = logging.getLogger(__name__)
-
-
-Element = TypeVar("Element")
-"""
-This type variable is used to annotate the type of a data element.
-"""
-
-
-@runtime_checkable
-class Seq(Protocol[Element]):
-    """
-    The protocol ``Seq`` is simpler and broader than the standard ``collections.abc.Sequence``.
-    The former requires only ``__len__``, ``__getitem__``, and ``__iter__``,
-    whereas the latter would add ``__contains__``, ``__reversed__``, ``index`` and ``count``
-    to these three. Although the extra methods can be implemented using the three basic methods,
-    they could be massively inefficient in particular cases, and that is the case
-    in the applications targeted by ``biglist``.
-    For this reason, the classes defined in this package implement the protocol ``Seq``
-    rather than ``Sequence``, to prevent the illusion that methods ``__contains__``, etc.,
-    are usable.
-
-    A class that implements this protocol is sized, iterable, and subscriptable.
-    This is a subset of the methods provided by Sequence.
-    In particular, Sequence implements this protocol, hence is considered a subclass
-    of this protocol class for type checking purposes:
-
-    >>> from biglist import Seq
-    >>> from collections.abc import Sequence
-    >>> issubclass(Sequence, Seq)
-    True
-
-    The type parameter ``Element`` indicates the type of each data element.
-    """
-
-    def __len__(self) -> int:
-        ...
-
-    def __getitem__(self, idx: int) -> Element:
-        ...
-
-    def __iter__(self) -> Iterator[Element]:
-        ...
-
-
-SeqType = TypeVar("SeqType", bound=Seq)
-
-
-# Can not use ``Sequence[T]`` as base class. See
-# https://github.com/python/mypy/issues/5264
-
-
-class ListView(Generic[SeqType]):
-    """
-    This class wraps a :class:`Seq` and enables access by slice or index array,
-    in addition to single-index access.
-
-    A ListView object does "zero-copy"---it keeps track of
-    indices of selected elements along with a reference to
-    the underlying Seq. This object may be sliced again in a repeated "zoom in" fashion.
-    Only when a single-element access or an iteration is performed, the relevant elements
-    are retrieved from the underlying Seq.
-
-    This class is generic with a parameter indicating the type of the underlying Seq.
-    For example, you can write::
-
-        def func(x: ListView[Biglist[int]]):
-            ...
-    """
-
-    def __init__(self, list_: SeqType, range_: Optional[range | Seq[int]] = None):
-        """
-        This provides a "window" into the Seq ``list_``,
-        which may be another :class:`ListView` (which *is* a Seq, hence
-        no special treatment is needed).
-
-        During the use of this object, the underlying ``list_`` must remain unchanged.
-
-        If ``range_`` is ``None``, the "window" covers the entire ``list_``.
-        """
-        self._list = list_
-        self._range = range_
-
-    @property
-    def raw(self) -> SeqType:
-        """The underlying data :class:`Seq`_."""
-        return self._list
-
-    @property
-    def range(self) -> range | Seq[int]:
-        """The current "window" represented by a `range <https://docs.python.org/3/library/stdtypes.html#range>`_ or a list of indices."""
-        return self._range
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} into {self.__len__()}/{len(self._list)} of {self._list}>"
-
-    def __str__(self):
-        return self.__repr__()
-
-    def __len__(self) -> int:
-        """Number of elements in the current window."""
-        if self._range is None:
-            return len(self._list)
-        return len(self._range)
-
-    def __getitem__(self, idx: int | slice | Seq[int]):
-        """
-        Element access by a single index, slice, or an index array.
-        Negative index and standard slice syntax work as expected.
-
-        Single-index access returns the requested data element.
-        Slice and index-array access return a new :class:`ListView` object.
-        """
-        if isinstance(idx, int):
-            # Return a single element.
-            if self._range is None:
-                return self._list[idx]
-            return self._list[self._range[idx]]
-
-        # Return a new `ListView` object below.
-
-        if isinstance(idx, slice):
-            if self._range is None:
-                range_ = range(len(self._list))[idx]
-            else:
-                range_ = self._range[idx]
-            return self.__class__(self._list, range_)
-
-        # `idx` is a list of indices.
-        if self._range is None:
-            return self.__class__(self._list, idx)
-        return self.__class__(self._list, [self._range[i] for i in idx])
-
-    def __iter__(self):
-        """Iterate over the elements in the current window."""
-        if self._range is None:
-            yield from self._list
-        else:
-            # This could be inefficient, depending on
-            # the random-access performance of `self._list`.
-            for i in self._range:
-                yield self._list[i]
-
-    def collect(self) -> list:
-        """
-        Return a list containing the elements in the current window.
-        This is equivalent to using the object to initialize a list.
-
-        Warning: don't do this on "big" data!
-        """
-        return list(self)
-
-
-class Viewable:
-    def view(self: Seq[Element]) -> ListView[Seq[Element]]:
-        return ListView(self)
 
 
 class FileReader(Viewable, Seq[Element]):
@@ -245,92 +87,134 @@ class FileReader(Viewable, Seq[Element]):
     #     return ListView(self)
 
 
-class ChainedList(Generic[SeqType]):
-    """
-    This class tracks a series of |Sequence|_ to provide
-    random element access and iteration on the series as a whole.
-    A call to the method :meth:`view` further returns an :class:`ListView` that
-    supports slicing.
-
-    This class operates with zero-copy.
-
-    Note that :class:`ListView` and :class:`ChainedList` are |Sequence|_, hence could be
-    members of the series.
-
-    This class is generic with a parameter indicating the type of the member sequences.
-    For example,
-
-    ::
-
-        def func(x: ChainedList[list[int] | Biglist[int]]):
-            ...
-    """
-
-    def __init__(self, *lists: SeqType):
-        self._lists = lists
-        self._lists_len: Optional[list[int]] = None
-        self._lists_len_cumsum: Optional[list[int]] = None
-        self._len: Optional[int] = None
-
-        # Records info about the last call to `__getitem__`
-        # to hopefully speed up the next call, under the assumption
-        # that user tends to access consecutive or neighboring
-        # elements.
-        self._get_item_last_list = None
-
-    def __repr__(self):
-        return "<{} with {} elements in {} member lists>".format(
-            self.__class__.__name__,
-            self._len,
-            len(self._lists),
-        )
-
-    def __str__(self):
-        return self.__repr__()
-
-    def __len__(self) -> int:
-        if self._len is None:
-            if self._lists_len is None:
-                self._lists_len = [len(v) for v in self._lists]
-            self._len = sum(self._lists_len)
-        return self._len
-
-    def __getitem__(self, idx: int):
-        if self._lists_len_cumsum is None:
-            if self._lists_len is None:
-                self._lists_len = [len(v) for v in self._lists]
-            self._lists_len_cumsum = list(itertools.accumulate(self._lists_len))
-        ilist, idx_in_list, list_info = locate_idx_in_chunked_seq(
-            idx, self._lists_len_cumsum, self._get_item_last_list
-        )
-        self._get_item_last_list = list_info
-        return self._lists[ilist][idx_in_list]
-
-    def __iter__(self):
-        for v in self._lists:
-            yield from v
-
-    # def view(self) -> ListView[ChainedList[SeqType]]:
-    #     # The returned object supports slicing.
-    #     return ListView(self)
-
-    @property
-    def raw(self) -> tuple[SeqType, ...]:
-        """
-        Return the underlying list of |Sequence|_\\s.
-
-        A member sequence could be a :class:`ListView`. The current method
-        does not follow a ListView to its "raw" component, b/c
-        that could represent a different set of elements than the ListView
-        object.
-        """
-        return self._lists
+FileReaderType = TypeVar("FileReaderType", bound=FileReader)
 
 
 _unspecified = object()
 
 
-class BiglistBase(Seq[Element]):
+"""
+Return a list of all the data files wrapped in :class:`FileReader` objects,
+which are light weight, have not loaded data yet, and are friendly
+to pickling.
+
+This is intended to facilitate concurrent processing,
+e.g. one may send the :class:`FileReader` objects to different processes or threads.
+"""
+
+
+class FileSeq(Generic[FileReaderType]):
+    @classmethod
+    @contextmanager
+    def lockfile(cls, file: Upath):
+        """
+        All this method does is to guarantee that the code block identified
+        by ``file`` (essentially the name) is *not* executed concurrently
+        by two "workers".
+
+        This method is used by several "distributed reading" methods.
+        The scope of the lock is for reading/writing a tiny "control info" file.
+
+        See `Upath.lock <https://github.com/zpz/upathlib/blob/main/src/upathlib/_upath.py>`_.
+        """
+        with file.lock(timeout=120):
+            yield
+
+    @property
+    @abstractmethod
+    def info(self) -> dict:
+        """
+        Return a dict with at least an element called 'data_files', which
+        is list of tuples for the data files.
+        Each tuple, representing one data file, consists of
+        "file path", "element count in the file",
+        and "cumulative element count in the data files so far".
+
+        Implementation in a subclass should consider caching the value
+        so that repeated calls are cheap.
+        """
+        raise NotImplementedError
+
+    def __len__(self) -> int:
+        return len(self.info["data_files"])
+
+    @abstractmethod
+    def __getitem__(self, idx: int) -> FileReaderType:
+        """
+        Parameters
+        ----------
+        idx
+            Index of the file (0-based) in the list of data files as returned
+            in :meth:`info`.
+        """
+        raise NotImplementedError
+
+    def __iter__(self) -> Iterator[FileReaderType]:
+        """
+        Yield one data file at a time.
+        """
+        for i in range(self.__len__()):
+            yield self.__getitem__(i)
+
+    def _concurrent_iter_info_file(self, task_id: str) -> Upath:
+        """
+        ``task_id``: returned by :meth:`new_concurrent_iter`.
+        """
+        raise NotImplementedError
+
+    def new_concurrent_iter(self) -> str:
+        """
+        One worker, such as a "coordinator", calls this method once.
+        After that, one or more workers independently call :meth:`concurrent_iter`,
+        providing the task-ID returned by this method.
+        Each data file will be obtained by exactly one worker,
+        thus content of the biglist is split between the workers.
+
+        During this iteration, the biglist object should stay unchanged.
+        """
+        task_id = datetime.utcnow().isoformat()
+        self._concurrent_file_iter_info_file(task_id).write_json(
+            {"n_files_claimed": 0}, overwrite=False
+        )
+        return task_id
+
+    def concurrent_iter(self, task_id: str) -> Iterator[FileReader[Element]]:
+        """
+        Parameters
+        ----------
+        task_id
+            The string returned by :meth:`new_concurrent_iter`.
+            All workers that call this method using the same ``task_id``
+            will consume the biglist collectively.
+        """
+        nfiles = self.__len__()
+        while True:
+            ff = self._concurrent_file_iter_info_file(task_id)
+            with self.lockfile(ff.with_suffix(".json.lock")):
+                iter_info = ff.read_json()
+                n_files_claimed = iter_info["n_files_claimed"]
+                if n_files_claimed >= nfiles:
+                    # No more date files to process.
+                    break
+
+                iter_info["n_files_claimed"] = n_files_claimed + 1
+                ff.write_json(iter_info, overwrite=True)
+
+            logger.debug('yielding file #"%d"', n_files_claimed)
+            yield self.__getitem__(n_files_claimed)
+
+    def concurrent_iter_stat(self, task_id: str) -> dict:
+        """Return status info of an ongoing "concurrent file iter"."""
+        info = self._concurrent_file_iter_info_file(task_id).read_json()
+        return {**info, "n_files": self._len__()}
+
+    def concurrent_iter_done(self, task_id: str) -> bool:
+        """Return whether the "concurrent file iter" identified by ``task_id`` is finished."""
+        zz = self.concurrent_iter_stat(task_id)
+        return zz["n_files_claimed"] >= zz["n_files"]
+
+
+class BiglistBase(Seq[Element], Viewable[Element]):
     """
     This base class contains code mainly concerning *reading* only.
     The subclass :class:`~biglist.Biglist` adds functionalities for writing.
@@ -595,25 +479,9 @@ class BiglistBase(Seq[Element]):
     def _info_file(self) -> Upath:
         return self.path / "info.json"
 
-    def _get_data_files(self) -> tuple:
-        """
-        Returns
-        -------
-        tuple
-            First element is "data_files"; second element is "data_files_cumlength".
-            Subclass may choose to cache these results in instance attributes.
-        """
-        raise NotImplementedError
-
-    def _get_data_file(self, datafiles, idx):
-        """
-        Parameters
-        ----------
-        datafiles
-            The first element returned by ``_get_data_files``.
-        idx
-            Index of the data file in the list of data files.
-        """
+    @abstractmethod
+    @property
+    def files(self) -> FileSeq:
         raise NotImplementedError
 
     def __len__(self) -> int:
@@ -625,9 +493,9 @@ class BiglistBase(Seq[Element]):
         # In other words, if the current object is one of
         # of a number of workers that are concurrently using
         # this biglist, then all the other workers are reading only.
-        _, data_files_cumlength = self._get_data_files()
-        if data_files_cumlength:
-            return data_files_cumlength[-1] + len(self._append_buffer)
+        files = self.files
+        if files:
+            return files.info["data_files"][-1][-1] + len(self._append_buffer)
         return len(self._append_buffer)
 
     def __getitem__(self, idx: int) -> Element:
@@ -657,11 +525,15 @@ class BiglistBase(Seq[Element]):
 
         # TODO: this is reliable only if there is no other "worker node"
         # appending elements to this object.
-        datafiles, data_files_cumlength = self._get_data_files()
-        if data_files_cumlength:
+        files = self.files
+        if files:
+            data_files_cumlength = [v[-1] for v in files.info["data_files"]]
             length = data_files_cumlength[-1]
+            nfiles = len(files)
         else:
+            data_files_cumlength = []
             length = 0
+            nfiles = 0
         idx = range(length + len(self._append_buffer))[idx]
 
         if idx >= length:
@@ -670,7 +542,7 @@ class BiglistBase(Seq[Element]):
             return self._append_buffer[idx - length]  # type: ignore
 
         ifile0 = 0
-        ifile1 = len(datafiles)
+        ifile1 = nfiles
         if self._read_buffer_file_idx is not None:
             n1, n2 = self._read_buffer_item_range  # type: ignore
             if idx < n1:
@@ -694,14 +566,14 @@ class BiglistBase(Seq[Element]):
             n = data_files_cumlength[ifile - 1]
         self._read_buffer_item_range = (n, data_files_cumlength[ifile])
 
-        file = self._get_data_file(datafiles, ifile)
+        file = files.info["data_files"][ifile][0]
         # If the file is in a writing queue and has not finished writing yet:
         if self._file_dumper is None:
             data = None
         else:
             data = self._file_dumper.get_file_data(file)
         if data is None:
-            data = self.file_reader(file)
+            data = files[ifile]
 
         self._read_buffer_file_idx = ifile
         self._read_buffer = data
@@ -711,158 +583,45 @@ class BiglistBase(Seq[Element]):
         """
         Iterate over all the elements.
         """
-        for f in self.iter_files():
-            yield from f
+        files = self.files
+        if files:
+            if len(files) == 1:
+                z = files[0]
+                z.load()
+                yield from z
+            else:
+                ndatafiles = len(files)
+
+                max_workers = min(self._n_read_threads, ndatafiles)
+                tasks = queue.Queue(max_workers)
+                executor = self._get_thread_pool()
+
+                def _read_file(idx):
+                    z = files[idx]
+                    z.load()
+                    return z
+
+                for i in range(max_workers):
+                    t = executor.submit(_read_file, i)
+                    tasks.put(t)
+                nfiles_queued = max_workers
+
+                for _ in range(ndatafiles):
+                    t = tasks.get()
+                    file_reader = t.result()
+
+                    # Before starting to yield data, take care of the
+                    # downloading queue to keep it busy.
+                    if nfiles_queued < ndatafiles:
+                        # `nfiles_queued` is the index of the next file to download.
+                        t = executor.submit(_read_file, nfiles_queued)
+                        tasks.put(t)
+                        nfiles_queued += 1
+
+                    yield from file_reader
 
         if self._append_buffer:
             yield from self._append_buffer
-
-    def iter_files(self) -> Iterator[FileReader[Element]]:
-        """
-        Yield one data file at a time, in contrast to :meth:`__iter__`,
-        which yields one element at a time.
-
-        See Also
-        --------
-        :meth:`concurrent_iter_files`: collectively iterate between multiple workers.
-        """
-        # Assuming the biglist will not change (not being appended to)
-        # during iteration.
-
-        datafiles, _ = self._get_data_files()
-        ndatafiles = len(datafiles)
-
-        if ndatafiles == 1:
-            z = self.file_reader(self._get_data_file(datafiles, 0))
-            z.load()
-            yield z
-        elif ndatafiles > 1:
-            max_workers = min(self._n_read_threads, ndatafiles)
-            tasks = queue.Queue(max_workers)
-            executor = self._get_thread_pool()
-
-            def _read_file(idx):
-                z = self.file_reader(self._get_data_file(datafiles, idx))
-                z.load()
-                return z
-
-            for i in range(max_workers):
-                t = executor.submit(_read_file, i)
-                tasks.put(t)
-            nfiles_queued = max_workers
-
-            for _ in range(ndatafiles):
-                t = tasks.get()
-                data = t.result()
-
-                # Before starting to yield data, take care of the
-                # downloading queue to keep it busy.
-                if nfiles_queued < ndatafiles:
-                    # `nfiles_queued` is the index of the next file to download.
-                    t = executor.submit(_read_file, nfiles_queued)
-                    tasks.put(t)
-                    nfiles_queued += 1
-
-                yield data
-
-    def _concurrent_file_iter_info_file(self, task_id: str) -> Upath:
-        """
-        `task_id`: returned by :meth:`new_concurrent_file_iter`.
-        """
-        return self.path / ".concurrent_file_iter" / task_id / "info.json"
-
-    def new_concurrent_file_iter(self) -> str:
-        """
-        One worker, such as a "coordinator", calls this method once.
-        After that, one or more workers independently call :meth:`concurrent_iter_files`,
-        providing the task-ID returned by this method.
-        Each data file will be obtained by exactly one worker,
-        thus content of the biglist is split between the workers.
-
-        During this iteration, the biglist object should stay unchanged.
-        """
-        task_id = datetime.utcnow().isoformat()
-        self._concurrent_file_iter_info_file(task_id).write_json(
-            {"n_files_claimed": 0}, overwrite=False
-        )
-        return task_id
-
-    def concurrent_iter_files(self, task_id: str) -> Iterator[FileReader[Element]]:
-        """
-        Parameters
-        ----------
-        task_id
-            The string returned by :meth:`new_concurrent_file_iter`.
-            All workers that call this method using the same ``task_id``
-            will consume the biglist collectively.
-        """
-        datafiles, _ = self._get_data_files()
-        while True:
-            ff = self._concurrent_file_iter_info_file(task_id)
-            with self.lockfile(ff.with_suffix(".json.lock")):
-                iter_info = ff.read_json()
-                n_files_claimed = iter_info["n_files_claimed"]
-                if n_files_claimed >= len(datafiles):
-                    # No more date files to process.
-                    break
-
-                iter_info["n_files_claimed"] = n_files_claimed + 1
-                ff.write_json(iter_info, overwrite=True)
-
-            file = self._get_data_file(datafiles, n_files_claimed)
-            logger.debug('yielding data of file "%s"', file)
-            yield self.file_reader(file)
-
-    def concurrent_file_iter_stat(self, task_id: str) -> dict:
-        """Return status info of an ongoing "concurrent file iter"."""
-        info = self._concurrent_file_iter_info_file(task_id).read_json()
-        return {**info, "n_files": len(self._get_data_files()[0])}
-
-    def concurrent_file_iter_done(self, task_id: str) -> bool:
-        """Return whether the "concurrent file iter" identified by ``task_id`` is finished."""
-        zz = self.concurrent_file_iter_stat(task_id)
-        return zz["n_files_claimed"] >= zz["n_files"]
-
-    @deprecated(
-        deprecated_in="0.7.1",
-        removed_in="0.8.0",
-        details="Use ``file_reader`` instead.",
-    )
-    def file_view(self, file):
-        return self.file_reader(file)
-
-    def file_reader(self, file: Upath | int) -> FileReader[Element]:
-        """
-        Parameters
-        ----------
-        file
-            The data file path or the index of the file (0-based)
-            in the list of data files.
-        """
-        raise NotImplementedError
-
-    @deprecated(
-        deprecated_in="0.7.1",
-        removed_in="0.8.0",
-        details="Use ``file_readers`` instead.",
-    )
-    def file_views(self):
-        return self.file_readers()
-
-    def file_readers(self) -> list[FileReader[Element]]:
-        """
-        Return a list of all the data files wrapped in :class:`FileReader` objects,
-        which are light weight, have not loaded data yet, and are friendly
-        to pickling.
-
-        This is intended to facilitate concurrent processing,
-        e.g. one may send the :class:`FileReader` objects to different processes or threads.
-        """
-        datafiles, _ = self._get_data_files()
-        return [
-            self.file_reader(self._get_data_file(datafiles, i))
-            for i in range(len(datafiles))
-        ]
 
     def view(self) -> ListView[BiglistBase[Element]]:
         """
@@ -884,23 +643,90 @@ class BiglistBase(Seq[Element]):
         """
         return ListView(self)
 
+    @deprecated(
+        deprecated_in="0.7.4", removed_in="0.8.0", details="Use `.files` instead."
+    )
+    def iter_files(self) -> Iterator[FileReader[Element]]:
+        """
+        Yield one data file at a time, in contrast to :meth:`__iter__`,
+        which yields one element at a time.
+
+        See Also
+        --------
+        :meth:`concurrent_iter_files`: collectively iterate between multiple workers.
+        """
+        yield from self.files
+
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``.files.new_concurrent_iter`` instead.",
+    )
+    def new_concurrent_file_iter(self) -> str:
+        return self.files.new_concurrent_iter()
+
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``.files.concurrent_iter`` instead.",
+    )
+    def concurrent_iter_files(self, task_id: str) -> Iterator[FileReader[Element]]:
+        yield from self.files.concurrent_iter(task_id)
+
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``.files.concurrent_iter_stat`` instead.",
+    )
+    def concurrent_file_iter_stat(self, task_id: str) -> dict:
+        return self.files.concurrent_iter_stat(task_id)
+
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``.files.concurrent_iter_done`` instead.",
+    )
+    def concurrent_file_iter_done(self, task_id: str) -> bool:
+        return self.files.concurrent_iter_done(task_id)
+
+    @deprecated(
+        deprecated_in="0.7.1",
+        removed_in="0.8.0",
+        details="Use ``.files.__getitem__`` instead.",
+    )
+    def file_view(self, file: int):
+        return self.files[file]
+
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``.files.__getitem__`` instead.",
+    )
+    def file_reader(self, file: int) -> FileReader[Element]:
+        return self.files[file]
+
+    @deprecated(
+        deprecated_in="0.7.1",
+        removed_in="0.8.0",
+        details="Use ``list(self.files)`` instead.",
+    )
+    def file_views(self):
+        return list(self.files)
+
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``list(self.files)`` instead.",
+    )
+    def file_readers(self) -> list[FileReader[Element]]:
+        return list(self.files)
+
     @property
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``len(self.files)`` instead.",
+    )
     def num_datafiles(self) -> int:
         """Number of data files."""
-        return len(self._get_data_files()[0])
-
-    @property
-    def datafiles(self) -> list[str]:
-        """
-        Return the list of data file paths.
-        """
-        raise NotImplementedError
-
-    @property
-    def datafiles_info(self) -> list[tuple[str, int, int]]:
-        """
-        Return a list of tuples for the data files.
-        Each tuple, representing one data file, consists of
-        "file path", "element count in the file",
-        and "cumulative element count in the data files so far".
-        """
+        return len(self.files)

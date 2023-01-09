@@ -29,7 +29,7 @@ from upathlib.serializer import (
     ZOrjsonSerializer,
     ZstdOrjsonSerializer,
 )
-from ._base import BiglistBase, FileReader, Upath, PathType, Element, ListView
+from ._base import BiglistBase, FileReader, Upath, PathType, Element, ListView, FileSeq
 
 
 logger = logging.getLogger(__name__)
@@ -61,6 +61,53 @@ def _cleanup():
 
 
 atexit.register(_cleanup)
+
+
+class BiglistFileReader(FileReader[Element]):
+    def __init__(self, path: PathType, loader: Callable[[Upath], Any]):
+        """
+        Parameters
+        ----------
+        path
+            Path of a Parquet file.
+        loader
+            Usually this is :meth:`Biglist.load_data_file`.
+            If you customize this, please see the doc of :meth:`FileReader.__init__`.
+        """
+        self._data: Optional[list] = None
+        super().__init__(path, loader)
+
+    def load(self) -> None:
+        if self._data is None:
+            self._data = self.loader(self.path)
+
+    def data(self) -> list[Element]:
+        """Return the data loaded from the file."""
+        self.load()
+        return self._data
+
+    def __len__(self) -> int:
+        return len(self.data())
+
+    def __getitem__(self, idx: int) -> Element:
+        return self.data()[idx]
+
+    def __iter__(self) -> Iterator[Element]:
+        return iter(self.data())
+
+
+class BiglistFileSeq(FileSeq):
+    def __init__(self, root_dir: Upath, data_files: list[tuple[str, int, int]]):
+        self._root_dir = root_dir
+        self._data_files = data_files
+
+    @property
+    def info(self):
+        return {"data_files": self._data_files}
+
+    def __getitem__(self, idx: int):
+        file = self._root_dir / self._data_files[idx][0]
+        return BiglistFileReader(file, Biglist.load_data_file)
 
 
 class Dumper:
@@ -519,29 +566,13 @@ class Biglist(BiglistBase[Element]):
         else:
             self._data_files_cumlength_ = []
 
-        return self._data_files, self._data_files_cumlength_  # type: ignore
+        return [(*w, v) for w, v in zip(self._data_files, self._data_files_cumlength_)]
+        # Each element of the list is a tuple containing file path, item count in file, and cumsum of item counts.
 
     @property
-    def datafiles(self) -> list[str]:
-        df, _ = self._get_data_files()
-        return [str(self._get_data_file(df, i)) for i in range(len(df))]
-
-    @property
-    def datafiles_info(self) -> list[tuple[str, int, int]]:
-        files = self.datafiles
-        counts = (v[1] for v in self._data_files)
-        cumcounts = self._data_files_cumlength_
-        return list(zip(files, counts, cumcounts))
-
-    def _get_data_file(self, datafiles, idx) -> Upath:
-        # `datafiles` is the return of `_get_datafiles`.
-        return self._data_dir / datafiles[idx][0]
-
-    def file_reader(self, file: Upath | int) -> BiglistFileReader[Element]:
-        if isinstance(file, int):
-            datafiles, _ = self._get_data_files()
-            file = self._get_data_file(datafiles, file)
-        return BiglistFileReader(file, self.load_data_file)
+    def files(self):
+        datafiles_info = self._get_data_files()
+        return BiglistFileSeq(self._data_dir, datafiles_info)
 
     def iter_files(self) -> Iterator[BiglistFileReader[Element]]:
         self.flush()
@@ -649,39 +680,6 @@ class Biglist(BiglistBase[Element]):
         """Return whether the "multiplex iter" identified by ``task_id`` is finished."""
         ss = self.multiplex_stat(task_id)
         return ss["next"] == ss["total"]
-
-
-class BiglistFileReader(FileReader[Element]):
-    def __init__(self, path: PathType, loader: Callable[[Upath], Any]):
-        """
-        Parameters
-        ----------
-        path
-            Path of a Parquet file.
-        loader
-            Usually this is :meth:`Biglist.load_data_file`.
-            If you customize this, please see the doc of :meth:`FileReader.__init__`.
-        """
-        self._data: Optional[list] = None
-        super().__init__(path, loader)
-
-    def load(self) -> None:
-        if self._data is None:
-            self._data = self.loader(self.path)
-
-    def data(self) -> list[Element]:
-        """Return the data loaded from the file."""
-        self.load()
-        return self._data
-
-    def __len__(self) -> int:
-        return len(self.data())
-
-    def __getitem__(self, idx: int) -> Element:
-        return self.data()[idx]
-
-    def __iter__(self) -> Iterator[Element]:
-        return iter(self.data())
 
 
 class JsonByteSerializer(ByteSerializer):

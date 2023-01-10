@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import bisect
 import logging
 import os
@@ -14,15 +15,15 @@ from datetime import datetime
 from typing import (
     Any,
     Callable,
+    Generic,
     Optional,
     TypeVar,
-    Generic,
 )
 
 from deprecation import deprecated
-from upathlib import LocalUpath, Upath, PathType, resolve_path
-from ._util import Seq, Element, ListView, Viewable
+from upathlib import LocalUpath, PathType, Upath, resolve_path
 
+from ._util import Element, ListView, Seq, Viewable
 
 logger = logging.getLogger(__name__)
 

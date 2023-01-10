@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import atexit
 import concurrent.futures
 import itertools
@@ -6,31 +7,31 @@ import json
 import logging
 import multiprocessing
 import string
-import time
 import threading
+import time
 import weakref
 from collections.abc import Iterable, Iterator
-from concurrent.futures import ThreadPoolExecutor, Future
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
 from typing import (
+    Any,
     Callable,
     Optional,
-    Any,
 )
 from uuid import uuid4
 
 from upathlib.serializer import (
     ByteSerializer,
-    _loads,
-    PickleSerializer,
-    ZPickleSerializer,
-    ZstdPickleSerializer,
     OrjsonSerializer,
+    PickleSerializer,
     ZOrjsonSerializer,
+    ZPickleSerializer,
     ZstdOrjsonSerializer,
+    ZstdPickleSerializer,
+    _loads,
 )
-from ._base import BiglistBase, FileReader, Upath, PathType, Element, ListView, FileSeq
 
+from ._base import BiglistBase, Element, FileReader, FileSeq, ListView, PathType, Upath
 
 logger = logging.getLogger(__name__)
 

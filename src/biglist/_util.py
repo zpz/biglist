@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import bisect
 import itertools
-from collections.abc import Sequence, Iterator
-from typing import Optional, Generic, TypeVar, Protocol, runtime_checkable
+from collections.abc import Iterator, Sequence
+from typing import Generic, Optional, Protocol, TypeVar, runtime_checkable
 
 
 def locate_idx_in_chunked_seq(

@@ -1,18 +1,19 @@
 from __future__ import annotations
-from datetime import datetime
+
 import itertools
 import logging
 from collections.abc import Iterable, Iterator, Sequence
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
 import pyarrow
-from pyarrow.parquet import ParquetFile, FileMetaData
 from pyarrow.fs import FileSystem, GcsFileSystem
+from pyarrow.parquet import FileMetaData, ParquetFile
 from upathlib import LocalUpath
-from ._base import BiglistBase, Upath, PathType, ListView, FileReader, Seq
-from ._util import locate_idx_in_chunked_seq
 
+from ._base import BiglistBase, FileReader, ListView, PathType, Seq, Upath
+from ._util import locate_idx_in_chunked_seq
 
 # If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
 # and "credential_token_expiration". These can be obtained via

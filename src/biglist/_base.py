@@ -23,12 +23,12 @@ from typing import (
 from deprecation import deprecated
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
-from ._util import Element, ListView, Seq, Viewable
+from ._util import Element, ListView, Seq, SeqType
 
 logger = logging.getLogger(__name__)
 
 
-class FileReader(Viewable, Seq[Element]):
+class FileReader(Seq[Element]):
     """
     A FileReader is a "lazy" loader of a data file.
     It keeps track of the path of a data file along with a loader function,
@@ -83,15 +83,13 @@ class FileReader(Viewable, Seq[Element]):
         """
         raise NotImplementedError
 
-    # def view(self) -> ListView[FileReader[Element]]:
-    #     """Return a :class:`ListView` object to facilitate slicing this biglist."""
-    #     return ListView(self)
+    def view(self) -> ListView[FileReader[Element]]:
+        """Return a :class:`ListView` object to facilitate slicing this biglist."""
+        return ListView(self)
 
 
 FileReaderType = TypeVar("FileReaderType", bound=FileReader)
 
-
-_unspecified = object()
 
 
 """
@@ -215,7 +213,10 @@ class FileSeq(Generic[FileReaderType]):
         return zz["n_files_claimed"] >= zz["n_files"]
 
 
-class BiglistBase(Seq[Element], Viewable[Element]):
+_unspecified = object()
+
+
+class BiglistBase(Seq[Element]):
     """
     This base class contains code mainly concerning *reading* only.
     The subclass :class:`~biglist.Biglist` adds functionalities for writing.
@@ -480,8 +481,8 @@ class BiglistBase(Seq[Element], Viewable[Element]):
     def _info_file(self) -> Upath:
         return self.path / "info.json"
 
-    @abstractmethod
     @property
+    @abstractmethod
     def files(self) -> FileSeq:
         raise NotImplementedError
 
@@ -731,3 +732,6 @@ class BiglistBase(Seq[Element], Viewable[Element]):
     def num_datafiles(self) -> int:
         """Number of data files."""
         return len(self.files)
+
+    def view(self: SeqType) -> ListView[SeqType[Element]]:
+        return ListView(self)

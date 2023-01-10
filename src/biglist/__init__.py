@@ -28,10 +28,10 @@ Additional utilities provide mechanisms for "slicing and dicing" a biglist,
 as well as "chaining up" a series of biglists. These utilities work not only for biglist,
 but also for any |Sequence|_.
 """
-# flake8: noqa
 from __future__ import annotations
-from ._base import FileReader, ListView, ChainedList, Seq
+from ._base import FileReader
 from ._biglist import Biglist, BiglistFileReader
+from ._util import Seq, ChainedList, ListView
 
 __version__ = "0.7.4b1"
 

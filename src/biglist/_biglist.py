@@ -70,7 +70,7 @@ class BiglistFileReader(FileReader[Element]):
         Parameters
         ----------
         path
-            Path of a Parquet file.
+            Path of a data file.
         loader
             Usually this is :meth:`Biglist.load_data_file`.
             If you customize this, please see the doc of :meth:`FileReader.__init__`.
@@ -99,6 +99,19 @@ class BiglistFileReader(FileReader[Element]):
 
 class BiglistFileSeq(FileSeq):
     def __init__(self, root_dir: Upath, data_files: list[tuple[str, int, int]]):
+        '''
+        Parameters
+        ----------
+        root_dir
+            Root directory where the data files resides.
+            The file paths in ``data_files`` are relative (under) this path.
+        data_files
+            A list of data files that constitute the file sequence.
+            Each tuple in the list is comprised of a file path (relative to
+            ``root_dir``), number of data items in the file, and cumulative
+            number of data items in the files up to the one at hand.
+            Therefore, the order of the files in the list is significant.
+        '''
         self._root_dir = root_dir
         self._data_files = data_files
 

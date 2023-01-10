@@ -20,7 +20,7 @@ def locate_idx_in_chunked_seq(
     `last_chunk`: info about the last call to this function, consisting of
         ('index of member sequence chosen',
          'starting index of the chosen sequence',
-         'finishing index (exclusive) of the chosen sequence',
+         'finishing index (plus 1) of the chosen sequence',
         )
     """
     if idx < 0:
@@ -44,7 +44,7 @@ def locate_idx_in_chunked_seq(
     if igrp != igrp0:
         if igrp == 0:
             last_chunk = (
-                0,  # row-group index
+                0,  # group index
                 0,  # item index lower bound
                 len_cumsum[0],  # item index upper bound
             )
@@ -56,6 +56,7 @@ def locate_idx_in_chunked_seq(
             )
 
     # index of chunk, item index in chunk, book-keeping for the chosen chunk
+    # `last_chunk` is the value to be passed in to this function in the next call.
     return igrp, idx - last_chunk[1], last_chunk
 
 
@@ -155,7 +156,7 @@ class ChainedList(Generic[SeqType]):
     def __repr__(self):
         return "<{} with {} elements in {} member lists>".format(
             self.__class__.__name__,
-            self._len,
+            self.__len__(),
             len(self._lists),
         )
 
@@ -184,9 +185,9 @@ class ChainedList(Generic[SeqType]):
         for v in self._lists:
             yield from v
 
-    # def view(self) -> ListView[ChainedList[SeqType]]:
-    #     # The returned object supports slicing.
-    #     return ListView(self)
+    def view(self) -> ListView[ChainedList[SeqType]]:
+        # The returned object supports slicing.
+        return ListView(self)
 
     @property
     def raw(self) -> tuple[SeqType, ...]:
@@ -300,8 +301,3 @@ class ListView(Generic[SeqType]):
         Warning: don't do this on "big" data!
         """
         return list(self)
-
-
-class Viewable(Generic[Element]):
-    def view(self: Seq[Element]) -> ListView[Seq[Element]]:
-        return ListView(self)

@@ -9,7 +9,7 @@ authors = [
     {name = "Zepu Zhang", email = "zepu.zhang@gmail.com"},
 ]
 dependencies = [
-    "upathlib >= 0.6.9b5",
+    "upathlib",
     "deprecation",
 ]
 requires-python = ">=3.8"
@@ -41,8 +41,23 @@ parquet = [
     "pyarrow >= 10.0.0",
 ]
 test = [
+    "bandit",
+    "black",
     "boltons",
+    "mypy",
+    "ruff",
 ]
+
+
+[tool.ruff]
+target-version = "py38"
+select = ["E", "F"]
+extend-select = ["I001"]  # isort
+ignore = ["E501"]  # line length
+
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["E402"]
 
 
 [tool.pytest.ini_options]
@@ -56,23 +71,7 @@ fail_under = 85
 show_missing = true
 skip_empty = true
 
+
 [tool.coverage.run]
 data_file = "/tmp/.coverage"
 
-
-[tool.flake8]
-ignore = ["E203", "E231", "E501", "W503"]
-
-
-[tool.pylint.messages_control]
-max-line-length = 88
-disable = [
-    "consider-using-f-string",
-    "missing-docstring",
-    "invalid-name",
-    "line-too-long",
-    "fixme",
-    "too-few-public-methods",
-    "too-many-branches",
-    "too-many-return-statements",
-]

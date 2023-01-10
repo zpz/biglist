@@ -731,6 +731,3 @@ class BiglistBase(Seq[Element]):
     def num_datafiles(self) -> int:
         """Number of data files."""
         return len(self.files)
-
-    def view(self: SeqType) -> ListView[SeqType[Element]]:
-        return ListView(self)

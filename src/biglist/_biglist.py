@@ -99,7 +99,7 @@ class BiglistFileReader(FileReader[Element]):
 
 class BiglistFileSeq(FileSeq):
     def __init__(self, root_dir: Upath, data_files: list[tuple[str, int, int]]):
-        '''
+        """
         Parameters
         ----------
         root_dir
@@ -111,7 +111,7 @@ class BiglistFileSeq(FileSeq):
             ``root_dir``), number of data items in the file, and cumulative
             number of data items in the files up to the one at hand.
             Therefore, the order of the files in the list is significant.
-        '''
+        """
         self._root_dir = root_dir
         self._data_files = data_files
 

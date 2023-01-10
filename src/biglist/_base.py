@@ -91,7 +91,6 @@ class FileReader(Seq[Element]):
 FileReaderType = TypeVar("FileReaderType", bound=FileReader)
 
 
-
 """
 Return a list of all the data files wrapped in :class:`FileReader` objects,
 which are light weight, have not loaded data yet, and are friendly

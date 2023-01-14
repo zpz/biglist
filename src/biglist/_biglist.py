@@ -64,148 +64,6 @@ def _cleanup():
 atexit.register(_cleanup)
 
 
-class BiglistFileReader(FileReader[Element]):
-    def __init__(self, path: PathType, loader: Callable[[Upath], Any]):
-        """
-        Parameters
-        ----------
-        path
-            Path of a data file.
-        loader
-            Usually this is :meth:`Biglist.load_data_file`.
-            If you customize this, please see the doc of :meth:`FileReader.__init__`.
-        """
-        self._data: Optional[list] = None
-        super().__init__(path, loader)
-
-    def load(self) -> None:
-        if self._data is None:
-            self._data = self.loader(self.path)
-
-    def data(self) -> list[Element]:
-        """Return the data loaded from the file."""
-        self.load()
-        return self._data
-
-    def __len__(self) -> int:
-        return len(self.data())
-
-    def __getitem__(self, idx: int) -> Element:
-        return self.data()[idx]
-
-    def __iter__(self) -> Iterator[Element]:
-        return iter(self.data())
-
-
-class BiglistFileSeq(FileSeq):
-    def __init__(self, root_dir: Upath, data_files: list[tuple[str, int, int]]):
-        """
-        Parameters
-        ----------
-        root_dir
-            Root directory where the data files resides.
-            The file paths in ``data_files`` are relative (under) this path.
-        data_files
-            A list of data files that constitute the file sequence.
-            Each tuple in the list is comprised of a file path (relative to
-            ``root_dir``), number of data items in the file, and cumulative
-            number of data items in the files up to the one at hand.
-            Therefore, the order of the files in the list is significant.
-        """
-        self._root_dir = root_dir
-        self._data_files = data_files
-
-    @property
-    def info(self):
-        return {"data_files": self._data_files}
-
-    def __getitem__(self, idx: int):
-        file = self._root_dir / self._data_files[idx][0]
-        return BiglistFileReader(file, Biglist.load_data_file)
-
-
-class Dumper:
-    """
-    This class performs file-saving in a thread pool.
-
-    Parameters
-    ----------
-    n_threads
-        Max number of threads to use. There are at most
-        this many submitted and unfinished file-dumping tasks
-        at any time.
-    """
-
-    def __init__(self, executor: ThreadPoolExecutor, n_threads: int):
-        self._executor: executor = executor
-        self._n_threads = n_threads
-        self._sem: Optional[threading.Semaphore] = None  # type: ignore
-        self._task_file_data: dict[Future, tuple] = {}
-
-    def _callback(self, t):
-        self._sem.release()
-        del self._task_file_data[t]
-        if t.exception():
-            raise t.exception()
-
-    def dump_file(
-        self, file_dumper: Callable[[Upath, list], None], data_file: Upath, data: list
-    ):
-        """
-        Parameters
-        ----------
-        file_dumper
-            This function takes a file path and the data as a list, and saves
-            the data in the file named by the path.
-
-        data_file, data
-            Parameters to ``file_dumper``.
-        """
-        if self._sem is None:
-            self._sem = threading.Semaphore(
-                min(self._n_threads, self._executor._max_workers)
-            )
-        self._sem.acquire()
-        # Wait here if the executor is busy at capacity.
-        # The `Dumper` object runs in the same thread as the `Biglist` object,
-        # hence if it's waiting for the semaphore here, it is blocking
-        # further actions of the `Biglist` and waiting for one file-dumping
-        # to finish.
-
-        task = self._executor.submit(file_dumper, data_file, data)
-        self._task_file_data[task] = (data_file.name, data)
-        # It's useful to keep the data here, as it will be needed
-        # by `get_file_data`.
-        task.add_done_callback(self._callback)
-        # If task is already finished when this callback is being added,
-        # then it is called immediately.
-
-    def get_file_data(self, data_file: Upath):
-        """
-        This is for such a special need:
-
-            Suppose 2 files are in the dump queue, hence not saved on disk yet,
-            however, they're already in the file-list of the ``Biglist``s meta info.
-            Now if we access one element by index, and the code determines based on
-            meta info that the element is in one of the files in-queue here.
-            Then we can't load the file from disk (as it is not persisted yet);
-            we can only get that file's data from the dump-queue via calling
-            this method.
-        """
-        file_name = data_file.name
-        for name, data in self._task_file_data.values():
-            # `_task_file_data` is not long, so this is OK.
-            if name == file_name:
-                return data
-        return None
-
-    def wait(self):
-        """
-        Wait to finish all the submitted dumping tasks.
-        """
-        concurrent.futures.wait(list(self._task_file_data.keys()))
-
-
 class Biglist(BiglistBase[Element]):
     registered_storage_formats = {}
 
@@ -585,12 +443,16 @@ class Biglist(BiglistBase[Element]):
 
     @property
     def files(self):
+        # This method should be cheap to call.
         datafiles_info = self._get_data_files()
-        return BiglistFileSeq(self._data_dir, datafiles_info)
+        return BiglistFileSeq(self.path, self._data_dir, datafiles_info)
 
     def iter_files(self) -> Iterator[BiglistFileReader[Element]]:
         self.flush()
         return super().iter_files()
+
+    def __len__(self):
+        return super().__len__() + len(self._append_buffer)
 
     def __iter__(self) -> Iterator[Element]:
         yield from super().__iter__()
@@ -694,6 +556,157 @@ class Biglist(BiglistBase[Element]):
         """Return whether the "multiplex iter" identified by ``task_id`` is finished."""
         ss = self.multiplex_stat(task_id)
         return ss["next"] == ss["total"]
+
+
+class BiglistFileReader(FileReader[Element]):
+    def __init__(self, path: PathType, loader: Callable[[Upath], Any]):
+        """
+        Parameters
+        ----------
+        path
+            Path of a data file.
+        loader
+            Usually this is :meth:`Biglist.load_data_file`.
+            If you customize this, please see the doc of :meth:`FileReader.__init__`.
+        """
+        self._data: Optional[list] = None
+        super().__init__(path, loader)
+
+    def load(self) -> None:
+        if self._data is None:
+            self._data = self.loader(self.path)
+
+    def data(self) -> list[Element]:
+        """Return the data loaded from the file."""
+        self.load()
+        return self._data
+
+    def __len__(self) -> int:
+        return len(self.data())
+
+    def __getitem__(self, idx: int) -> Element:
+        return self.data()[idx]
+
+    def __iter__(self) -> Iterator[Element]:
+        return iter(self.data())
+
+
+class BiglistFileSeq(FileSeq):
+    def __init__(
+        self, root_dir: Upath, data_dir: Upath, data_files: list[tuple[str, int, int]]
+    ):
+        """
+        Parameters
+        ----------
+        root_dir
+            Root directory for storage of meta info.
+        data_dir
+            Root directory where the data files resides.
+            The file paths in ``data_files`` are relative (under) this path.
+        data_files
+            A list of data files that constitute the file sequence.
+            Each tuple in the list is comprised of a file path (relative to
+            ``root_dir``), number of data items in the file, and cumulative
+            number of data items in the files up to the one at hand.
+            Therefore, the order of the files in the list is significant.
+        """
+        self._root_dir = root_dir
+        self._data_dir = data_dir
+        self._data_files = data_files
+
+    @property
+    def path(self):
+        return self._root_dir
+
+    @property
+    def info(self):
+        return {"data_files": self._data_files}
+
+    def __getitem__(self, idx: int):
+        file = self._data_dir / self._data_files[idx][0]
+        return BiglistFileReader(file, Biglist.load_data_file)
+
+
+class Dumper:
+    """
+    This class performs file-saving in a thread pool.
+
+    Parameters
+    ----------
+    n_threads
+        Max number of threads to use. There are at most
+        this many submitted and unfinished file-dumping tasks
+        at any time.
+    """
+
+    def __init__(self, executor: ThreadPoolExecutor, n_threads: int):
+        self._executor: executor = executor
+        self._n_threads = n_threads
+        self._sem: Optional[threading.Semaphore] = None  # type: ignore
+        self._task_file_data: dict[Future, tuple] = {}
+
+    def _callback(self, t):
+        self._sem.release()
+        del self._task_file_data[t]
+        if t.exception():
+            raise t.exception()
+
+    def dump_file(
+        self, file_dumper: Callable[[Upath, list], None], data_file: Upath, data: list
+    ):
+        """
+        Parameters
+        ----------
+        file_dumper
+            This function takes a file path and the data as a list, and saves
+            the data in the file named by the path.
+
+        data_file, data
+            Parameters to ``file_dumper``.
+        """
+        if self._sem is None:
+            self._sem = threading.Semaphore(
+                min(self._n_threads, self._executor._max_workers)
+            )
+        self._sem.acquire()
+        # Wait here if the executor is busy at capacity.
+        # The `Dumper` object runs in the same thread as the `Biglist` object,
+        # hence if it's waiting for the semaphore here, it is blocking
+        # further actions of the `Biglist` and waiting for one file-dumping
+        # to finish.
+
+        task = self._executor.submit(file_dumper, data_file, data)
+        self._task_file_data[task] = (data_file.name, data)
+        # It's useful to keep the data here, as it will be needed
+        # by `get_file_data`.
+        task.add_done_callback(self._callback)
+        # If task is already finished when this callback is being added,
+        # then it is called immediately.
+
+    def get_file_data(self, data_file: Upath):
+        """
+        This is for such a special need:
+
+            Suppose 2 files are in the dump queue, hence not saved on disk yet,
+            however, they're already in the file-list of the ``Biglist``s meta info.
+            Now if we access one element by index, and the code determines based on
+            meta info that the element is in one of the files in-queue here.
+            Then we can't load the file from disk (as it is not persisted yet);
+            we can only get that file's data from the dump-queue via calling
+            this method.
+        """
+        file_name = data_file.name
+        for name, data in self._task_file_data.values():
+            # `_task_file_data` is not long, so this is OK.
+            if name == file_name:
+                return data
+        return None
+
+    def wait(self):
+        """
+        Wait to finish all the submitted dumping tasks.
+        """
+        concurrent.futures.wait(list(self._task_file_data.keys()))
 
 
 class JsonByteSerializer(ByteSerializer):

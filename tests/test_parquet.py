@@ -99,15 +99,15 @@ def test_big_parquet_list():
 
     biglist = ParquetBiglist.new(path)
     assert len(biglist) == N + N
-    assert biglist.num_datafiles == 2
+    assert len(biglist.files) == 2
     
     print('')
     print('datafiles')
-    z = biglist.datafiles
+    z = biglist.files.info
     print(z)
-    print('datafiles_info:\n', biglist.datafiles_info)
-    assert isinstance(z, list)
-    assert all(isinstance(v, str) for v in z)
+    print('datafiles_info:\n', z['data_files'])
+    assert isinstance(z, dict)
+    assert all(isinstance(v[0], str) for v in z['data_files'])
     print('')
 
     print(biglist[0])
@@ -132,14 +132,14 @@ def test_big_parquet_list():
     print('')
     print(biglist)
     print(biglist.view())
-    print(biglist.file_reader(0))
-    print(biglist.file_reader(1).data)
+    print(biglist.files[0])
+    print(biglist.files[1].data)
     print('')
-    print(biglist.file_reader(1).data())
+    print(biglist.files[1].data())
 
     # specify columns
     print('')
-    p = biglist._get_data_files()[0][0]['path']
+    p = biglist.files.info['data_files'][0][0]
     d = read_parquet_file(p)
     d1 = d.columns(['key', 'value'])
     print(d1[3])

@@ -154,11 +154,16 @@ class FileSeq(Generic[FileReaderType]):
         for i in range(self.__len__()):
             yield self.__getitem__(i)
 
+    @property
+    @abstractmethod
+    def path(self) -> Upath:
+        raise NotImplementedError
+
     def _concurrent_iter_info_file(self, task_id: str) -> Upath:
         """
         ``task_id``: returned by :meth:`new_concurrent_iter`.
         """
-        raise NotImplementedError
+        return self.path / ".concurrent_file_iter" / task_id / "info.json"
 
     def new_concurrent_iter(self) -> str:
         """
@@ -171,7 +176,7 @@ class FileSeq(Generic[FileReaderType]):
         During this iteration, the biglist object should stay unchanged.
         """
         task_id = datetime.utcnow().isoformat()
-        self._concurrent_file_iter_info_file(task_id).write_json(
+        self._concurrent_iter_info_file(task_id).write_json(
             {"n_files_claimed": 0}, overwrite=False
         )
         return task_id
@@ -187,7 +192,7 @@ class FileSeq(Generic[FileReaderType]):
         """
         nfiles = self.__len__()
         while True:
-            ff = self._concurrent_file_iter_info_file(task_id)
+            ff = self._concurrent_iter_info_file(task_id)
             with self.lockfile(ff.with_suffix(".json.lock")):
                 iter_info = ff.read_json()
                 n_files_claimed = iter_info["n_files_claimed"]
@@ -203,8 +208,8 @@ class FileSeq(Generic[FileReaderType]):
 
     def concurrent_iter_stat(self, task_id: str) -> dict:
         """Return status info of an ongoing "concurrent file iter"."""
-        info = self._concurrent_file_iter_info_file(task_id).read_json()
-        return {**info, "n_files": self._len__()}
+        info = self._concurrent_iter_info_file(task_id).read_json()
+        return {**info, "n_files": self.__len__()}
 
     def concurrent_iter_done(self, task_id: str) -> bool:
         """Return whether the "concurrent file iter" identified by ``task_id`` is finished."""
@@ -496,8 +501,8 @@ class BiglistBase(Seq[Element]):
         # this biglist, then all the other workers are reading only.
         files = self.files
         if files:
-            return files.info["data_files"][-1][-1] + len(self._append_buffer)
-        return len(self._append_buffer)
+            return files.info["data_files"][-1][-1]
+        return 0
 
     def __getitem__(self, idx: int) -> Element:
         """
@@ -620,9 +625,6 @@ class BiglistBase(Seq[Element]):
                         nfiles_queued += 1
 
                     yield from file_reader
-
-        if self._append_buffer:
-            yield from self._append_buffer
 
     def view(self) -> ListView[BiglistBase[Element]]:
         """

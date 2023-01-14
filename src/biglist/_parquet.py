@@ -12,7 +12,7 @@ from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
 from upathlib import LocalUpath
 
-from ._base import BiglistBase, FileReader, ListView, PathType, Seq, Upath
+from ._base import BiglistBase, FileReader, FileSeq, ListView, PathType, Seq, Upath
 from ._util import locate_idx_in_chunked_seq
 
 # If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
@@ -202,31 +202,20 @@ class ParquetBiglist(BiglistBase):
             self.path.rmrf()
 
     def __repr__(self):
-        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data file(s) stored at {self.info['datapath']}>"
-
-    def _get_data_files(self):
-        return self.info["datafiles"], self.info["datafiles_cumlength"]
-
-    def _get_data_file(self, datafiles, idx):
-        return self.resolve_path(datafiles[idx]["path"])
-
-    def file_reader(self, file: Upath | int) -> ParquetFileReader:
-        if isinstance(file, int):
-            datafiles, _ = self._get_data_files()
-            file = self._get_data_file(datafiles, file)
-        return ParquetFileReader(file, self.load_data_file)
+        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {len(self.files)} data file(s) stored at {self.info['datapath']}>"
 
     @property
-    def datafiles(self) -> list[str]:
-        return [f["path"] for f in self.info["datafiles"]]
-
-    @property
-    def datafiles_info(self) -> list[tuple[str, int, int]]:
-        files = self.info["datafiles"]
-        cumlen = self.info["datafiles_cumlength"]
-        return [
-            (file["path"], file["num_rows"], cum) for file, cum in zip(files, cumlen)
-        ]
+    def files(self):
+        # This method should be cheap to call.
+        return ParquetFileSeq(
+            self.path,
+            [
+                (a["path"], a["num_rows"], b)
+                for a, b in zip(
+                    self.info["datafiles"], self.info["datafiles_cumlength"]
+                )
+            ],
+        )
 
 
 class ParquetFileReader(FileReader):
@@ -510,6 +499,37 @@ class ParquetFileReader(FileReader):
         self._columns[idx] = z
         self._columns[name] = z
         return z
+
+
+class ParquetFileSeq(FileSeq):
+    def __init__(self, root_dir: Upath, data_files: list[tuple[str, int, int]]):
+        """
+        Parameters
+        ----------
+        root_dir
+            Root directory for storage of meta info.
+        data_files
+            A list of data files that constitute the file sequence.
+            Each tuple in the list is comprised of a file path (relative to
+            ``root_dir``), number of data items in the file, and cumulative
+            number of data items in the files up to the one at hand.
+            Therefore, the order of the files in the list is significant.
+        """
+        self._root_dir = root_dir
+        self._data_files = data_files
+
+    @property
+    def path(self):
+        return self._root_dir
+
+    @property
+    def info(self):
+        return {"data_files": self._data_files}
+
+    def __getitem__(self, idx: int):
+        return ParquetFileReader(
+            self._data_files[idx][0], ParquetBiglist.load_data_file
+        )
 
 
 class ParquetBatchData(Seq):

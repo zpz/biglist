@@ -83,18 +83,6 @@ class FileReader(Seq[Element]):
         """
         raise NotImplementedError
 
-    def slicer(self) -> Slicer[FileReader[Element]]:
-        """Return a :class:`Slicer` object to facilitate slicing this biglist."""
-        return Slicer(self)
-
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.8.0",
-        details="Use ``slicer`` instead.",
-    )
-    def view(self):
-        return self.slicer()
-
 
 FileReaderType = TypeVar("FileReaderType", bound=FileReader)
 
@@ -608,7 +596,12 @@ class BiglistBase(Seq[Element]):
 
                     yield from file_reader
 
-    def slicer(self) -> Slicer[BiglistBase[Element]]:
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``Slicer`` instead.",
+    )
+    def view(self):
         """
         By convention, a "slicing" method should return an object of the same class
         as the original object. This is not possible for :class:`~biglist._base.BiglistBase` (or its subclasses),
@@ -627,14 +620,6 @@ class BiglistBase(Seq[Element]):
         of the biglist; they open and read files independent of other slicers.
         """
         return Slicer(self)
-
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.8.0",
-        details="Use ``slicer`` instead.",
-    )
-    def view(self):
-        return self.slicer()
 
     @property
     @abstractmethod

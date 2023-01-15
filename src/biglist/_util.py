@@ -5,8 +5,6 @@ import itertools
 from collections.abc import Iterator, Sequence
 from typing import Generic, Optional, Protocol, TypeVar, runtime_checkable
 
-from deprecation import deprecated
-
 
 def locate_idx_in_chunked_seq(
     idx: int,
@@ -128,12 +126,10 @@ class Chain(Generic[SeqType]):
     """
     This class tracks a series of |Sequence|_ to provide
     random element access and iteration on the series as a whole.
-    A call to the method :meth:`slicer` further returns an :class:`Slicer` that
-    supports slicing.
 
     This class operates with zero-copy.
 
-    Note that :class:`Slicer` and :class:`Chain` are |Sequence|_, hence could be
+    Note that :class:`Slicer` and :class:`Chain` are both |Sequence|_, hence could be
     members of the series.
 
     This class is generic with a parameter indicating the type of the member sequences.
@@ -200,18 +196,6 @@ class Chain(Generic[SeqType]):
         object.
         """
         return self._lists
-
-    def slicer(self) -> Slicer[Chain[SeqType]]:
-        # The returned object supports slicing.
-        return Slicer(self)
-
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.8.0",
-        details="Use ``slicer`` instead.",
-    )
-    def view(self):
-        return self.slicer()
 
 
 class Slicer(Generic[SeqType]):

@@ -30,11 +30,11 @@ but also for any |Sequence|_.
 """
 from __future__ import annotations
 
-from ._base import FileReader
-from ._biglist import Biglist, BiglistFileReader
+from ._base import FileReader, FileSeq
+from ._biglist import Biglist, BiglistFileReader, BiglistFileSeq
 from ._util import Chain, Seq, Slicer
 
-__version__ = "0.7.4b1"
+__version__ = "0.7.4b2"
 
 # Back compat; will be removed >=0.8.0
 FileView = FileReader
@@ -42,8 +42,10 @@ BiglistFileView = BiglistFileReader
 
 try:
     from ._parquet import (
+        ParquetBatchData,
         ParquetBiglist,
         ParquetFileReader,
+        ParquetFileSeq,
         read_parquet_file,
         write_parquet_file,
     )

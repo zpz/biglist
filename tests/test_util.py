@@ -1,6 +1,6 @@
 from __future__ import annotations
 from collections.abc import Sequence, Iterable, Sized
-from biglist._util import Slicer, Chain, Seq, locate_idx_in_chunked_seq, Slicer
+from biglist._util import Slicer, Chain, Seq, locate_idx_in_chunked_seq
 from biglist._base import BiglistBase, FileReader, FileSeq
 from biglist._parquet import ParquetBatchData
 
@@ -40,7 +40,7 @@ def test_seq():
     chain = Chain([1, 2, 3], ['a', 'b'])
     assert isinstance(chain, Seq)
 
-    s = chain.slicer()
+    s = Slicer(chain)
     assert isinstance(s, Seq)
 
     class Numbers(Seq[int]):
@@ -86,7 +86,7 @@ def test_seq():
     assert issubclass(Letters, Seq)
 
 
-def test_slicer(datalv):
+def test_slicer():
     datalv = Slicer(list(range(20)))
 
     data = list(range(20))

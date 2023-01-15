@@ -58,7 +58,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - Added "external" Biglist variant---class `ParquetBiglist`---backed by Parquet data. This exposes a few new classes as part of the public API. To this purpose, there was a code re-org.
-- New class `ChainedSeq`.
+- New class `ChainedList`.
 - New class `BiglistFileData`. Although currently the data file content of a `Biglist` is always a Python `list`, the class prepares for possible changes in the future. In addition, this achieves consistency between `Biglist`/`BiglistFileData` and `ParquetBiglist`/`ParquetFileData`.
 
 ### Removed
@@ -68,7 +68,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
-- More systematic and thoughtful use of `SeqView`.
+- More systematic and thoughtful use of `ListView`.
 - `Biglist.load_data_file` returns an object of the new class `BiglistFileData`.
 - `Biglist.DEFAULT_STORAGE_FORMAT` changed from `pickle` to `pickle-zstd`.
 - Reformatted `CHANGELOG`.

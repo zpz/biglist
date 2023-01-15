@@ -18,7 +18,7 @@ from ._base import (
     FileSeq,
     PathType,
     Seq,
-    SeqView,
+    ListView,
     Upath,
     resolve_path,
 )
@@ -634,9 +634,9 @@ class ParquetBatchData(Seq):
                 for row in zip(*self._data.columns):
                     yield dict(zip(names, row))
 
-    def view(self) -> SeqView:
-        """Return a :class:`SeqView` to gain slicing capabilities."""
-        return SeqView(self)
+    def view(self) -> ListView:
+        """Return a :class:`ListView` to gain slicing capabilities."""
+        return ListView(self)
 
     def columns(self, cols: Sequence[str]) -> ParquetBatchData:
         """

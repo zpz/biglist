@@ -23,7 +23,7 @@ from typing import (
 from deprecation import deprecated
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
-from ._util import Element, Seq, SeqView
+from ._util import Element, Seq, ListView
 
 logger = logging.getLogger(__name__)
 
@@ -83,9 +83,9 @@ class FileReader(Seq[Element]):
         """
         raise NotImplementedError
 
-    def view(self) -> SeqView[FileReader[Element]]:
-        """Return a :class:`SeqView` object to facilitate slicing this biglist."""
-        return SeqView(self)
+    def view(self) -> ListView[FileReader[Element]]:
+        """Return a :class:`ListView` object to facilitate slicing this biglist."""
+        return ListView(self)
 
 
 FileReaderType = TypeVar("FileReaderType", bound=FileReader)
@@ -600,7 +600,7 @@ class BiglistBase(Seq[Element]):
 
                     yield from file_reader
 
-    def view(self) -> SeqView[BiglistBase[Element]]:
+    def view(self) -> ListView[BiglistBase[Element]]:
         """
         By convention, a "slicing" method should return an object of the same class
         as the original object. This is not possible for :class:`~biglist._base.BiglistBase` (or its subclasses),
@@ -618,7 +618,7 @@ class BiglistBase(Seq[Element]):
         Multiple views may be used to view diff parts
         of the biglist; they open and read files independent of other views.
         """
-        return SeqView(self)
+        return ListView(self)
 
     @property
     @abstractmethod

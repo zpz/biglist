@@ -1,6 +1,6 @@
 from __future__ import annotations
 from collections.abc import Sequence
-from biglist._util import SeqView, ChainedSeq, Seq, locate_idx_in_chunked_seq, SeqView
+from biglist._util import ListView, ChainedList, Seq, locate_idx_in_chunked_seq, ListView
 
 
 def test_locate_idx_in_chunked_seq():
@@ -76,7 +76,7 @@ def _test_view(datalv):
     assert datalv[17] == data[17]
 
     lv = datalv[:9]
-    assert isinstance(lv, SeqView)
+    assert isinstance(lv, ListView)
     assert list(lv) == data[:9]
     assert lv[-1] == data[8]
     assert lv[3] == data[3]
@@ -105,10 +105,10 @@ def _test_view(datalv):
     
 
 def test_seqview():
-    _test_view(SeqView(list(range(20))))
+    _test_view(ListView(list(range(20))))
 
     x = list(range(20))
-    z: SeqView[list[int]] = SeqView(x, [2, 3, 5, 6, 13])
+    z: ListView[list[int]] = ListView(x, [2, 3, 5, 6, 13])
     print(z)
     assert z[3] == 6
     assert list(z[1:4]) == [3, 5, 6]
@@ -118,21 +118,21 @@ def test_chainedlist():
     mylist1 = list(range(0, 8))
     mylist2 = list(range(8, 18))
     mylist3 = list(range(18, 32))
-    mylist: ChainedSeq[list[int]] = ChainedSeq(mylist1, mylist2, mylist3)
+    mylist: ChainedList[list[int]] = ChainedList(mylist1, mylist2, mylist3)
     data = list(range(32))
     
     assert list(mylist) == data
     assert mylist[12] == data[12]
     assert mylist[17] == data[17]
     assert mylist[-8] == data[-8]
-    assert list(SeqView(mylist)[:8]) == data[:8]
-    assert list(SeqView(mylist)[-6:]) == data[-6:]
-    assert list(SeqView(mylist)[2:30:3]) == data[2:30:3]
-    assert list(SeqView(mylist)[::-1]) == data[::-1]
-    assert list(SeqView(mylist)[-2:9:-1]) == data[-2:9:-1]
-    assert list(SeqView(mylist)[::-3]) == data[::-3]
+    assert list(ListView(mylist)[:8]) == data[:8]
+    assert list(ListView(mylist)[-6:]) == data[-6:]
+    assert list(ListView(mylist)[2:30:3]) == data[2:30:3]
+    assert list(ListView(mylist)[::-1]) == data[::-1]
+    assert list(ListView(mylist)[-2:9:-1]) == data[-2:9:-1]
+    assert list(ListView(mylist)[::-3]) == data[::-3]
 
-    yourlist = SeqView(mylist)[-2:-30:-3]
+    yourlist = ListView(mylist)[-2:-30:-3]
     yourdata = data[-2:-30:-3]
     
     assert list(yourlist) == yourdata

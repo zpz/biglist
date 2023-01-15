@@ -17,9 +17,9 @@ from ._base import (
     BiglistBase,
     FileReader,
     FileSeq,
-    SeqView,
     PathType,
     Seq,
+    SeqView,
     Upath,
     resolve_path,
 )

@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from ._base import FileReader
 from ._biglist import Biglist, BiglistFileReader
-from ._util import Seq, ChainedSeq, SeqView
+from ._util import ChainedSeq, Seq, SeqView
 
 __version__ = "0.7.4b1"
 

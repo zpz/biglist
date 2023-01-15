@@ -23,7 +23,7 @@ from typing import (
 from deprecation import deprecated
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
-from ._util import Element, SeqView, Seq
+from ._util import Element, Seq, SeqView
 
 logger = logging.getLogger(__name__)
 

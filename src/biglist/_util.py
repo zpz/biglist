@@ -313,13 +313,13 @@ class SeqView(Generic[SeqType]):
 
 
 ListView = SeqView
-'''
+"""
 An alias to :class:`SeqView` for back compat.
 This alias will be removed in version 0.8.0.
-'''
+"""
 
 ChainedList = ChainedSeq
-'''
+"""
 An alias to :class:`ChainedSeq` for back compat.
 This alias will be removed in version 0.8.0.
-'''
+"""

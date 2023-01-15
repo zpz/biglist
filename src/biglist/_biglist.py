@@ -659,7 +659,7 @@ class BiglistFileReader(FileReader[Element]):
         return iter(self.data())
 
 
-class BiglistFileSeq(FileSeq):
+class BiglistFileSeq(FileSeq[BiglistFileReader]):
     def __init__(self, path: Upath, data_files: list[tuple[str, int, int]]):
         """
         Parameters

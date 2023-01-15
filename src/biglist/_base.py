@@ -97,7 +97,7 @@ e.g. one may send the :class:`FileReader` objects to different processes or thre
 """
 
 
-class FileSeq(Generic[FileReaderType]):
+class FileSeq(Seq[FileReaderType]):
     @classmethod
     @contextmanager
     def lockfile(cls, file: Upath):

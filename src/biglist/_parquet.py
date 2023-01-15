@@ -509,7 +509,7 @@ class ParquetFileReader(FileReader):
         return z
 
 
-class ParquetFileSeq(FileSeq):
+class ParquetFileSeq(FileSeq[ParquetFileReader]):
     def __init__(self, root_dir: Upath, data_files: list[tuple[str, int, int]]):
         """
         Parameters

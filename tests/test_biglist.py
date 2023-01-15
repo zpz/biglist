@@ -67,8 +67,6 @@ def test_existing_numbers():
     data = list(range(len(mylist)))
     assert list(mylist) == data
 
-    rmtree(PATH)
-
 
 def test_FileReader():
     bl = Biglist.new(batch_size=4, storage_format='pickle')
@@ -130,6 +128,7 @@ def test_multi_appenders():
     t4 = pool2.submit(add_to_biglist, bl.path, *sets[4])
 
     wait([t1, t2, t3, t4])
+    bl.reload()
 
     data = []
     for prefix, ll in sets:

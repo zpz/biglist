@@ -133,7 +133,16 @@ class FileSeq(Generic[FileReaderType]):
         """
         raise NotImplementedError
 
+    @property
+    def size(self) -> int:
+        '''Total number of data items in the files.'''
+        z = self.info['data_files']
+        if not z:
+            return 0
+        return z[-1][-1]
+
     def __len__(self) -> int:
+        '''Number of data files.'''
         return len(self.info["data_files"])
 
     @abstractmethod
@@ -298,22 +307,6 @@ class BiglistBase(Seq[Element]):
         raise NotImplementedError
 
     @classmethod
-    @contextmanager
-    def lockfile(cls, file: Upath):
-        """
-        All this method does is to guarantee that the code block identified
-        by ``file`` (essentially the name) is *not* executed concurrently
-        by two "workers".
-
-        This method is used by several "distributed reading" methods.
-        The scope of the lock is for reading/writing a tiny "control info" file.
-
-        See `Upath.lock <https://github.com/zpz/upathlib/blob/main/src/upathlib/_upath.py>`_.
-        """
-        with file.lock(timeout=120):
-            yield
-
-    @classmethod
     def new(
         cls,
         path: Optional[PathType] = None,
@@ -445,12 +438,6 @@ class BiglistBase(Seq[Element]):
         # `self._read_buffer` contains the content of the file
         # indicated by `self._read_buffer_file_idx`.
 
-        self._append_buffer: list = []
-        self._file_dumper = None
-        # These are for writing, but are needed in some code for reading.
-        # In a read-only subclass, they remain these default values and
-        # behave correctly.
-
         if thread_pool_executor is not _unspecified:
             warnings.warn(
                 "`thread_pool_executor` is deprecated and ignored; will be removed in 0.7.6",
@@ -485,11 +472,6 @@ class BiglistBase(Seq[Element]):
     def _info_file(self) -> Upath:
         return self.path / "info.json"
 
-    @property
-    @abstractmethod
-    def files(self) -> FileSeq:
-        raise NotImplementedError
-
     def __len__(self) -> int:
         """
         Number of elements in this biglist.
@@ -501,7 +483,7 @@ class BiglistBase(Seq[Element]):
         # this biglist, then all the other workers are reading only.
         files = self.files
         if files:
-            return files.info["data_files"][-1][-1]
+            return files.size
         return 0
 
     def __getitem__(self, idx: int) -> Element:
@@ -526,11 +508,6 @@ class BiglistBase(Seq[Element]):
             if n1 <= idx < n2:
                 return self._read_buffer[idx - n1]  # type: ignore
 
-        if idx < 0 and (-idx) <= len(self._append_buffer):
-            return self._append_buffer[idx]
-
-        # TODO: this is reliable only if there is no other "worker node"
-        # appending elements to this object.
         files = self.files
         if files:
             data_files_cumlength = [v[-1] for v in files.info["data_files"]]
@@ -540,12 +517,10 @@ class BiglistBase(Seq[Element]):
             data_files_cumlength = []
             length = 0
             nfiles = 0
-        idx = range(length + len(self._append_buffer))[idx]
+        idx = range(length)[idx]
 
         if idx >= length:
-            if idx - length >= len(self._append_buffer):
-                raise IndexError(idx)
-            return self._append_buffer[idx - length]  # type: ignore
+            raise IndexError(idx)
 
         ifile0 = 0
         ifile1 = nfiles
@@ -572,15 +547,7 @@ class BiglistBase(Seq[Element]):
             n = data_files_cumlength[ifile - 1]
         self._read_buffer_item_range = (n, data_files_cumlength[ifile])
 
-        file = files.info["data_files"][ifile][0]
-        # If the file is in a writing queue and has not finished writing yet:
-        if self._file_dumper is None:
-            data = None
-        else:
-            data = self._file_dumper.get_file_data(file)
-        if data is None:
-            data = files[ifile]
-
+        data = files[ifile]
         self._read_buffer_file_idx = ifile
         self._read_buffer = data
         return data[idx - n]
@@ -645,6 +612,11 @@ class BiglistBase(Seq[Element]):
         of the biglist; they open and read files independent of other views.
         """
         return ListView(self)
+
+    @property
+    @abstractmethod
+    def files(self) -> FileSeq:
+        raise NotImplementedError
 
     @deprecated(
         deprecated_in="0.7.4", removed_in="0.8.0", details="Use `.files` instead."
@@ -723,6 +695,18 @@ class BiglistBase(Seq[Element]):
     )
     def file_readers(self) -> list[FileReader[Element]]:
         return list(self.files)
+
+    @property
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``self.files.info`` instead.",
+    )
+    def datafiles(self) -> list[str]:
+        """
+        Return the list of data file paths.
+        """
+        return [v[0] for v in self.files.info['data_files']]
 
     @property
     @deprecated(

@@ -12,6 +12,7 @@ import time
 import weakref
 from collections.abc import Iterable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import datetime
 from typing import (
     Any,
@@ -149,6 +150,22 @@ class Biglist(BiglistBase[Element]):
         return deserializer.deserialize(data)
 
     @classmethod
+    @contextmanager
+    def lockfile(cls, file: Upath):
+        """
+        All this method does is to guarantee that the code block identified
+        by ``file`` (essentially the name) is *not* executed concurrently
+        by two "workers".
+
+        This method is used by several "distributed reading" methods.
+        The scope of the lock is for reading/writing a tiny "control info" file.
+
+        See `Upath.lock <https://github.com/zpz/upathlib/blob/main/src/upathlib/_upath.py>`_.
+        """
+        with file.lock(timeout=120):
+            yield
+
+    @classmethod
     def new(
         cls,
         path: Optional[PathType] = None,
@@ -229,13 +246,17 @@ class Biglist(BiglistBase[Element]):
         if storage_format.replace("_", "-") not in cls.registered_storage_formats:
             raise ValueError(f"invalid value of `storage_format`: '{storage_format}'")
         obj.info["storage_format"] = storage_format.replace("_", "-")
-        obj.info["storage_version"] = 1
+        obj.info["storage_version"] = 2
         # `storage_version` is a flag for certain breaking changes in the implementation,
         # such that certain parts of the code (mainly concerning I/O) need to
         # branch into different treatments according to the version.
         # This has little relation to `storage_format`.
         # version 0 designator introduced on 2022/3/8
         # version 1 designator introduced on 2022/7/25
+        # version 2 designator introduced in version 0.7.4.
+
+        obj.info['data_files'] = []
+
         obj._info_file.write_json(obj.info, overwrite=False)
 
         return obj
@@ -243,12 +264,19 @@ class Biglist(BiglistBase[Element]):
     def __init__(self, *args, **kwargs):
         """Please see doc of the base class."""
         super().__init__(*args, **kwargs)
-        self._data_files: Optional[list] = None
-        self._data_files_cumlength_ = []
         self.keep_files: bool = True
         """Indicates whether the persisted files should be kept or deleted when the object is garbage-collected."""
 
+        self._append_buffer: list = []
+        self._file_dumper = None
+
         _biglist_objs.add(self)
+
+        # For back compat.
+        if self.info and 'data_files' not in self.info:
+            # This is not called by ``new``, instead is opening an existing dataset
+            self.info['data_files'] = self._get_data_files()
+            self._info_file.write_json(self.info, overwrite=True)
 
     def __del__(self) -> None:
         if getattr(self, "keep_files"):
@@ -315,6 +343,8 @@ class Biglist(BiglistBase[Element]):
         reaches ``self.batch_size``. This happens w/o the user's intervention.
         """
         if not self._append_buffer:
+            if self._file_dumper is not None and wait:
+                self._file_dumper.wait()
             return
 
         buffer = self._append_buffer
@@ -347,14 +377,13 @@ class Biglist(BiglistBase[Element]):
             # what if dump fails later? The 'n_data_files' file is updated
             # already assuming everything will be fine.
 
-        with self.lockfile(self.path / "_n_datafiles_.txt.lock"):
-            try:
-                n = (self.path / "_n_datafiles_.txt").read_text()
-            except FileNotFoundError:
-                n = 0
-            else:
-                n = int(n)
-            (self.path / "_n_datafiles_.txt").write_text(str(n + 1), overwrite=True)
+        if self.info['data_files']:
+            n = self.info['data_files'][-1][-1]
+        else:
+            n = 0
+        self.info['data_files'].append((
+            str(data_file), buffer_len, n + buffer_len
+        ))
 
     def flush(self) -> None:
         """
@@ -374,95 +403,70 @@ class Biglist(BiglistBase[Element]):
         """
         self._flush(wait=True)
 
+        # Other workers in other threads, processes, or machines may have appended data
+        # to the list. This block merges the appends by the current worker with
+        # appends by other workers. The last call to ``flush`` across all workers
+        # will get the final meta info right.
+        with self.lockfile(self._info_file.with_suffix('.lock')):
+            z0 = self._info_file.read_json()['data_files']
+            z1 = self.info['data_files']
+            z = sorted(set((*(tuple(v[:2]) for v in z0), *(tuple(v[:2]) for v in z1))))
+            # TODO: maybe a merge sort can be more efficient.
+            cum = list(itertools.accumulate(v[1] for v in z))
+            z = [(a, b, c) for (a, b), c in zip(z, cum)]
+            self.info['data_files'] = z
+            self._info_file.write_json(self.info, overwrite=True)
+
     def _get_data_files(self) -> list:
-        if self.storage_version < 1:
+        if self.storage_version == 0:
             # This may not be totally reliable in every scenario.
             # The older version had a parameter `lazy`, which is gone now.
             # After some time we may stop supporting this storage version. (7/27/2022)
             # However, as long as older datasets are in a "read-only" status,
             # this is fine.
-            if self._data_files is None:
-                try:
-                    data_info_file = self.path / "datafiles_info.json"
-                    self._data_files = data_info_file.read_json()
-                except FileNotFoundError:
-                    self._data_files = []
-        else:
             try:
-                nfiles = (self.path / "_n_datafiles_.txt").read_text()
+                data_info_file = self.path / "datafiles_info.json"
+                data_files = data_info_file.read_json()
+                # A list of tuples, (file_name, item_count)
             except FileNotFoundError:
-                nfiles = 0
-            else:
-                nfiles = int(nfiles)
-
-            if self._data_files is None or len(self._data_files) != nfiles:
-                files = []
-                if nfiles > 0:
-                    for _ in range(5):
-                        # Starting with storage_version 1, data file name is
-                        #   <timestamp>_<uuid>_<itemcount>.<ext>
-                        # <timestamp> contains a '.', no '_';
-                        # <uuid> contains '-', no '_';
-                        # <itemcount> contains no '-' nor '_';
-                        # <ext> may contain '_'.
-                        files0 = (v.name for v in self._data_dir.iterdir())
-                        files1 = (v.split("_") + [v] for v in files0)
-                        files2 = (
-                            (float(v[0]), v[-1], int(v[2].partition(".")[0]))
-                            # timestamp, file name, item count
-                            for v in files1
-                        )
-                        files = sorted(files2)  # sort by timestamp
-                        if len(files) == nfiles:
-                            break
-                        time.sleep(0.2)
-                        # A few files may be being dumped and not done yet.
-                        # Wait for them.
-
-                    if len(files) != nfiles:
-                        raise RuntimeError(
-                            f"{nfiles} data files are expected, yet only {len(files)} are found"
-                        )
-
-                if files:
-                    self._data_files = [
-                        (v[1], v[2]) for v in files
-                    ]  # file name, item count
-                else:
-                    self._data_files = []
-
-        if self._data_files:
-            self._data_files_cumlength_ = list(
-                itertools.accumulate(v[1] for v in self._data_files)
-            )
+                return []
         else:
-            self._data_files_cumlength_ = []
+            # Starting with storage_version 1, data file name is
+            #   <timestamp>_<uuid>_<itemcount>.<ext>
+            # <timestamp> contains a '.', no '_';
+            # <uuid> contains '-', no '_';
+            # <itemcount> contains no '-' nor '_';
+            # <ext> may contain '_'.
+            files0 = (v.name for v in self._data_dir.iterdir())
+            files1 = (v.split("_") + [v] for v in files0)
+            files2 = (
+                (float(v[0]), v[-1], int(v[2].partition(".")[0]))
+                # timestamp, file name, item count
+                for v in files1
+            )
+            files = sorted(files2)  # sort by timestamp
 
-        return [(*w, v) for w, v in zip(self._data_files, self._data_files_cumlength_)]
+            if files:
+                data_files = [
+                    (v[1], v[2]) for v in files
+                ]  # file name, item count
+            else:
+                return []
+
+        data_files_cumlength = list(
+            itertools.accumulate(v[1] for v in self._data_files)
+        )
+        return [(str(self._data_dir / filename), count, cumcount)
+                for (filename, count), cumcount in zip(data_files, data_files_cumlength)]
         # Each element of the list is a tuple containing file path, item count in file, and cumsum of item counts.
+
+    def reload(self) -> None:
+        self.info = self._info_file.read_json()
 
     @property
     def files(self):
         # This method should be cheap to call.
-        datafiles_info = self._get_data_files()
-        return BiglistFileSeq(self.path, self._data_dir, datafiles_info)
-
-    def iter_files(self) -> Iterator[BiglistFileReader[Element]]:
-        self.flush()
-        return super().iter_files()
-
-    def __len__(self):
-        return super().__len__() + len(self._append_buffer)
-
-    def __iter__(self) -> Iterator[Element]:
-        yield from super().__iter__()
-
-        if self._append_buffer:
-            yield from self._append_buffer
-
-    def view(self) -> ListView[Biglist[Element]]:
-        self.flush()
-        return super().view()
+        return BiglistFileSeq(self.path, self.info['data_files'])
 
     def _multiplex_info_file(self, task_id: str) -> Upath:
         """
@@ -558,75 +562,6 @@ class Biglist(BiglistBase[Element]):
         return ss["next"] == ss["total"]
 
 
-class BiglistFileReader(FileReader[Element]):
-    def __init__(self, path: PathType, loader: Callable[[Upath], Any]):
-        """
-        Parameters
-        ----------
-        path
-            Path of a data file.
-        loader
-            Usually this is :meth:`Biglist.load_data_file`.
-            If you customize this, please see the doc of :meth:`FileReader.__init__`.
-        """
-        self._data: Optional[list] = None
-        super().__init__(path, loader)
-
-    def load(self) -> None:
-        if self._data is None:
-            self._data = self.loader(self.path)
-
-    def data(self) -> list[Element]:
-        """Return the data loaded from the file."""
-        self.load()
-        return self._data
-
-    def __len__(self) -> int:
-        return len(self.data())
-
-    def __getitem__(self, idx: int) -> Element:
-        return self.data()[idx]
-
-    def __iter__(self) -> Iterator[Element]:
-        return iter(self.data())
-
-
-class BiglistFileSeq(FileSeq):
-    def __init__(
-        self, root_dir: Upath, data_dir: Upath, data_files: list[tuple[str, int, int]]
-    ):
-        """
-        Parameters
-        ----------
-        root_dir
-            Root directory for storage of meta info.
-        data_dir
-            Root directory where the data files resides.
-            The file paths in ``data_files`` are relative (under) this path.
-        data_files
-            A list of data files that constitute the file sequence.
-            Each tuple in the list is comprised of a file path (relative to
-            ``root_dir``), number of data items in the file, and cumulative
-            number of data items in the files up to the one at hand.
-            Therefore, the order of the files in the list is significant.
-        """
-        self._root_dir = root_dir
-        self._data_dir = data_dir
-        self._data_files = data_files
-
-    @property
-    def path(self):
-        return self._root_dir
-
-    @property
-    def info(self):
-        return {"data_files": self._data_files}
-
-    def __getitem__(self, idx: int):
-        file = self._data_dir / self._data_files[idx][0]
-        return BiglistFileReader(file, Biglist.load_data_file)
-
-
 class Dumper:
     """
     This class performs file-saving in a thread pool.
@@ -707,6 +642,71 @@ class Dumper:
         Wait to finish all the submitted dumping tasks.
         """
         concurrent.futures.wait(list(self._task_file_data.keys()))
+
+
+class BiglistFileReader(FileReader[Element]):
+    def __init__(self, path: PathType, loader: Callable[[Upath], Any]):
+        """
+        Parameters
+        ----------
+        path
+            Path of a data file.
+        loader
+            Usually this is :meth:`Biglist.load_data_file`.
+            If you customize this, please see the doc of :meth:`FileReader.__init__`.
+        """
+        self._data: Optional[list] = None
+        super().__init__(path, loader)
+
+    def load(self) -> None:
+        if self._data is None:
+            self._data = self.loader(self.path)
+
+    def data(self) -> list[Element]:
+        """Return the data loaded from the file."""
+        self.load()
+        return self._data
+
+    def __len__(self) -> int:
+        return len(self.data())
+
+    def __getitem__(self, idx: int) -> Element:
+        return self.data()[idx]
+
+    def __iter__(self) -> Iterator[Element]:
+        return iter(self.data())
+
+
+class BiglistFileSeq(FileSeq):
+    def __init__(
+        self, path: Upath, data_files: list[tuple[str, int, int]]
+    ):
+        """
+        Parameters
+        ----------
+        path
+            Root directory for storage of meta info.
+        data_files
+            A list of data files that constitute the file sequence.
+            Each tuple in the list is comprised of a file path (relative to
+            ``root_dir``), number of data items in the file, and cumulative
+            number of data items in the files up to the one at hand.
+            Therefore, the order of the files in the list is significant.
+        """
+        self._root_dir = path
+        self._data_files = data_files
+
+    @property
+    def path(self):
+        return self._root_dir
+
+    @property
+    def info(self):
+        return {"data_files": self._data_files}
+
+    def __getitem__(self, idx: int):
+        file = self._data_files[idx][0]
+        return BiglistFileReader(file, Biglist.load_data_file)
 
 
 class JsonByteSerializer(ByteSerializer):

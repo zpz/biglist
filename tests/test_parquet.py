@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 import pyarrow
 from upathlib import LocalUpath
-from biglist import ParquetBiglist, ParquetFileReader, write_parquet_file, read_parquet_file
+from biglist import ParquetBiglist, ParquetFileReader, write_parquet_file, read_parquet_file, SeqView
 import pytest
 
 
@@ -122,7 +122,7 @@ def test_big_parquet_list():
             break
 
     print('')
-    z = biglist.view()[100:130:2]
+    z = SeqView(biglist)[100:130:2]
     assert len(z) == 15
     print(z)
     print(z[2])
@@ -131,7 +131,7 @@ def test_big_parquet_list():
 
     print('')
     print(biglist)
-    print(biglist.view())
+    print(SeqView(biglist))
     print(biglist.files[0])
     print(biglist.files[1].data)
     print('')
@@ -148,8 +148,8 @@ def test_big_parquet_list():
     print(d2[2])
     with pytest.raises(ValueError):
         d3 = d2.columns(['key'])
-    print(d.columns(['key']).view()[7:17].collect())
-    print(list(d.view()[:7]))
+    print(SeqView(d.columns(['key']))[7:17].collect())
+    print(list(SeqView(d)[:7]))
 
     #
     print('')

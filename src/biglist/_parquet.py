@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 import pyarrow
-from deprecation import deprecated
 from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
 from upathlib import LocalUpath
@@ -635,11 +634,6 @@ class ParquetBatchData(Seq):
                 for row in zip(*self._data.columns):
                     yield dict(zip(names, row))
 
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.8.0",
-        details="Use ``SeqView(...)`` directly.",
-    )
     def view(self) -> SeqView:
         """Return a :class:`SeqView` to gain slicing capabilities."""
         return SeqView(self)

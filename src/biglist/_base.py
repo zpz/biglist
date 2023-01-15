@@ -83,11 +83,6 @@ class FileReader(Seq[Element]):
         """
         raise NotImplementedError
 
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.8.0",
-        details="Use ``SeqView(...)`` directly.",
-    )
     def view(self) -> SeqView[FileReader[Element]]:
         """Return a :class:`SeqView` object to facilitate slicing this biglist."""
         return SeqView(self)
@@ -475,7 +470,7 @@ class BiglistBase(Seq[Element]):
         self._n_write_threads = 3
 
     def __repr__(self):
-        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} elements in {self.num_datafiles} data file(s)>"
+        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} elements in {len(self.files)} data file(s)>"
 
     def __str__(self):
         return self.__repr__()
@@ -605,11 +600,6 @@ class BiglistBase(Seq[Element]):
 
                     yield from file_reader
 
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.8.0",
-        details="Use ``SeqView(...)`` directly.",
-    )
     def view(self) -> SeqView[BiglistBase[Element]]:
         """
         By convention, a "slicing" method should return an object of the same class

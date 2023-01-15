@@ -46,6 +46,7 @@ test = [
     "mypy",
     "ruff",
     "pytest-asyncio",
+    "pytest-parallel",
 ]
 
 
@@ -61,7 +62,7 @@ ignore = ["E501"]  # line length
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-sv --log-cli-level info -p no:cacheprovider --tb=short"
+addopts = "-sv --log-cli-level info -p no:cacheprovider --tb=short --workers=auto"
 
 
 [tool.coverage.report]

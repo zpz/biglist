@@ -1,6 +1,6 @@
 from __future__ import annotations
 from collections.abc import Sequence
-from biglist._util import SeqView, ChainedSeq, Seq, locate_idx_in_chunked_seq
+from biglist._util import SeqView, ChainedSeq, Seq, locate_idx_in_chunked_seq, SeqView
 
 
 def test_locate_idx_in_chunked_seq():
@@ -125,14 +125,14 @@ def test_chainedlist():
     assert mylist[12] == data[12]
     assert mylist[17] == data[17]
     assert mylist[-8] == data[-8]
-    assert list(mylist.view()[:8]) == data[:8]
-    assert list(mylist.view()[-6:]) == data[-6:]
-    assert list(mylist.view()[2:30:3]) == data[2:30:3]
-    assert list(mylist.view()[::-1]) == data[::-1]
-    assert list(mylist.view()[-2:9:-1]) == data[-2:9:-1]
-    assert list(mylist.view()[::-3]) == data[::-3]
+    assert list(SeqView(mylist)[:8]) == data[:8]
+    assert list(SeqView(mylist)[-6:]) == data[-6:]
+    assert list(SeqView(mylist)[2:30:3]) == data[2:30:3]
+    assert list(SeqView(mylist)[::-1]) == data[::-1]
+    assert list(SeqView(mylist)[-2:9:-1]) == data[-2:9:-1]
+    assert list(SeqView(mylist)[::-3]) == data[::-3]
 
-    yourlist = mylist.view()[-2:-30:-3]
+    yourlist = SeqView(mylist)[-2:-30:-3]
     yourdata = data[-2:-30:-3]
     
     assert list(yourlist) == yourdata

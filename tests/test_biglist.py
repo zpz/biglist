@@ -170,9 +170,13 @@ def test_file_readers():
     for t in as_completed(tasks):
         data.extend(t.result())
 
-    assert sorted(data) == list(bl)
+    try:
+        assert sorted(data) == list(bl)
+    except AssertionError:
+        bl.keep_files = True
+        print('\npath:', bl.path, '\n')
+        raise
     assert bl.files.concurrent_iter_done(task_id)
-    print(bl.files.concurrent_iter_done(task_id))
 
 
 def square_sum(x):

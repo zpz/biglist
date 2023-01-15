@@ -8,7 +8,6 @@ import logging
 import multiprocessing
 import string
 import threading
-import time
 import weakref
 from collections.abc import Iterable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -336,7 +335,7 @@ class Biglist(BiglistBase[Element]):
         self._append_buffer = []
 
         datafile_ext = self.storage_format.replace("-", "_")
-        filename = f"{time.time()}_{uuid4()}_{buffer_len}.{datafile_ext}"
+        filename = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S.%f')}_{uuid4()}_{buffer_len}.{datafile_ext}"
         # File name pattern introduced on 7/25/2022.
         # this should almost guarantee the file name is unique, hence
         # we do not need to verify this file name does not exist in `data_files`.

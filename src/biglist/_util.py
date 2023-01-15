@@ -5,8 +5,6 @@ import itertools
 from collections.abc import Iterator, Sequence
 from typing import Generic, Optional, Protocol, TypeVar, runtime_checkable
 
-from deprecation import deprecated
-
 
 def locate_idx_in_chunked_seq(
     idx: int,
@@ -201,11 +199,6 @@ class ChainedSeq(Generic[SeqType]):
         """
         return self._lists
 
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.8.0",
-        details="Use ``SeqView(...)`` directly.",
-    )
     def view(self) -> SeqView[ChainedSeq[SeqType]]:
         # The returned object supports slicing.
         return SeqView(self)

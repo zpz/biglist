@@ -135,14 +135,14 @@ class FileSeq(Generic[FileReaderType]):
 
     @property
     def size(self) -> int:
-        '''Total number of data items in the files.'''
-        z = self.info['data_files']
+        """Total number of data items in the files."""
+        z = self.info["data_files"]
         if not z:
             return 0
         return z[-1][-1]
 
     def __len__(self) -> int:
-        '''Number of data files.'''
+        """Number of data files."""
         return len(self.info["data_files"])
 
     @abstractmethod
@@ -706,7 +706,7 @@ class BiglistBase(Seq[Element]):
         """
         Return the list of data file paths.
         """
-        return [v[0] for v in self.files.info['data_files']]
+        return [v[0] for v in self.files.info["data_files"]]
 
     @property
     @deprecated(

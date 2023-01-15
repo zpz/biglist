@@ -32,7 +32,7 @@ from upathlib.serializer import (
     _loads,
 )
 
-from ._base import BiglistBase, Element, FileReader, FileSeq, ListView, PathType, Upath
+from ._base import BiglistBase, Element, FileReader, FileSeq, PathType, Upath
 
 logger = logging.getLogger(__name__)
 
@@ -255,7 +255,7 @@ class Biglist(BiglistBase[Element]):
         # version 1 designator introduced on 2022/7/25
         # version 2 designator introduced in version 0.7.4.
 
-        obj.info['data_files'] = []
+        obj.info["data_files"] = []
 
         obj._info_file.write_json(obj.info, overwrite=False)
 
@@ -273,9 +273,9 @@ class Biglist(BiglistBase[Element]):
         _biglist_objs.add(self)
 
         # For back compat.
-        if self.info and 'data_files' not in self.info:
+        if self.info and "data_files" not in self.info:
             # This is not called by ``new``, instead is opening an existing dataset
-            self.info['data_files'] = self._get_data_files()
+            self.info["data_files"] = self._get_data_files()
             self._info_file.write_json(self.info, overwrite=True)
 
     def __del__(self) -> None:
@@ -377,13 +377,11 @@ class Biglist(BiglistBase[Element]):
             # what if dump fails later? The 'n_data_files' file is updated
             # already assuming everything will be fine.
 
-        if self.info['data_files']:
-            n = self.info['data_files'][-1][-1]
+        if self.info["data_files"]:
+            n = self.info["data_files"][-1][-1]
         else:
             n = 0
-        self.info['data_files'].append((
-            str(data_file), buffer_len, n + buffer_len
-        ))
+        self.info["data_files"].append((str(data_file), buffer_len, n + buffer_len))
 
     def flush(self) -> None:
         """
@@ -407,14 +405,14 @@ class Biglist(BiglistBase[Element]):
         # to the list. This block merges the appends by the current worker with
         # appends by other workers. The last call to ``flush`` across all workers
         # will get the final meta info right.
-        with self.lockfile(self._info_file.with_suffix('.lock')):
-            z0 = self._info_file.read_json()['data_files']
-            z1 = self.info['data_files']
+        with self.lockfile(self._info_file.with_suffix(".lock")):
+            z0 = self._info_file.read_json()["data_files"]
+            z1 = self.info["data_files"]
             z = sorted(set((*(tuple(v[:2]) for v in z0), *(tuple(v[:2]) for v in z1))))
             # TODO: maybe a merge sort can be more efficient.
             cum = list(itertools.accumulate(v[1] for v in z))
             z = [(a, b, c) for (a, b), c in zip(z, cum)]
-            self.info['data_files'] = z
+            self.info["data_files"] = z
             self._info_file.write_json(self.info, overwrite=True)
 
     def _get_data_files(self) -> list:
@@ -447,17 +445,17 @@ class Biglist(BiglistBase[Element]):
             files = sorted(files2)  # sort by timestamp
 
             if files:
-                data_files = [
-                    (v[1], v[2]) for v in files
-                ]  # file name, item count
+                data_files = [(v[1], v[2]) for v in files]  # file name, item count
             else:
                 return []
 
         data_files_cumlength = list(
             itertools.accumulate(v[1] for v in self._data_files)
         )
-        return [(str(self._data_dir / filename), count, cumcount)
-                for (filename, count), cumcount in zip(data_files, data_files_cumlength)]
+        return [
+            (str(self._data_dir / filename), count, cumcount)
+            for (filename, count), cumcount in zip(data_files, data_files_cumlength)
+        ]
         # Each element of the list is a tuple containing file path, item count in file, and cumsum of item counts.
 
     def reload(self) -> None:
@@ -466,7 +464,7 @@ class Biglist(BiglistBase[Element]):
     @property
     def files(self):
         # This method should be cheap to call.
-        return BiglistFileSeq(self.path, self.info['data_files'])
+        return BiglistFileSeq(self.path, self.info["data_files"])
 
     def _multiplex_info_file(self, task_id: str) -> Upath:
         """
@@ -678,9 +676,7 @@ class BiglistFileReader(FileReader[Element]):
 
 
 class BiglistFileSeq(FileSeq):
-    def __init__(
-        self, path: Upath, data_files: list[tuple[str, int, int]]
-    ):
+    def __init__(self, path: Upath, data_files: list[tuple[str, int, int]]):
         """
         Parameters
         ----------

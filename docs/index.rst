@@ -141,23 +141,23 @@ However, the method :meth:`~Biglist.view` returns an object that supports elemen
    >>> len(v)
    10023
    >>> v
-   <ListView into 10023/10023 of <Biglist at '/tmp/dc260854-8041-40e8-801c-34084451d7a3' with 10023 elements in 101 data file(s)>>
+   <SeqView into 10023/10023 of <Biglist at '/tmp/dc260854-8041-40e8-801c-34084451d7a3' with 10023 elements in 101 data file(s)>>
    >>> v[83]
    83
    >>> v[100:104]
-   <ListView into 4/10023 of <Biglist at '/tmp/dc260854-8041-40e8-801c-34084451d7a3' with 10023 elements in 101 data file(s)>>
+   <SeqView into 4/10023 of <Biglist at '/tmp/dc260854-8041-40e8-801c-34084451d7a3' with 10023 elements in 101 data file(s)>>
    >>>
 
 Note that slicing the view does not return a list of values.
-Instead, it returns another :class:`ListView` object, which, naturally, can be used the same way,
+Instead, it returns another :class:`SeqView` object, which, naturally, can be used the same way,
 including slicing further.
 
-A :class:`ListView` object is a |Sequence|_, hence we can gather all of its elements in a list::
+A :class:`SeqView` object is a |Sequence|_, hence we can gather all of its elements in a list::
 
    >>> list(v[100:104])
    [100, 101, 102, 103]
 
-:class:`ListView` provides a convenience method :meth:`~ListView.collect` to do the same::
+:class:`SeqView` provides a convenience method :meth:`~SeqView.collect` to do the same::
 
    >>> v[100:104].collect()
    [100, 101, 102, 103]
@@ -170,7 +170,7 @@ A few more examples::
    >>> v[-8::2].collect()
    [10015, 10017, 10019, 10021]
    >>> v[[1, 83, 250, -2]]
-   <ListView into 4/10023 of <Biglist at '/tmp/dc260854-8041-40e8-801c-34084451d7a3' with 10023 elements in 101 data file(s)>>
+   <SeqView into 4/10023 of <Biglist at '/tmp/dc260854-8041-40e8-801c-34084451d7a3' with 10023 elements in 101 data file(s)>>
    >>> v[[1, 83, 250, -2]].collect()
    [1, 83, 250, 10021]
    >>> v[[1, 83, 250, -2]][-3:].collect()
@@ -930,16 +930,16 @@ as demonstrated above, are ready for use::
 Other utilities
 ===============
 
-:class:`ChainedList` takes a series of |Sequence|_\s and returns a combined Sequence without data copy.
+:class:`ChainedSeq` takes a series of |Sequence|_\s and returns a combined Sequence without data copy.
 For example,
 
 ::
 
-   >>> from biglist import ChainedList
+   >>> from biglist import ChainedSeq
    >>> numbers = list(range(10))
    >>> car_data
    <ParquetBiglist at '/tmp/edd9cefb-179b-46d2-8946-7dc8ae1bdc50' with 112 records in 2 data file(s) stored at ['/tmp/a/b/c/e']>
-   >>> combined = ChainedList(numbers, car_data)
+   >>> combined = ChainedSeq(numbers, car_data)
    >>> combined[3]
    3
    >>> combined[9]
@@ -950,25 +950,25 @@ For example,
    >>> car_data[0]
    {'make': 'ford', 'year': 1960, 'sales': 78}
 
-:class:`ListView` takes any |Sequence|_ and provides :meth:`~ListView.__getitem__` that accepts
+:class:`SeqView` takes any |Sequence|_ and provides :meth:`~SeqView.__getitem__` that accepts
 a single index, or a slice, or a list of indices. A single-index access will return
-the requested element; the other two scenarios return a new ListView via a zero-copy operation.
-To get all the elements out of a ListView, either iterate it or call its method :meth:`~ListView.collect`.
+the requested element; the other two scenarios return a new SeqView via a zero-copy operation.
+To get all the elements out of a SeqView, either iterate it or call its method :meth:`~SeqView.collect`.
 
 :class:`~_base.BiglistBase` (including :class:`Biglist` and :class:`ParquetBiglist`),
 :class:`FileReader` (including :class:`BiglistFileReader` and :class:`ParquetFileReader`),
-:class:`ParquetBatchData`, and :class:`ChainedList` all have a method ``view``, which returns
-a :class:`ListView` to give them slicing capabilities. All these ``view`` methods are implemented
+:class:`ParquetBatchData`, and :class:`ChainedSeq` all have a method ``view``, which returns
+a :class:`SeqView` to give them slicing capabilities. All these ``view`` methods are implemented
 by the one-liner
 
 ::
 
    def view(self):
-      return ListView(self)
+      return SeqView(self)
 
 because, after all, this ``self`` is a |Sequence|_.
 
-We should emphasize that :class:`ChainedList` and :class:`ListView` work with any |Sequence|_,
+We should emphasize that :class:`ChainedSeq` and :class:`SeqView` work with any |Sequence|_,
 hence they are useful independent of the other ``biglist`` classes.
 
 
@@ -985,10 +985,10 @@ API reference
 .. autodata:: biglist._base.SeqType
 
 
-.. autoclass:: biglist.ListView
+.. autoclass:: biglist.SeqView
 
 
-.. autoclass:: biglist.ChainedList
+.. autoclass:: biglist.ChainedSeq
 
 
 .. autoclass:: biglist.FileReader

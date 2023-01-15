@@ -1,6 +1,6 @@
 from __future__ import annotations
 from collections.abc import Sequence
-from biglist._util import ListView, ChainedList, Seq, locate_idx_in_chunked_seq
+from biglist._util import SeqView, ChainedSeq, Seq, locate_idx_in_chunked_seq
 
 
 def test_locate_idx_in_chunked_seq():
@@ -26,6 +26,47 @@ def test_seq():
     assert issubclass(list, Seq)
     assert issubclass(tuple, Seq)
 
+    class Numbers(Seq[int]):
+        def __len__(self):
+            return 4
+
+        def __getitem__(self, idx):
+            if idx < -4 or idx >= 4:
+                raise KeyError(idx)
+            return 3 + idx
+
+    assert issubclass(Numbers, Seq)
+    assert not issubclass(Numbers, Sequence)
+    nn = Numbers()
+    assert [v for v in nn] == [3, 4, 5, 6]
+
+    class Letters:
+        def __len__(self):
+            return 3
+
+        def __getitem__(self, idx):
+            if idx < -3 or idx > 2:
+                raise KeyError(idx)
+
+    assert not issubclass(Letters, Seq)
+
+    Letters.__iter__ = Seq.__iter__
+    assert not issubclass(Letters, Seq)
+
+    class Letters:
+        def __len__(self):
+            return 3
+
+        def __getitem__(self, idx):
+            if idx < -3 or idx > 2:
+                raise KeyError(idx)
+
+        def __iter__(self):
+            for i in range(self.__len__()):
+                yield self[i]
+
+    assert issubclass(Letters, Seq)
+
 
 def _test_view(datalv):
     data = list(range(20))
@@ -35,7 +76,7 @@ def _test_view(datalv):
     assert datalv[17] == data[17]
 
     lv = datalv[:9]
-    assert isinstance(lv, ListView)
+    assert isinstance(lv, SeqView)
     assert list(lv) == data[:9]
     assert lv[-1] == data[8]
     assert lv[3] == data[3]
@@ -63,13 +104,11 @@ def _test_view(datalv):
     assert list(llv) == [1, 5, 9]
     
 
-def test_ListView():
-    _test_view(ListView(list(range(20))))
+def test_seqview():
+    _test_view(SeqView(list(range(20))))
 
-
-def test_ListView2():
     x = list(range(20))
-    z: ListView[list[int]] = ListView(x, [2, 3, 5, 6, 13])
+    z: SeqView[list[int]] = SeqView(x, [2, 3, 5, 6, 13])
     print(z)
     assert z[3] == 6
     assert list(z[1:4]) == [3, 5, 6]
@@ -79,7 +118,7 @@ def test_chainedlist():
     mylist1 = list(range(0, 8))
     mylist2 = list(range(8, 18))
     mylist3 = list(range(18, 32))
-    mylist: ChainedList[list[int]] = ChainedList(mylist1, mylist2, mylist3)
+    mylist: ChainedSeq[list[int]] = ChainedSeq(mylist1, mylist2, mylist3)
     data = list(range(32))
     
     assert list(mylist) == data

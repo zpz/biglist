@@ -12,7 +12,6 @@ import time
 import weakref
 from collections.abc import Iterable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
-from contextlib import contextmanager
 from datetime import datetime
 from typing import (
     Any,
@@ -150,22 +149,6 @@ class Biglist(BiglistBase[Element]):
         return deserializer.deserialize(data)
 
     @classmethod
-    @contextmanager
-    def lockfile(cls, file: Upath):
-        """
-        All this method does is to guarantee that the code block identified
-        by ``file`` (essentially the name) is *not* executed concurrently
-        by two "workers".
-
-        This method is used by several "distributed reading" methods.
-        The scope of the lock is for reading/writing a tiny "control info" file.
-
-        See `Upath.lock <https://github.com/zpz/upathlib/blob/main/src/upathlib/_upath.py>`_.
-        """
-        with file.lock(timeout=120):
-            yield
-
-    @classmethod
     def new(
         cls,
         path: Optional[PathType] = None,
@@ -276,10 +259,11 @@ class Biglist(BiglistBase[Element]):
         if self.info and "data_files" not in self.info:
             # This is not called by ``new``, instead is opening an existing dataset
             self.info["data_files"] = self._get_data_files()
-            self._info_file.write_json(self.info, overwrite=True)
+            with self.lockfile(self._info_file.with_suffix(".lock")):
+                self._info_file.write_json(self.info, overwrite=True)
 
     def __del__(self) -> None:
-        if getattr(self, "keep_files"):
+        if getattr(self, "keep_files", False):
             if self.keep_files:
                 self.flush()
             else:
@@ -459,7 +443,8 @@ class Biglist(BiglistBase[Element]):
         # Each element of the list is a tuple containing file path, item count in file, and cumsum of item counts.
 
     def reload(self) -> None:
-        self.info = self._info_file.read_json()
+        with self.lockfile(self._info_file.with_suffix(".lock")):
+            self.info = self._info_file.read_json()
 
     @property
     def files(self):

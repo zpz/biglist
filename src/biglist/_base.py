@@ -23,7 +23,7 @@ from typing import (
 from deprecation import deprecated
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
-from ._util import Element, ListView, Seq
+from ._util import Element, SeqView, Seq
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ class FileReader(Seq[Element]):
             function, because a FileReader object is often used
             with `multiprocessing <https://docs.python.org/3/library/multiprocessing.html>`_, hence must be pickle-friendly.
         """
-        self.path: Upath = BiglistBase.resolve_path(path)
+        self.path: Upath = resolve_path(path)
         """Path of the file."""
         self.loader: Callable[[Upath], Any] = loader
         """A function that will be used to read the file."""
@@ -83,9 +83,14 @@ class FileReader(Seq[Element]):
         """
         raise NotImplementedError
 
-    def view(self) -> ListView[FileReader[Element]]:
-        """Return a :class:`ListView` object to facilitate slicing this biglist."""
-        return ListView(self)
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``SeqView(...)`` directly.",
+    )
+    def view(self) -> SeqView[FileReader[Element]]:
+        """Return a :class:`SeqView` object to facilitate slicing this biglist."""
+        return SeqView(self)
 
 
 FileReaderType = TypeVar("FileReaderType", bound=FileReader)
@@ -242,18 +247,6 @@ class BiglistBase(Seq[Element]):
 
     _thread_pool: ThreadPoolExecutor = None
 
-    @staticmethod
-    def resolve_path(path: PathType) -> Upath:
-        """
-        Resolve ``path`` to a `upathlib.Upath`_ object.
-
-        User may want to customize this method to provide
-        credentials for cloud storages, if their application involves
-        them, so that the code does not resort to default credential
-        retrieval mechanisms, which may be slow.
-        """
-        return resolve_path(path)
-
     @classmethod
     def _get_thread_pool(cls):
         """
@@ -305,6 +298,22 @@ class BiglistBase(Seq[Element]):
         The value it returns is contained in :class:`FileReader` for subsequent use.
         """
         raise NotImplementedError
+
+    @classmethod
+    @contextmanager
+    def lockfile(cls, file: Upath):
+        """
+        All this method does is to guarantee that the code block identified
+        by ``file`` (essentially the name) is *not* executed concurrently
+        by two "workers".
+
+        This method is used by several "distributed reading" methods.
+        The scope of the lock is for reading/writing a tiny "control info" file.
+
+        See `Upath.lock <https://github.com/zpz/upathlib/blob/main/src/upathlib/_upath.py>`_.
+        """
+        with file.lock(timeout=120):
+            yield
 
     @classmethod
     def new(
@@ -385,7 +394,7 @@ class BiglistBase(Seq[Element]):
             if keep_files is None:
                 keep_files = False
         else:
-            path = cls.resolve_path(path)
+            path = resolve_path(path)
             if keep_files is None:
                 keep_files = True
         if path.is_dir():
@@ -429,7 +438,7 @@ class BiglistBase(Seq[Element]):
             before any file is written, ``require_exists=False`` is used.
             User should usually leave this parameter at its default value.
         """
-        self.path: Upath = self.resolve_path(path)
+        self.path: Upath = resolve_path(path)
         """Root directory of the storage space for this object."""
 
         self._read_buffer: Optional[Seq[Element]] = None
@@ -451,7 +460,10 @@ class BiglistBase(Seq[Element]):
         try:
             # Instantiate a Biglist object pointing to
             # existing data.
-            self.info = self._info_file.read_json()
+            with self.lockfile(self._info_file.with_suffix(".lock")):
+                # Lock it because there could be multiple distributed workers
+                # accessing this file.
+                self.info = self._info_file.read_json()
         except FileNotFoundError as e:
             if require_exists:
                 raise RuntimeError(
@@ -593,7 +605,12 @@ class BiglistBase(Seq[Element]):
 
                     yield from file_reader
 
-    def view(self) -> ListView[BiglistBase[Element]]:
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``SeqView(...)`` directly.",
+    )
+    def view(self) -> SeqView[BiglistBase[Element]]:
         """
         By convention, a "slicing" method should return an object of the same class
         as the original object. This is not possible for :class:`~biglist._base.BiglistBase` (or its subclasses),
@@ -611,7 +628,7 @@ class BiglistBase(Seq[Element]):
         Multiple views may be used to view diff parts
         of the biglist; they open and read files independent of other views.
         """
-        return ListView(self)
+        return SeqView(self)
 
     @property
     @abstractmethod

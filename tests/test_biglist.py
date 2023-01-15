@@ -83,6 +83,7 @@ def test_FileReader():
 def test_iter_cancel():
     bl = Biglist.new(batch_size=7)
     bl.extend(range(27))
+    bl.flush()
     n = 0
     total = 0
     for x in bl:
@@ -120,6 +121,7 @@ def test_multi_appenders():
         bl.append(f'{prefix}-{i}')
     bl.flush()
 
+    print('')
     pool1 = ThreadPoolExecutor(2)
     t1 = pool1.submit(add_to_biglist, bl.path, *sets[1])
     t2 = pool1.submit(add_to_biglist, bl.path, *sets[2])

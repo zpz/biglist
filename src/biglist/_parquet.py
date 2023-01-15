@@ -8,11 +8,21 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 import pyarrow
+from deprecation import deprecated
 from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
 from upathlib import LocalUpath
 
-from ._base import BiglistBase, FileReader, FileSeq, ListView, PathType, Seq, Upath
+from ._base import (
+    BiglistBase,
+    FileReader,
+    FileSeq,
+    SeqView,
+    PathType,
+    Seq,
+    Upath,
+    resolve_path,
+)
 from ._util import locate_idx_in_chunked_seq
 
 # If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
@@ -136,9 +146,9 @@ class ParquetBiglist(BiglistBase):
         """
         if isinstance(data_path, (str, Path, Upath)):
             #  TODO: in py 3.10, we will be able to do `isinstance(data_path, PathType)`
-            data_path = [cls.resolve_path(data_path)]
+            data_path = [resolve_path(data_path)]
         else:
-            data_path = [cls.resolve_path(p) for p in data_path]
+            data_path = [resolve_path(p) for p in data_path]
 
         def get_file_meta(f, p: Upath):
             meta = f(p).metadata
@@ -625,9 +635,14 @@ class ParquetBatchData(Seq):
                 for row in zip(*self._data.columns):
                     yield dict(zip(names, row))
 
-    def view(self) -> ListView:
-        """Return a :class:`ListView` to gain slicing capabilities."""
-        return ListView(self)
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``SeqView(...)`` directly.",
+    )
+    def view(self) -> SeqView:
+        """Return a :class:`SeqView` to gain slicing capabilities."""
+        return SeqView(self)
 
     def columns(self, cols: Sequence[str]) -> ParquetBatchData:
         """
@@ -727,7 +742,7 @@ def write_parquet_file(
         data = pyarrow.Table.from_arrays(arrays, names=names)
     else:
         assert names is None
-    path = ParquetBiglist.resolve_path(path)
+    path = resolve_path(path)
     if isinstance(path, LocalUpath):
         path.parent.path.mkdir(exist_ok=True, parents=True)
 

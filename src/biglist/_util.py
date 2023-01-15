@@ -5,6 +5,8 @@ import itertools
 from collections.abc import Iterator, Sequence
 from typing import Generic, Optional, Protocol, TypeVar, runtime_checkable
 
+from deprecation import deprecated
+
 
 def locate_idx_in_chunked_seq(
     idx: int,
@@ -110,7 +112,9 @@ class Seq(Protocol[Element]):
         ...
 
     def __iter__(self) -> Iterator[Element]:
-        ...
+        # A reference, or naive, implementation.
+        for i in range(self.__len__()):
+            yield self[i]
 
 
 SeqType = TypeVar("SeqType", bound=Seq)
@@ -120,16 +124,16 @@ SeqType = TypeVar("SeqType", bound=Seq)
 # https://github.com/python/mypy/issues/5264
 
 
-class ChainedList(Generic[SeqType]):
+class ChainedSeq(Generic[SeqType]):
     """
     This class tracks a series of |Sequence|_ to provide
     random element access and iteration on the series as a whole.
-    A call to the method :meth:`view` further returns an :class:`ListView` that
+    A call to the method :meth:`view` further returns an :class:`SeqView` that
     supports slicing.
 
     This class operates with zero-copy.
 
-    Note that :class:`ListView` and :class:`ChainedList` are |Sequence|_, hence could be
+    Note that :class:`SeqView` and :class:`ChainedSeq` are |Sequence|_, hence could be
     members of the series.
 
     This class is generic with a parameter indicating the type of the member sequences.
@@ -137,7 +141,7 @@ class ChainedList(Generic[SeqType]):
 
     ::
 
-        def func(x: ChainedList[list[int] | Biglist[int]]):
+        def func(x: ChainedSeq[list[int] | Biglist[int]]):
             ...
     """
 
@@ -185,29 +189,34 @@ class ChainedList(Generic[SeqType]):
         for v in self._lists:
             yield from v
 
-    def view(self) -> ListView[ChainedList[SeqType]]:
-        # The returned object supports slicing.
-        return ListView(self)
-
     @property
     def raw(self) -> tuple[SeqType, ...]:
         """
         Return the underlying list of |Sequence|_\\s.
 
-        A member sequence could be a :class:`ListView`. The current method
-        does not follow a ListView to its "raw" component, b/c
-        that could represent a different set of elements than the ListView
+        A member sequence could be a :class:`SeqView`. The current method
+        does not follow a SeqView to its "raw" component, b/c
+        that could represent a different set of elements than the SeqView
         object.
         """
         return self._lists
 
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``SeqView(...)`` directly.",
+    )
+    def view(self) -> SeqView[ChainedSeq[SeqType]]:
+        # The returned object supports slicing.
+        return SeqView(self)
 
-class ListView(Generic[SeqType]):
+
+class SeqView(Generic[SeqType]):
     """
     This class wraps a :class:`Seq` and enables access by slice or index array,
     in addition to single-index access.
 
-    A ListView object does "zero-copy"---it keeps track of
+    A SeqView object does "zero-copy"---it keeps track of
     indices of selected elements along with a reference to
     the underlying Seq. This object may be sliced again in a repeated "zoom in" fashion.
     Only when a single-element access or an iteration is performed, the relevant elements
@@ -216,14 +225,14 @@ class ListView(Generic[SeqType]):
     This class is generic with a parameter indicating the type of the underlying Seq.
     For example, you can write::
 
-        def func(x: ListView[Biglist[int]]):
+        def func(x: SeqView[Biglist[int]]):
             ...
     """
 
     def __init__(self, list_: SeqType, range_: Optional[range | Seq[int]] = None):
         """
         This provides a "window" into the Seq ``list_``,
-        which may be another :class:`ListView` (which *is* a Seq, hence
+        which may be another :class:`SeqView` (which *is* a Seq, hence
         no special treatment is needed).
 
         During the use of this object, the underlying ``list_`` must remain unchanged.
@@ -232,16 +241,6 @@ class ListView(Generic[SeqType]):
         """
         self._list = list_
         self._range = range_
-
-    @property
-    def raw(self) -> SeqType:
-        """The underlying data :class:`Seq`_."""
-        return self._list
-
-    @property
-    def range(self) -> range | Seq[int]:
-        """The current "window" represented by a `range <https://docs.python.org/3/library/stdtypes.html#range>`_ or a list of indices."""
-        return self._range
 
     def __repr__(self):
         return f"<{self.__class__.__name__} into {self.__len__()}/{len(self._list)} of {self._list}>"
@@ -261,7 +260,7 @@ class ListView(Generic[SeqType]):
         Negative index and standard slice syntax work as expected.
 
         Single-index access returns the requested data element.
-        Slice and index-array access return a new :class:`ListView` object.
+        Slice and index-array access return a new :class:`SeqView` object.
         """
         if isinstance(idx, int):
             # Return a single element.
@@ -269,7 +268,7 @@ class ListView(Generic[SeqType]):
                 return self._list[idx]
             return self._list[self._range[idx]]
 
-        # Return a new `ListView` object below.
+        # Return a new `SeqView` object below.
 
         if isinstance(idx, slice):
             if self._range is None:
@@ -293,6 +292,16 @@ class ListView(Generic[SeqType]):
             for i in self._range:
                 yield self._list[i]
 
+    @property
+    def raw(self) -> SeqType:
+        """The underlying data :class:`Seq`_."""
+        return self._list
+
+    @property
+    def range(self) -> range | Seq[int]:
+        """The current "window" represented by a `range <https://docs.python.org/3/library/stdtypes.html#range>`_ or a list of indices."""
+        return self._range
+
     def collect(self) -> list:
         """
         Return a list containing the elements in the current window.
@@ -301,3 +310,16 @@ class ListView(Generic[SeqType]):
         Warning: don't do this on "big" data!
         """
         return list(self)
+
+
+ListView = SeqView
+'''
+An alias to :class:`SeqView` for back compat.
+This alias will be removed in version 0.8.0.
+'''
+
+ChainedList = ChainedSeq
+'''
+An alias to :class:`ChainedSeq` for back compat.
+This alias will be removed in version 0.8.0.
+'''

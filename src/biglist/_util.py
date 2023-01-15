@@ -5,6 +5,8 @@ import itertools
 from collections.abc import Iterator, Sequence
 from typing import Generic, Optional, Protocol, TypeVar, runtime_checkable
 
+from deprecation import deprecated
+
 
 def locate_idx_in_chunked_seq(
     idx: int,
@@ -122,16 +124,16 @@ SeqType = TypeVar("SeqType", bound=Seq)
 # https://github.com/python/mypy/issues/5264
 
 
-class ChainedList(Generic[SeqType]):
+class Chain(Generic[SeqType]):
     """
     This class tracks a series of |Sequence|_ to provide
     random element access and iteration on the series as a whole.
-    A call to the method :meth:`view` further returns an :class:`ListView` that
+    A call to the method :meth:`slicer` further returns an :class:`Slicer` that
     supports slicing.
 
     This class operates with zero-copy.
 
-    Note that :class:`ListView` and :class:`ChainedList` are |Sequence|_, hence could be
+    Note that :class:`Slicer` and :class:`Chain` are |Sequence|_, hence could be
     members of the series.
 
     This class is generic with a parameter indicating the type of the member sequences.
@@ -139,7 +141,7 @@ class ChainedList(Generic[SeqType]):
 
     ::
 
-        def func(x: ChainedList[list[int] | Biglist[int]]):
+        def func(x: Chain[list[int] | Biglist[int]]):
             ...
     """
 
@@ -192,24 +194,32 @@ class ChainedList(Generic[SeqType]):
         """
         Return the underlying list of |Sequence|_\\s.
 
-        A member sequence could be a :class:`ListView`. The current method
-        does not follow a ListView to its "raw" component, b/c
-        that could represent a different set of elements than the ListView
+        A member sequence could be a :class:`Slicer`. The current method
+        does not follow a Slicer to its "raw" component, b/c
+        that could represent a different set of elements than the Slicer
         object.
         """
         return self._lists
 
-    def view(self) -> ListView[ChainedList[SeqType]]:
+    def slicer(self) -> Slicer[Chain[SeqType]]:
         # The returned object supports slicing.
-        return ListView(self)
+        return Slicer(self)
+
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``slicer`` instead.",
+    )
+    def view(self):
+        return self.slicer()
 
 
-class ListView(Generic[SeqType]):
+class Slicer(Generic[SeqType]):
     """
     This class wraps a :class:`Seq` and enables access by slice or index array,
     in addition to single-index access.
 
-    A ListView object does "zero-copy"---it keeps track of
+    A Slicer object does "zero-copy"---it keeps track of
     indices of selected elements along with a reference to
     the underlying Seq. This object may be sliced again in a repeated "zoom in" fashion.
     Only when a single-element access or an iteration is performed, the relevant elements
@@ -218,14 +228,14 @@ class ListView(Generic[SeqType]):
     This class is generic with a parameter indicating the type of the underlying Seq.
     For example, you can write::
 
-        def func(x: ListView[Biglist[int]]):
+        def func(x: Slicer[Biglist[int]]):
             ...
     """
 
     def __init__(self, list_: SeqType, range_: Optional[range | Seq[int]] = None):
         """
         This provides a "window" into the Seq ``list_``,
-        which may be another :class:`ListView` (which *is* a Seq, hence
+        which may be another :class:`Slicer` (which *is* a Seq, hence
         no special treatment is needed).
 
         During the use of this object, the underlying ``list_`` must remain unchanged.
@@ -253,7 +263,7 @@ class ListView(Generic[SeqType]):
         Negative index and standard slice syntax work as expected.
 
         Single-index access returns the requested data element.
-        Slice and index-array access return a new :class:`ListView` object.
+        Slice and index-array access return a new :class:`Slicer` object.
         """
         if isinstance(idx, int):
             # Return a single element.
@@ -261,7 +271,7 @@ class ListView(Generic[SeqType]):
                 return self._list[idx]
             return self._list[self._range[idx]]
 
-        # Return a new `ListView` object below.
+        # Return a new `Slicer` object below.
 
         if isinstance(idx, slice):
             if self._range is None:

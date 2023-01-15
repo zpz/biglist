@@ -1,6 +1,8 @@
 from __future__ import annotations
-from collections.abc import Sequence
-from biglist._util import ListView, ChainedList, Seq, locate_idx_in_chunked_seq, ListView
+from collections.abc import Sequence, Iterable, Sized
+from biglist._util import Slicer, Chain, Seq, locate_idx_in_chunked_seq, Slicer
+from biglist._base import BiglistBase, FileReader, FileSeq
+from biglist._parquet import ParquetBatchData
 
 
 def test_locate_idx_in_chunked_seq():
@@ -25,6 +27,21 @@ def test_seq():
     assert issubclass(Sequence, Seq)
     assert issubclass(list, Seq)
     assert issubclass(tuple, Seq)
+    assert issubclass(Seq, Sized)
+    assert issubclass(Seq, Iterable)
+
+    assert issubclass(Chain, Seq)
+    assert issubclass(Slicer, Seq)
+    assert issubclass(BiglistBase, Seq)
+    assert issubclass(FileReader, Seq)
+    assert issubclass(FileSeq, Seq)
+    assert issubclass(ParquetBatchData, Seq)
+
+    chain = Chain([1, 2, 3], ['a', 'b'])
+    assert isinstance(chain, Seq)
+
+    s = chain.slicer()
+    assert isinstance(s, Seq)
 
     class Numbers(Seq[int]):
         def __len__(self):
@@ -52,6 +69,7 @@ def test_seq():
 
     Letters.__iter__ = Seq.__iter__
     assert not issubclass(Letters, Seq)
+    # TODO: why assigning __iter__ this way does not work?
 
     class Letters:
         def __len__(self):
@@ -68,7 +86,9 @@ def test_seq():
     assert issubclass(Letters, Seq)
 
 
-def _test_view(datalv):
+def test_slicer(datalv):
+    datalv = Slicer(list(range(20)))
+
     data = list(range(20))
     assert list(datalv) == data
 
@@ -76,7 +96,7 @@ def _test_view(datalv):
     assert datalv[17] == data[17]
 
     lv = datalv[:9]
-    assert isinstance(lv, ListView)
+    assert isinstance(lv, Slicer)
     assert list(lv) == data[:9]
     assert lv[-1] == data[8]
     assert lv[3] == data[3]
@@ -103,12 +123,8 @@ def _test_view(datalv):
     assert llv[2] == 9
     assert list(llv) == [1, 5, 9]
     
-
-def test_seqview():
-    _test_view(ListView(list(range(20))))
-
     x = list(range(20))
-    z: ListView[list[int]] = ListView(x, [2, 3, 5, 6, 13])
+    z: Slicer[list[int]] = Slicer(x, [2, 3, 5, 6, 13])
     print(z)
     assert z[3] == 6
     assert list(z[1:4]) == [3, 5, 6]
@@ -118,21 +134,21 @@ def test_chainedlist():
     mylist1 = list(range(0, 8))
     mylist2 = list(range(8, 18))
     mylist3 = list(range(18, 32))
-    mylist: ChainedList[list[int]] = ChainedList(mylist1, mylist2, mylist3)
+    mylist: Chain[list[int]] = Chain(mylist1, mylist2, mylist3)
     data = list(range(32))
     
     assert list(mylist) == data
     assert mylist[12] == data[12]
     assert mylist[17] == data[17]
     assert mylist[-8] == data[-8]
-    assert list(ListView(mylist)[:8]) == data[:8]
-    assert list(ListView(mylist)[-6:]) == data[-6:]
-    assert list(ListView(mylist)[2:30:3]) == data[2:30:3]
-    assert list(ListView(mylist)[::-1]) == data[::-1]
-    assert list(ListView(mylist)[-2:9:-1]) == data[-2:9:-1]
-    assert list(ListView(mylist)[::-3]) == data[::-3]
+    assert list(Slicer(mylist)[:8]) == data[:8]
+    assert list(Slicer(mylist)[-6:]) == data[-6:]
+    assert list(Slicer(mylist)[2:30:3]) == data[2:30:3]
+    assert list(Slicer(mylist)[::-1]) == data[::-1]
+    assert list(Slicer(mylist)[-2:9:-1]) == data[-2:9:-1]
+    assert list(Slicer(mylist)[::-3]) == data[::-3]
 
-    yourlist = ListView(mylist)[-2:-30:-3]
+    yourlist = Slicer(mylist)[-2:-30:-3]
     yourdata = data[-2:-30:-3]
     
     assert list(yourlist) == yourdata

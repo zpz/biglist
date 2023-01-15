@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 import pyarrow
+from deprecation import deprecated
 from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
 from upathlib import LocalUpath
@@ -16,7 +17,7 @@ from ._base import (
     BiglistBase,
     FileReader,
     FileSeq,
-    ListView,
+    Slicer,
     PathType,
     Seq,
     Upath,
@@ -634,9 +635,17 @@ class ParquetBatchData(Seq):
                 for row in zip(*self._data.columns):
                     yield dict(zip(names, row))
 
-    def view(self) -> ListView:
-        """Return a :class:`ListView` to gain slicing capabilities."""
-        return ListView(self)
+    def slicer(self) -> Slicer:
+        """Return a :class:`Slicer` to gain slicing capabilities."""
+        return Slicer(self)
+
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``slicer`` instead.",
+    )
+    def view(self):
+        return self.slicer()
 
     def columns(self, cols: Sequence[str]) -> ParquetBatchData:
         """

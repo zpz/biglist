@@ -23,7 +23,7 @@ from typing import (
 from deprecation import deprecated
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
-from ._util import Element, ListView, Seq
+from ._util import Element, Slicer, Seq
 
 logger = logging.getLogger(__name__)
 
@@ -83,9 +83,17 @@ class FileReader(Seq[Element]):
         """
         raise NotImplementedError
 
-    def view(self) -> ListView[FileReader[Element]]:
-        """Return a :class:`ListView` object to facilitate slicing this biglist."""
-        return ListView(self)
+    def slicer(self) -> Slicer[FileReader[Element]]:
+        """Return a :class:`Slicer` object to facilitate slicing this biglist."""
+        return Slicer(self)
+
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``slicer`` instead.",
+    )
+    def view(self):
+        return self.slicer()
 
 
 FileReaderType = TypeVar("FileReaderType", bound=FileReader)
@@ -497,8 +505,8 @@ class BiglistBase(Seq[Element]):
         """
         Element access by single index; negative index works as expected.
 
-        This does not support slicing. For slicing, see method :meth:`view`.
-        The object returned by :meth:`view` eventually also calls this method
+        This does not support slicing. For slicing, see method :meth:`slicer`.
+        The object returned by :meth:`slicer` eventually also calls this method
         to access elements.
         """
         # This is not optimized for speed. For example, ``self._get_data_files``
@@ -600,7 +608,7 @@ class BiglistBase(Seq[Element]):
 
                     yield from file_reader
 
-    def view(self) -> ListView[BiglistBase[Element]]:
+    def slicer(self) -> Slicer[BiglistBase[Element]]:
         """
         By convention, a "slicing" method should return an object of the same class
         as the original object. This is not possible for :class:`~biglist._base.BiglistBase` (or its subclasses),
@@ -610,15 +618,23 @@ class BiglistBase(Seq[Element]):
         ::
 
             biglist = Biglist(...)
-            v = biglist.view()
-            print(v[2:8].collect())
-            print(v[3::2].collect())
+            s = biglist.slicer()
+            print(s[2:8].collect())
+            print(s[3::2].collect())
 
-        During the use of this view, the underlying biglist should not change.
-        Multiple views may be used to view diff parts
-        of the biglist; they open and read files independent of other views.
+        During the use of this slicer, the underlying biglist should not change.
+        Multiple slicers may be used to view diff parts
+        of the biglist; they open and read files independent of other slicers.
         """
-        return ListView(self)
+        return Slicer(self)
+
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``slicer`` instead.",
+    )
+    def view(self):
+        return self.slicer()
 
     @property
     @abstractmethod

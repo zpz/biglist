@@ -303,16 +303,3 @@ class ListView(Generic[SeqType]):
         Warning: don't do this on "big" data!
         """
         return list(self)
-
-
-ListView = ListView
-"""
-An alias to :class:`ListView` for back compat.
-This alias will be removed in version 0.8.0.
-"""
-
-ChainedList = ChainedList
-"""
-An alias to :class:`ChainedList` for back compat.
-This alias will be removed in version 0.8.0.
-"""

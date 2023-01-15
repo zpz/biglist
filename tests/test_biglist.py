@@ -51,7 +51,7 @@ def test_numbers():
 
 
 def test_existing_numbers():
-    PATH = os.path.join(os.environ.get('TMPDIR', '/tmp'), 'test', 'biglist')
+    PATH = os.path.join(os.environ.get('TMPDIR', '/tmp'), 'test', 'biglist2')
     if os.path.isdir(PATH):
         rmtree(PATH)
     yourlist = Biglist.new(PATH)

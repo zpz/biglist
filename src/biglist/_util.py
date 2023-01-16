@@ -142,7 +142,7 @@ class Slicer(Generic[SeqType]):
     indices of selected elements along with a reference to
     the underlying Seq. This object may be sliced again in a repeated "zoom in" fashion.
     Actual data elements are retrieved from the underlying Seq
-    only when a single-element is accessed or iteration is performed, 
+    only when a single-element is accessed or iteration is performed,
 
     This class is generic with the parameter ``SeqType`` indicating the type of the underlying Seq.
     For example, you may write::
@@ -335,4 +335,3 @@ class Chain(Generic[SeqType]):
         object.
         """
         return self._lists
-

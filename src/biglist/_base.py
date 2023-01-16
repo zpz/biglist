@@ -131,7 +131,7 @@ class FileSeq(Seq[FileReaderType]):
     @property
     def num_data_files(self) -> int:
         """Number of data files."""
-        return len(self.info['data_files'])
+        return len(self.info["data_files"])
 
     @property
     def num_data_items(self) -> int:
@@ -632,7 +632,7 @@ class BiglistBase(Seq[Element]):
 
     @deprecated(
         deprecated_in="0.7.4",
-        removed_in="0.8.0", 
+        removed_in="0.8.0",
         details="Use ``files`` instead.",
     )
     def iter_files(self) -> Iterator[FileReader[Element]]:

@@ -20,9 +20,9 @@
 .. _pyarrow.fs.GcsFileSystem: https://arrow.apache.org/docs/python/generated/pyarrow.fs.GcsFileSystem.html
 .. _upathlib.Upath: https://github.com/zpz/upathlib/blob/main/src/upathlib/_upath.py
 
-===========
-``biglist``
-===========
+=======
+biglist
+=======
 
 (Generated on |today| for biglist version |version|.)
 
@@ -976,13 +976,14 @@ API reference
 =============
 
 
-.. autodata:: biglist._base.Element
+.. autodata:: biglist._util.Element
 
 
 .. autoclass:: biglist.Seq
+   :exclude-members: __init__
 
 
-.. autodata:: biglist._base.SeqType
+.. autodata:: biglist._util.SeqType
 
 
 .. autoclass:: biglist.Slicer

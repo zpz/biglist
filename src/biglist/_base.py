@@ -129,7 +129,12 @@ class FileSeq(Seq[FileReaderType]):
         raise NotImplementedError
 
     @property
-    def size(self) -> int:
+    def num_data_files(self) -> int:
+        """Number of data files."""
+        return len(self.info['data_files'])
+
+    @property
+    def num_data_items(self) -> int:
         """Total number of data items in the files."""
         z = self.info["data_files"]
         if not z:
@@ -138,7 +143,7 @@ class FileSeq(Seq[FileReaderType]):
 
     def __len__(self) -> int:
         """Number of data files."""
-        return len(self.info["data_files"])
+        return self.num_data_files
 
     @abstractmethod
     def __getitem__(self, idx: int) -> FileReaderType:
@@ -485,7 +490,7 @@ class BiglistBase(Seq[Element]):
         # this biglist, then all the other workers are reading only.
         files = self.files
         if files:
-            return files.size
+            return files.num_data_items
         return 0
 
     def __getitem__(self, idx: int) -> Element:
@@ -626,16 +631,14 @@ class BiglistBase(Seq[Element]):
         raise NotImplementedError
 
     @deprecated(
-        deprecated_in="0.7.4", removed_in="0.8.0", details="Use `.files` instead."
+        deprecated_in="0.7.4",
+        removed_in="0.8.0", 
+        details="Use ``files`` instead.",
     )
     def iter_files(self) -> Iterator[FileReader[Element]]:
         """
         Yield one data file at a time, in contrast to :meth:`__iter__`,
         which yields one element at a time.
-
-        See Also
-        --------
-        :meth:`concurrent_iter_files`: collectively iterate between multiple workers.
         """
         yield from self.files
 

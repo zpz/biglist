@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from ._base import FileReader, FileSeq
 from ._biglist import Biglist, BiglistFileReader, BiglistFileSeq
-from ._util import Chain, Seq, Slicer
+from ._util import Seq, Chain, Slicer
 
 __version__ = "0.7.4b2"
 

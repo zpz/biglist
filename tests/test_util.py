@@ -1,5 +1,6 @@
 from __future__ import annotations
 from collections.abc import Sequence, Iterable, Sized
+import pytest
 from biglist._util import Slicer, Chain, Seq, locate_idx_in_chunked_seq
 from biglist._base import BiglistBase, FileReader, FileSeq
 from biglist._parquet import ParquetBatchData
@@ -87,7 +88,11 @@ def test_seq():
 
 
 def test_slicer():
-    datalv = Slicer(list(range(20)))
+    x = list(range(20))
+    datalv = Slicer(x)
+
+    assert datalv.raw is x
+    assert datalv.range is None
 
     data = list(range(20))
     assert list(datalv) == data
@@ -96,23 +101,27 @@ def test_slicer():
     assert datalv[17] == data[17]
 
     lv = datalv[:9]
+    assert lv.range == range(9)
+
     assert isinstance(lv, Slicer)
     assert list(lv) == data[:9]
     assert lv[-1] == data[8]
     assert lv[3] == data[3]
 
     lv = lv[:2:-2]
+    assert lv.range == range(8, 2, -2)
     assert list(lv) == data[8:2:-2]
 
     lv = datalv[10:17]
+    assert lv.range == range(10, 17)
     assert lv[3] == data[13]
-    assert list(lv[3:6]) == data[13:16]
-    assert list(lv[-3:]) == data[14:17]
-    assert list(lv[::2]) == data[10:17:2]
-    assert list(lv) == data[10:17]
+    assert lv[3:6].collect() == data[13:16]
+    assert lv[-3:].collect() == data[14:17]
+    assert lv[::2].collect() == data[10:17:2]
+    assert lv.collect() == data[10:17]
 
     lv = datalv[::-2]
-    assert list(lv) == data[::-2]
+    assert [v for v in lv] == data[::-2]
     assert list(lv[:3]) == [data[-1], data[-3], data[-5]]
     assert lv[2] == data[-5]
     assert list(lv[::-3]) == data[1::6]
@@ -125,33 +134,35 @@ def test_slicer():
     
     x = list(range(20))
     z: Slicer[list[int]] = Slicer(x, [2, 3, 5, 6, 13])
-    print(z)
     assert z[3] == 6
-    assert list(z[1:4]) == [3, 5, 6]
+    assert z[1:4].collect() == [3, 5, 6]
+    assert len(z) == 5
 
 
-def test_chainedlist():
+def test_chain():
     mylist1 = list(range(0, 8))
     mylist2 = list(range(8, 18))
     mylist3 = list(range(18, 32))
     mylist: Chain[list[int]] = Chain(mylist1, mylist2, mylist3)
     data = list(range(32))
     
+    assert len(mylist) == len(data)
     assert list(mylist) == data
+    assert mylist[3] == data[3]
     assert mylist[12] == data[12]
     assert mylist[17] == data[17]
+    assert mylist[23] == data[23]
     assert mylist[-8] == data[-8]
-    assert list(Slicer(mylist)[:8]) == data[:8]
-    assert list(Slicer(mylist)[-6:]) == data[-6:]
-    assert list(Slicer(mylist)[2:30:3]) == data[2:30:3]
-    assert list(Slicer(mylist)[::-1]) == data[::-1]
-    assert list(Slicer(mylist)[-2:9:-1]) == data[-2:9:-1]
-    assert list(Slicer(mylist)[::-3]) == data[::-3]
+    assert mylist[-17] == data[-17]
 
-    yourlist = Slicer(mylist)[-2:-30:-3]
-    yourdata = data[-2:-30:-3]
-    
-    assert list(yourlist) == yourdata
-    assert yourlist[3] == yourdata[3]
-    assert list(yourlist[2:20:4]) == yourdata[2:20:4]
-    assert list(yourlist[-2:-20:-3]) == yourdata[-2:-20:-3]
+    with pytest.raises(IndexError):
+        _ = mylist[len(data) + 2]
+
+    with pytest.raises(IndexError):
+        _ = mylist[-len(data) - 3]
+
+    ch = Chain([], [], [])
+    assert len(ch) == 0
+
+    with pytest.raises(IndexError):
+        _ = ch[2]

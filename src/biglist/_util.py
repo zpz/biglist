@@ -15,13 +15,26 @@ def locate_idx_in_chunked_seq(
     Suppose a sequence is composed of a number of member sequences.
     This function finds which member sequence contains the requested item.
 
-    `idx`: index of the item of interest.
-    `len_cumsum`: cumulative lengths of the member sequences.
-    `last_chunk`: info about the last call to this function, consisting of
-        ('index of member sequence chosen',
-         'starting index of the chosen sequence',
-         'finishing index (plus 1) of the chosen sequence',
-        )
+    Parameters
+    ----------
+    idx
+        Index of the item of interest.
+    len_cumsum
+        Cumulative lengths of the member sequences.
+    last_chunk
+        Info about the last call to this function, consisting of
+
+        ::
+
+            ('index of the selected member sequence',
+             'starting index of the chosen sequence',
+             'finishing index (plus 1) of the chosen sequence',
+            )
+
+        This info about the last call is used as the starting point to
+        search for the current item of interest, at index ``idx``.
+        This is used with the assumption that user tends to access consecutive
+        items.
     """
     if idx < 0:
         idx = len_cumsum[-1] + idx
@@ -69,9 +82,9 @@ This type variable is used to annotate the type of a data element.
 @runtime_checkable
 class Seq(Protocol[Element]):
     """
-    The protocol ``Seq`` is simpler and broader than the standard ``collections.abc.Sequence``.
-    The former requires only ``__len__``, ``__getitem__``, and ``__iter__``,
-    whereas the latter would add ``__contains__``, ``__reversed__``, ``index`` and ``count``
+    The protocol ``Seq`` is simpler and broader than the standard |Sequence|_.
+    The former requires/provides only ``__len__``, ``__getitem__``, and ``__iter__``,
+    whereas the latter adds ``__contains__``, ``__reversed__``, ``index`` and ``count``
     to these three. Although the extra methods can be implemented using the three basic methods,
     they could be massively inefficient in particular cases, and that is the case
     in the applications targeted by ``biglist``.
@@ -79,15 +92,17 @@ class Seq(Protocol[Element]):
     rather than ``Sequence``, to prevent the illusion that methods ``__contains__``, etc.,
     are usable.
 
-    A class that implements this protocol is sized, iterable, and subscriptable.
+    A class that implements this protocol is sized, iterable, and subscriptable by an int index.
     This is a subset of the methods provided by Sequence.
     In particular, Sequence implements this protocol, hence is considered a subclass
-    of this protocol class for type checking purposes:
+    of Seq for type checking purposes:
 
     >>> from biglist import Seq
     >>> from collections.abc import Sequence
     >>> issubclass(Sequence, Seq)
     True
+
+    The built-in dict and tuple also implement the ``Seq`` protocol.
 
     The type parameter ``Element`` indicates the type of each data element.
     """
@@ -106,7 +121,7 @@ class Seq(Protocol[Element]):
     def __len__(self) -> int:
         ...
 
-    def __getitem__(self, idx: int) -> Element:
+    def __getitem__(self, index: int) -> Element:
         ...
 
     def __iter__(self) -> Iterator[Element]:
@@ -118,19 +133,138 @@ class Seq(Protocol[Element]):
 SeqType = TypeVar("SeqType", bound=Seq)
 
 
-# Can not use ``Sequence[T]`` as base class. See
-# https://github.com/python/mypy/issues/5264
+class Slicer(Generic[SeqType]):
+    """
+    This class wraps a :class:`Seq` and enables access by slice or index array,
+    in addition to single-index access.
+
+    A Slicer object makes "zero-copy"---it keeps track of
+    indices of selected elements along with a reference to
+    the underlying Seq. This object may be sliced again in a repeated "zoom in" fashion.
+    Actual data elements are retrieved from the underlying Seq
+    only when a single-element is accessed or iteration is performed, 
+
+    This class is generic with the parameter ``SeqType`` indicating the type of the underlying Seq.
+    For example, you may write::
+
+        def func(x: Slicer[list[int]]):
+            ...
+
+    ``Slicer`` implements the :class:`Seq` protocol.
+    """
+
+    def __init__(self, list_: SeqType, range_: Optional[range | Seq[int]] = None):
+        """
+        This provides a "slice" of, or "window" into, ``list_``.
+
+        The selection of elements is represented by the optional ``range_``,
+        which is eithe a `range <https://docs.python.org/3/library/stdtypes.html#range>`_
+        such as ``range(3, 8)``,
+        or a list of indices such as ``[1, 3, 5, 6]``.
+        If ``range_`` is ``None``, the "window" covers the entire ``list_``.
+        A common practice is to omit ``range_``, and access a slice of the Slicer object,
+        for example, ``Slicer(obj)[3:8]`` rather than ``Slicer(obj, range(3,8))``.
+
+        During the use of this object, the underlying ``list_`` must remain unchanged.
+        """
+        self._list = list_
+        self._range = range_
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} into {self.__len__()}/{len(self._list)} of {self._list!r}>"
+
+    def __str__(self):
+        return self.__repr__()
+
+    def __len__(self) -> int:
+        """Number of elements in the current window or "slice"."""
+        if self._range is None:
+            return len(self._list)
+        return len(self._range)
+
+    def __getitem__(self, idx: int | slice | Seq[int]):
+        """
+        Element access by a single index, slice, or an index array.
+        Negative index and standard slice syntax work as expected.
+
+        Single-index access returns the requested data element.
+        Slice and index-array accesses return a new :class:`Slicer` object.
+        The resultant Slicer object can, naturally, be sliced again, like
+
+        ::
+
+            >>> x = list(range(30))
+            >>> Slicer(x)[[1, 3, 5, 6, 7, 8, 9, 13, 14]][::2][-2]
+            9
+        """
+        if isinstance(idx, int):
+            # Return a single element.
+            if self._range is None:
+                return self._list[idx]
+            return self._list[self._range[idx]]
+
+        # Return a new `Slicer` object below.
+
+        if isinstance(idx, slice):
+            if self._range is None:
+                range_ = range(len(self._list))[idx]
+            else:
+                range_ = self._range[idx]
+            return self.__class__(self._list, range_)
+
+        # `idx` is a list of indices.
+        if self._range is None:
+            return self.__class__(self._list, idx)
+        return self.__class__(self._list, [self._range[i] for i in idx])
+
+    def __iter__(self) -> Iterator:
+        """Iterate over the elements in the current window or "slice"."""
+        if self._range is None:
+            yield from self._list
+        else:
+            # This could be inefficient, depending on
+            # the random-access performance of `self._list`.
+            for i in self._range:
+                yield self._list[i]
+
+    @property
+    def raw(self) -> SeqType:
+        """Return the underlying data :class:`Seq`."""
+        return self._list
+
+    @property
+    def range(self) -> Optional[range | Seq[int]]:
+        """Return the parameter ``range_`` that was provided to :meth:`__init__`, representing the selection of items in the underlying Seq."""
+        return self._range
+
+    def collect(self) -> list:
+        """
+        Return a list containing the elements in the current window.
+        This is equivalent to ``list(self)``.
+
+        This is often used to substantiate a small slice as a list, because a slice is still a ``Slicer`` object,
+        which does not directly reveal the data items. For example,
+
+        ::
+
+            >>> x = list(range(30))
+            >>> Slicer(x)[3:11]
+            <Slicer into 8/30 of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]>
+            >>> Slicer(x)[3:11].collect()
+            [3, 4, 5, 6, 7, 8, 9, 10]
+
+        (A list is used for illustration. In reality, list supports slicing directly, hence would not need Slicer.)
+
+        .. warning:: Do not call this on "big" data!
+        """
+        return list(self)
 
 
 class Chain(Generic[SeqType]):
     """
-    This class tracks a series of |Sequence|_ to provide
-    random element access and iteration on the series as a whole.
-
-    This class operates with zero-copy.
-
-    Note that :class:`Slicer` and :class:`Chain` are both |Sequence|_, hence could be
-    members of the series.
+    This class tracks a series of :class:`Seq` to provide
+    random element access and iteration on the series as a whole,
+    with zero-copy.
 
     This class is generic with a parameter indicating the type of the member sequences.
     For example,
@@ -139,10 +273,15 @@ class Chain(Generic[SeqType]):
 
         def func(x: Chain[list[int] | Biglist[int]]):
             ...
+
+    ``Chain`` implements the :class:`Seq` protocol.
+
+    This class is in contrast with the standard `itertools.chain <https://docs.python.org/3/library/itertools.html#itertools.chain>`_,
+    which takes iterables.
     """
 
-    def __init__(self, *lists: SeqType):
-        self._lists = lists
+    def __init__(self, list_: SeqType, *lists: SeqType):
+        self._lists = (list_, *lists)
         self._lists_len: Optional[list[int]] = None
         self._lists_len_cumsum: Optional[list[int]] = None
         self._len: Optional[int] = None
@@ -154,7 +293,7 @@ class Chain(Generic[SeqType]):
         self._get_item_last_list = None
 
     def __repr__(self):
-        return "<{} with {} elements in {} member lists>".format(
+        return "<{} with {} elements in {} member Seq's>".format(
             self.__class__.__name__,
             self.__len__(),
             len(self._lists),
@@ -188,112 +327,12 @@ class Chain(Generic[SeqType]):
     @property
     def raw(self) -> tuple[SeqType, ...]:
         """
-        Return the underlying list of |Sequence|_\\s.
+        Return the underlying list of :class:`Seq`\s.
 
-        A member sequence could be a :class:`Slicer`. The current method
+        A member Seq could be a :class:`Slicer`. The current method
         does not follow a Slicer to its "raw" component, b/c
         that could represent a different set of elements than the Slicer
         object.
         """
         return self._lists
 
-
-class Slicer(Generic[SeqType]):
-    """
-    This class wraps a :class:`Seq` and enables access by slice or index array,
-    in addition to single-index access.
-
-    A Slicer object does "zero-copy"---it keeps track of
-    indices of selected elements along with a reference to
-    the underlying Seq. This object may be sliced again in a repeated "zoom in" fashion.
-    Only when a single-element access or an iteration is performed, the relevant elements
-    are retrieved from the underlying Seq.
-
-    This class is generic with a parameter indicating the type of the underlying Seq.
-    For example, you can write::
-
-        def func(x: Slicer[Biglist[int]]):
-            ...
-    """
-
-    def __init__(self, list_: SeqType, range_: Optional[range | Seq[int]] = None):
-        """
-        This provides a "window" into the Seq ``list_``,
-        which may be another :class:`Slicer` (which *is* a Seq, hence
-        no special treatment is needed).
-
-        During the use of this object, the underlying ``list_`` must remain unchanged.
-
-        If ``range_`` is ``None``, the "window" covers the entire ``list_``.
-        """
-        self._list = list_
-        self._range = range_
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} into {self.__len__()}/{len(self._list)} of {self._list}>"
-
-    def __str__(self):
-        return self.__repr__()
-
-    def __len__(self) -> int:
-        """Number of elements in the current window."""
-        if self._range is None:
-            return len(self._list)
-        return len(self._range)
-
-    def __getitem__(self, idx: int | slice | Seq[int]):
-        """
-        Element access by a single index, slice, or an index array.
-        Negative index and standard slice syntax work as expected.
-
-        Single-index access returns the requested data element.
-        Slice and index-array access return a new :class:`Slicer` object.
-        """
-        if isinstance(idx, int):
-            # Return a single element.
-            if self._range is None:
-                return self._list[idx]
-            return self._list[self._range[idx]]
-
-        # Return a new `Slicer` object below.
-
-        if isinstance(idx, slice):
-            if self._range is None:
-                range_ = range(len(self._list))[idx]
-            else:
-                range_ = self._range[idx]
-            return self.__class__(self._list, range_)
-
-        # `idx` is a list of indices.
-        if self._range is None:
-            return self.__class__(self._list, idx)
-        return self.__class__(self._list, [self._range[i] for i in idx])
-
-    def __iter__(self):
-        """Iterate over the elements in the current window."""
-        if self._range is None:
-            yield from self._list
-        else:
-            # This could be inefficient, depending on
-            # the random-access performance of `self._list`.
-            for i in self._range:
-                yield self._list[i]
-
-    @property
-    def raw(self) -> SeqType:
-        """The underlying data :class:`Seq`_."""
-        return self._list
-
-    @property
-    def range(self) -> range | Seq[int]:
-        """The current "window" represented by a `range <https://docs.python.org/3/library/stdtypes.html#range>`_ or a list of indices."""
-        return self._range
-
-    def collect(self) -> list:
-        """
-        Return a list containing the elements in the current window.
-        This is equivalent to using the object to initialize a list.
-
-        Warning: don't do this on "big" data!
-        """
-        return list(self)

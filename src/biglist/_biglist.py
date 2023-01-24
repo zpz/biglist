@@ -136,6 +136,7 @@ class Biglist(BiglistBase[Element]):
         """Load the data file given by ``path``.
 
         This function is used as the argument ``loader`` to :meth:`BiglistFileReader.__init__`.
+        The value it returns is contained in :class:`FileReader` for subsequent use.
 
         See Also
         --------
@@ -258,7 +259,7 @@ class Biglist(BiglistBase[Element]):
         if self.info and "data_files" not in self.info:
             # This is not called by ``new``, instead is opening an existing dataset
             self.info["data_files"] = self._get_data_files()
-            with self.lockfile(self._info_file.with_suffix(".lock")):
+            with self._info_file.with_suffix(".lock").lock(timeout=120):
                 self._info_file.write_json(self.info, overwrite=True)
 
     def __del__(self) -> None:
@@ -388,7 +389,7 @@ class Biglist(BiglistBase[Element]):
         # to the list. This block merges the appends by the current worker with
         # appends by other workers. The last call to ``flush`` across all workers
         # will get the final meta info right.
-        with self.lockfile(self._info_file.with_suffix(".lock")):
+        with self._info_file.with_suffix(".lock").lock(timeout=120):
             z0 = self._info_file.read_json()["data_files"]
             z1 = self.info["data_files"]
             z = sorted(set((*(tuple(v[:2]) for v in z0), *(tuple(v[:2]) for v in z1))))
@@ -442,7 +443,7 @@ class Biglist(BiglistBase[Element]):
         # Each element of the list is a tuple containing file path, item count in file, and cumsum of item counts.
 
     def reload(self) -> None:
-        with self.lockfile(self._info_file.with_suffix(".lock")):
+        with self._info_file.with_suffix(".lock").lock(timeout=120):
             self.info = self._info_file.read_json()
 
     @property
@@ -509,7 +510,7 @@ class Biglist(BiglistBase[Element]):
         finfo = self._multiplex_info_file(task_id)
         flock = finfo.with_suffix(finfo.suffix + ".lock")
         while True:
-            with self.lockfile(flock):
+            with flock.lock(timeout=120):
                 # In concurrent use cases, I've observed
                 # `upathlib.LockAcquireError` raised here.
                 # User may want to do retry here.

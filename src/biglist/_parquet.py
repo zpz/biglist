@@ -87,6 +87,7 @@ class ParquetBiglist(BiglistBase):
         Load the data file given by ``path``.
 
         This function is used as the argument ``loader`` to :meth:`ParquetFileReader.__init__`.
+        The value it returns is contained in :class:`FileReader` for subsequent use.
         """
         ff, pp = FileSystem.from_uri(str(path))
         if isinstance(ff, GcsFileSystem):

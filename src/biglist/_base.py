@@ -32,20 +32,22 @@ class FileReader(Seq[Element]):
     A FileReader is a "lazy" loader of a data file.
     It keeps track of the path of a data file along with a loader function,
     but performs the loading only when needed.
-    In particular, upon initiation, file loading has not happened, and the object
+    In particular, upon initiation of a FileReader object,
+    file loading has not happened, and the object
     is light weight and friendly to pickling.
 
-    One use case of this class is to pass these objects around in
-    `multiprocessing <https://docs.python.org/3/library/multiprocessing.html>`_ code for concurrent data processing.
-
     Once data have been loaded, this class provides various ways to navigate
-    the data. At a minimum, a subclass must implement the
-    |Sequence|_ API, mainly random access and iteration.
+    the data. At a minimum, the :class:`Seq` API is implemented.
 
     With loaded data and associated facilities, this object may no longer
     be pickle-able, depending on the specifics of the subclass.
 
-    This class is generic with a parameter indicating the type of the data elements.
+    One use case of this class is to pass around FileReader objects
+    (that are initiated but not loaded) in
+    `multiprocessing <https://docs.python.org/3/library/multiprocessing.html>`_ code for concurrent data processing.
+
+    This class is generic with a parameter indicating the type of the elements in the data sequence
+    contained in the file.
     For example you can write::
 
         def func(file_reader: FileReader[int]):
@@ -57,28 +59,35 @@ class FileReader(Seq[Element]):
         Parameters
         ----------
         path
-            Path of a data file.
+            Path of the data file.
         loader
-            A function that will load the data file.
-            This could be a classmethod, staticmethod,
-            or a standalone function, but can't be a lambda
-            function, because a FileReader object is often used
-            with `multiprocessing <https://docs.python.org/3/library/multiprocessing.html>`_, hence must be pickle-friendly.
+            A function that will be used to load the data file.
+            This must be pickle-able.
         """
         self.path: Upath = resolve_path(path)
         """Path of the file."""
         self.loader: Callable[[Upath], Any] = loader
-        """A function that will be used to read the file."""
+        """A function that will be used to read the data file."""
 
     def __repr__(self):
-        return f"{self.__class__.__name__}('{self.path}', {self.loader})"
+        return f"{self.__class__.__name__}('{self.path}', <{self.loader}>)"
 
     def __str__(self):
-        return self.__repr__()
+        return f"{self.__class__.__name__} for '{self.path}'"
 
+    @abstractmethod
     def load(self) -> None:
         """
         This method *eagerly* loads all the data from the file.
+
+        Once this method has been called, typically the entire data file is loaded
+        into memory, and subsequent data consumption should all draw upon this
+        in-memory copy. However, if the data file is large, and especially
+        if only part of the data is of interest, calling this method may not be
+        the best approach. This all depends on the specifics of the subclass.
+
+        A subclass may allow consuming the data and load parts of data 
+        in a "as-needed" or "streaming" fashion.
         """
         raise NotImplementedError
 
@@ -86,39 +95,20 @@ class FileReader(Seq[Element]):
 FileReaderType = TypeVar("FileReaderType", bound=FileReader)
 
 
-"""
-Return a list of all the data files wrapped in :class:`FileReader` objects,
-which are light weight, have not loaded data yet, and are friendly
-to pickling.
-
-This is intended to facilitate concurrent processing,
-e.g. one may send the :class:`FileReader` objects to different processes or threads.
-"""
-
-
 class FileSeq(Seq[FileReaderType]):
-    @classmethod
-    @contextmanager
-    def lockfile(cls, file: Upath):
-        """
-        All this method does is to guarantee that the code block identified
-        by ``file`` (essentially the name) is *not* executed concurrently
-        by two "workers".
+    '''
+    A FileSeq is a :class:`Seq` of :class:`FileReader` objects.
 
-        This method is used by several "distributed reading" methods.
-        The scope of the lock is for reading/writing a tiny "control info" file.
-
-        See `Upath.lock <https://github.com/zpz/upathlib/blob/main/src/upathlib/_upath.py>`_.
-        """
-        with file.lock(timeout=120):
-            yield
+    Since this class represents a sequence of data files,
+    methods such as ``__len__`` and ``__iter__`` are in terms of data *files*
+    rather than data *items*. (One data file contains a sequence of data items.)
+    '''
 
     @property
     @abstractmethod
-    def info(self) -> dict:
+    def data_files_info(self) -> list:
         """
-        Return a dict with at least an element called 'data_files', which
-        is list of tuples for the data files.
+        Return a list of tuples for the data files.
         Each tuple, representing one data file, consists of
         "file path", "element count in the file",
         and "cumulative element count in the data files so far".
@@ -135,7 +125,7 @@ class FileSeq(Seq[FileReaderType]):
 
     @property
     def num_data_items(self) -> int:
-        """Total number of data items in the files."""
+        """Total number of data items in the data files."""
         z = self.info["data_files"]
         if not z:
             return 0
@@ -152,7 +142,7 @@ class FileSeq(Seq[FileReaderType]):
         ----------
         idx
             Index of the file (0-based) in the list of data files as returned
-            in :meth:`info`.
+            by :meth:`data_files_info`.
         """
         raise NotImplementedError
 
@@ -166,6 +156,13 @@ class FileSeq(Seq[FileReaderType]):
     @property
     @abstractmethod
     def path(self) -> Upath:
+        '''
+        Return the location (a "directory") where this object
+        saves info about the data files, and any other info the implementation chooses
+        to save.
+
+        Note that this location does not need to be related to the location of the data files.
+        '''
         raise NotImplementedError
 
     def _concurrent_iter_info_file(self, task_id: str) -> Upath:
@@ -176,13 +173,14 @@ class FileSeq(Seq[FileReaderType]):
 
     def new_concurrent_iter(self) -> str:
         """
-        One worker, such as a "coordinator", calls this method once.
-        After that, one or more workers independently call :meth:`concurrent_iter`,
-        providing the task-ID returned by this method.
-        Each data file will be obtained by exactly one worker,
-        thus content of the biglist is split between the workers.
+        Initiate a concurrent iteration of the data files by multiple workers.
 
-        During this iteration, the biglist object should stay unchanged.
+        One worker, such as a "coordinator", calls this method and obtains a task-ID.
+        After that, one or more workers independently call :meth:`concurrent_iter`,
+        providing the task-ID, which they have received from the coordinator.
+        Each data file will be obtained by exactly one worker.
+
+        During this iteration, the data files should stay unchanged.
         """
         task_id = datetime.utcnow().isoformat()
         self._concurrent_iter_info_file(task_id).write_json(
@@ -190,19 +188,19 @@ class FileSeq(Seq[FileReaderType]):
         )
         return task_id
 
-    def concurrent_iter(self, task_id: str) -> Iterator[FileReader[Element]]:
+    def concurrent_iter(self, task_id: str) -> Iterator[FileReaderType]:
         """
         Parameters
         ----------
         task_id
             The string returned by :meth:`new_concurrent_iter`.
             All workers that call this method using the same ``task_id``
-            will consume the biglist collectively.
+            will consume the data files collectively.
         """
         nfiles = self.__len__()
         while True:
             ff = self._concurrent_iter_info_file(task_id)
-            with self.lockfile(ff.with_suffix(".json.lock")):
+            with ff.with_suffix(".json.lock").lock(timeout=120):
                 iter_info = ff.read_json()
                 n_files_claimed = iter_info["n_files_claimed"]
                 if n_files_claimed >= nfiles:
@@ -216,7 +214,11 @@ class FileSeq(Seq[FileReaderType]):
             yield self.__getitem__(n_files_claimed)
 
     def concurrent_iter_stat(self, task_id: str) -> dict:
-        """Return status info of an ongoing "concurrent file iter"."""
+        """Return status info for an ongoing "concurrent file iter"
+        identified by the task ID.
+        
+        .. seealso: :meth:`new_concurrent_iter`.
+        """
         info = self._concurrent_iter_info_file(task_id).read_json()
         return {**info, "n_files": self.__len__()}
 
@@ -235,9 +237,10 @@ class BiglistBase(Seq[Element]):
     The subclass :class:`~biglist.Biglist` adds functionalities for writing.
     Other subclasses, such as :class:`~biglist.ParquetBiglist`, may be read-only.
 
-    This class is generic with a parameter indicating the type of the data elements,
+    This class is generic with a parameter indicating the type of the data items,
     but this is useful only for the subclass :class:`~biglist.Biglist`.
-    For the subclass :class:`~biglist.ParquetBiglist`, this parameter is essentially ``Any``.
+    For the subclass :class:`~biglist.ParquetBiglist`, this parameter is essentially ``Any``
+    because the data items (or rows) in a Parquet files are compound and flexible.
     """
 
     _thread_pool: ThreadPoolExecutor = None
@@ -282,33 +285,17 @@ class BiglistBase(Seq[Element]):
         )  # type: ignore
         return path  # type: ignore
 
-    @classmethod
-    @abstractmethod
-    def load_data_file(cls, path: Upath):
-        """
-        Load the data file given by ``path``.
+    # @classmethod
+    # @abstractmethod
+    # def load_data_file(cls, path: Upath):
+    #     """
+    #     Load the data file given by ``path``.
 
-        This function is used as the argument ``loader`` to :meth:`biglist.FileReader.__init__`.
-        Its return type depends on the subclass.
-        The value it returns is contained in :class:`FileReader` for subsequent use.
-        """
-        raise NotImplementedError
-
-    @classmethod
-    @contextmanager
-    def lockfile(cls, file: Upath):
-        """
-        All this method does is to guarantee that the code block identified
-        by ``file`` (essentially the name) is *not* executed concurrently
-        by two "workers".
-
-        This method is used by several "distributed reading" methods.
-        The scope of the lock is for reading/writing a tiny "control info" file.
-
-        See `Upath.lock <https://github.com/zpz/upathlib/blob/main/src/upathlib/_upath.py>`_.
-        """
-        with file.lock(timeout=120):
-            yield
+    #     This function is used as the argument ``loader`` to :meth:`biglist.FileReader.__init__`.
+    #     Its return type depends on the subclass.
+    #     The value it returns is contained in :class:`FileReader` for subsequent use.
+    #     """
+    #     raise NotImplementedError
 
     @classmethod
     def new(
@@ -455,7 +442,7 @@ class BiglistBase(Seq[Element]):
         try:
             # Instantiate a Biglist object pointing to
             # existing data.
-            with self.lockfile(self._info_file.with_suffix(".lock")):
+            with self._info_file.with_suffix(".lock").lock(timeout=120):
                 # Lock it because there could be multiple distributed workers
                 # accessing this file.
                 self.info = self._info_file.read_json()
@@ -600,6 +587,19 @@ class BiglistBase(Seq[Element]):
 
                     yield from file_reader
 
+    @property
+    def num_data_files(self) -> int:
+        return len(self.files)
+
+    @property
+    def num_data_items(self) -> int:
+        return self.__len__()
+
+    @property
+    @abstractmethod
+    def files(self) -> FileSeq[FileReader[Element]]:
+        raise NotImplementedError
+
     @deprecated(
         deprecated_in="0.7.4",
         removed_in="0.8.0",
@@ -624,11 +624,6 @@ class BiglistBase(Seq[Element]):
         of the biglist; they open and read files independent of other slicers.
         """
         return Slicer(self)
-
-    @property
-    @abstractmethod
-    def files(self) -> FileSeq:
-        raise NotImplementedError
 
     @deprecated(
         deprecated_in="0.7.4",

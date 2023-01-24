@@ -34,7 +34,7 @@ doc = [
     "pydata-sphinx-theme",
 ]
 gcs = [
-    "upathlib[gcs] >= 0.6.9",
+    "upathlib[gcs] >= 0.7.0",
     "google-auth",
 ]
 parquet = [

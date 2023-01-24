@@ -10,7 +10,6 @@ import warnings
 from abc import abstractmethod
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
 from datetime import datetime
 from typing import (
     Any,
@@ -86,7 +85,7 @@ class FileReader(Seq[Element]):
         if only part of the data is of interest, calling this method may not be
         the best approach. This all depends on the specifics of the subclass.
 
-        A subclass may allow consuming the data and load parts of data 
+        A subclass may allow consuming the data and load parts of data
         in a "as-needed" or "streaming" fashion.
         """
         raise NotImplementedError
@@ -96,13 +95,13 @@ FileReaderType = TypeVar("FileReaderType", bound=FileReader)
 
 
 class FileSeq(Seq[FileReaderType]):
-    '''
+    """
     A FileSeq is a :class:`Seq` of :class:`FileReader` objects.
 
     Since this class represents a sequence of data files,
     methods such as ``__len__`` and ``__iter__`` are in terms of data *files*
     rather than data *items*. (One data file contains a sequence of data items.)
-    '''
+    """
 
     @property
     @abstractmethod
@@ -156,13 +155,13 @@ class FileSeq(Seq[FileReaderType]):
     @property
     @abstractmethod
     def path(self) -> Upath:
-        '''
+        """
         Return the location (a "directory") where this object
         saves info about the data files, and any other info the implementation chooses
         to save.
 
         Note that this location does not need to be related to the location of the data files.
-        '''
+        """
         raise NotImplementedError
 
     def _concurrent_iter_info_file(self, task_id: str) -> Upath:
@@ -216,7 +215,7 @@ class FileSeq(Seq[FileReaderType]):
     def concurrent_iter_stat(self, task_id: str) -> dict:
         """Return status info for an ongoing "concurrent file iter"
         identified by the task ID.
-        
+
         .. seealso: :meth:`new_concurrent_iter`.
         """
         info = self._concurrent_iter_info_file(task_id).read_json()

@@ -105,7 +105,7 @@ class FileSeq(Seq[FileReaderType]):
 
     @property
     @abstractmethod
-    def data_files_info(self) -> list:
+    def data_files_info(self) -> list[tuple[str, int, int]]:
         """
         Return a list of tuples for the data files.
         Each tuple, representing one data file, consists of
@@ -137,6 +137,10 @@ class FileSeq(Seq[FileReaderType]):
     @abstractmethod
     def __getitem__(self, idx: int) -> FileReaderType:
         """
+        Return the :class:`FileReader` for the data file at the specified
+        (0-based) index. The returned FileReader object has not loaded data yet,
+        and is guaranteed to be pickle-able.
+
         Parameters
         ----------
         idx
@@ -148,6 +152,8 @@ class FileSeq(Seq[FileReaderType]):
     def __iter__(self) -> Iterator[FileReaderType]:
         """
         Yield one data file at a time.
+
+        .. seealso:: :meth:`__getitem__`
         """
         for i in range(self.__len__()):
             yield self.__getitem__(i)
@@ -195,6 +201,8 @@ class FileSeq(Seq[FileReaderType]):
             The string returned by :meth:`new_concurrent_iter`.
             All workers that call this method using the same ``task_id``
             will consume the data files collectively.
+
+        .. seealso:: :meth:`__getitem__`, :meth:`new_concurrent_iter`
         """
         nfiles = self.__len__()
         while True:
@@ -232,14 +240,19 @@ _unspecified = object()
 
 class BiglistBase(Seq[Element]):
     """
-    This base class contains code mainly concerning *reading* only.
+    This base class contains code mainly concerning *reading*.
     The subclass :class:`~biglist.Biglist` adds functionalities for writing.
-    Other subclasses, such as :class:`~biglist.ParquetBiglist`, may be read-only.
-
+    Another subclass :class:`~biglist.ParquetBiglist` is read-only.
+    Here, "reading" and "read-only" is talking about the *data files*.
+    This class always needs to write meta info *about* the data files.
+    In addition, the subclass :class:`~biglist.Biglist` also creates and manages
+    the data files, whereas :class:`_biglist.ParquetBiglist` provides methods
+    to read existing data files, treating them as read-only.
+ 
     This class is generic with a parameter indicating the type of the data items,
     but this is useful only for the subclass :class:`~biglist.Biglist`.
     For the subclass :class:`~biglist.ParquetBiglist`, this parameter is essentially ``Any``
-    because the data items (or rows) in a Parquet files are compound and flexible.
+    because the data items (or rows) in Parquet files are composite and flexible.
     """
 
     _thread_pool: ThreadPoolExecutor = None
@@ -275,7 +288,9 @@ class BiglistBase(Seq[Element]):
         If user does not specify ``path`` when calling :meth:`new` (in a subclass),
         this method is used to determine a temporary directory.
 
-        Subclass may want to customize this if they prefer other ways
+        This implementation returns a temporary location in the local file system.
+
+        Subclasses may want to customize this if they prefer other ways
         to find temporary locations. For example, they may want
         to use a temporary location in a cloud storage.
         """
@@ -311,15 +326,17 @@ class BiglistBase(Seq[Element]):
         ----------
         path
             A directory in which this :class:`BiglistBase` will save whatever it needs to save.
-            (The subclass :class:`~biglist.Biglist` saves both data and meta-info.
-            The subclass :class:`~biglist.ParquetBiglist` saves meta-info only.)
+
             The directory must be non-existent.
             It is not necessary to pre-create the parent directory of this path.
 
             This path can be either on local disk or in a cloud storage.
 
             If not specified, :meth:`~biglist._base.BiglistBase.get_temp_path`
-            will be called to determine a temporary path.
+            is called to determine a temporary path.
+
+            The subclass :class:`~biglist.Biglist` saves both data and meta-info in this path.
+            The subclass :class:`~biglist.ParquetBiglist` saves meta-info only.
 
         keep_files
             If not specified, the default behavior is the following:
@@ -456,7 +473,7 @@ class BiglistBase(Seq[Element]):
         self._n_write_threads = 3
 
     def __repr__(self):
-        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} elements in {len(self.files)} data file(s)>"
+        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} elements in {self.num_data_files} data file(s)>"
 
     def __str__(self):
         return self.__repr__()
@@ -467,7 +484,7 @@ class BiglistBase(Seq[Element]):
 
     def __len__(self) -> int:
         """
-        Number of elements in this biglist.
+        Number of data items in this biglist.
         """
         # This assumes the current object is the only one
         # that may be appending to the biglist.
@@ -481,11 +498,7 @@ class BiglistBase(Seq[Element]):
 
     def __getitem__(self, idx: int) -> Element:
         """
-        Element access by single index; negative index works as expected.
-
-        This does not support slicing. For slicing, see method :meth:`slicer`.
-        The object returned by :meth:`slicer` eventually also calls this method
-        to access elements.
+        Access a data item by its index; negative index works as expected.
         """
         # This is not optimized for speed. For example, ``self._get_data_files``
         # could be expensive involving directory crawl, maybe even in the cloud.
@@ -548,6 +561,21 @@ class BiglistBase(Seq[Element]):
     def __iter__(self) -> Iterator[Element]:
         """
         Iterate over all the elements.
+
+        When there are multiple data files, as the data in one file is being yielded,
+        the next file(s) may be pre-loaded in background threads.
+        For this reason, although the following is equivalent in the final result::
+
+            for file in self.files:
+                for item in file:
+                    ... use item ...
+
+        it could be less efficient than iterating over `self` directly, as in
+
+        ::
+
+            for item in self:
+                ... use item ...
         """
         files = self.files
         if files:
@@ -592,6 +620,9 @@ class BiglistBase(Seq[Element]):
 
     @property
     def num_data_items(self) -> int:
+        '''
+        Aliast to :meth:`__len__`.
+        '''
         return self.__len__()
 
     @property

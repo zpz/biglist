@@ -287,6 +287,44 @@ class Biglist(BiglistBase[Element]):
         """The internal format used in persistence. This is a read-only attribute for information only."""
         return self.info.get("storage_version", 0)
 
+    def __len__(self) -> int:
+        """
+        Number of data items in this biglist.
+
+        If data is being appended to this biglist, then this method only includes the items
+        that have been "flushed" to storage. Data items in the internal memory buffer
+        are not counted. The buffer is empty upon calling :meth:`_flush` (internally and automatically)
+        or :meth:`flush` (explicitly by user).
+
+        .. versionchanged:: 0.7.4
+            In previous versions, this count includes items that are not yet flushed.
+        """
+        return super.__len__()
+
+    def __getitem__(self, idx: int) -> Element:
+        """
+        Access a data item by its index; negative index works as expected.
+
+        Items not yet "flushed" are not accessible by this method.
+        They are considered "invisible" to this method.
+        Similarly, negative ``idx`` operates in the range of flushed items only.
+
+        .. versionchanged:: 0.7.4
+            In previous versions, the accessible items include those that are not yet flushed.
+        """
+        return super().__getitem__(idx)
+
+    def __iter__(self) -> Iterator[Element]:
+        """
+        Iterate over all the elements.
+
+        Items that are not yet "flushed" are invisible to this iteration.
+
+        .. versionchanged:: 0.7.4
+            In previous versions, this iteration includes those items that are not yet flushed.
+        """
+        return super().__iter__()
+
     def append(self, x: Element) -> None:
         """
         Append a single element to the :class:`Biglist`.

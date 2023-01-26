@@ -248,7 +248,7 @@ class BiglistBase(Seq[Element]):
     In addition, the subclass :class:`~biglist.Biglist` also creates and manages
     the data files, whereas :class:`_biglist.ParquetBiglist` provides methods
     to read existing data files, treating them as read-only.
- 
+
     This class is generic with a parameter indicating the type of the data items,
     but this is useful only for the subclass :class:`~biglist.Biglist`.
     For the subclass :class:`~biglist.ParquetBiglist`, this parameter is essentially ``Any``
@@ -620,9 +620,9 @@ class BiglistBase(Seq[Element]):
 
     @property
     def num_data_items(self) -> int:
-        '''
+        """
         Aliast to :meth:`__len__`.
-        '''
+        """
         return self.__len__()
 
     @property

@@ -17,7 +17,7 @@ def test_numbers():
     class MyBiglist(Biglist[int]):
         pass
 
-    PATH = os.path.join(os.environ.get('TMPDIR', '/tmp'), 'test', 'biglist')
+    PATH = os.path.join(os.environ.get('TMPDIR', '/tmp'), 'test', 'biglist-numbers')
     if os.path.isdir(PATH):
         rmtree(PATH)
 
@@ -29,16 +29,14 @@ def test_numbers():
     mylist.extend([26, 27, 28])
     mylist.flush()
 
-    n = mylist.num_datafiles
-    z = mylist.datafiles
+    n = len(mylist.files)
+    z = mylist.files.data_files_info
     print('')
     print('num datafiles:', n)
     print('datafiles:\n', z)
-    print('datafiles_info:\n', mylist.datafiles_info)
 
-    assert isinstance(z, list)
     assert len(z) == n
-    assert all(isinstance(v, str) for v in z)
+    assert all(isinstance(v[0], str) for v in z)
     print('')
 
     data = list(range(len(mylist)))
@@ -51,7 +49,7 @@ def test_numbers():
 
 
 def test_existing_numbers():
-    PATH = os.path.join(os.environ.get('TMPDIR', '/tmp'), 'test', 'biglist')
+    PATH = os.path.join(os.environ.get('TMPDIR', '/tmp'), 'test', 'biglist-existing-numbers')
     if os.path.isdir(PATH):
         rmtree(PATH)
     yourlist = Biglist.new(PATH)
@@ -67,27 +65,23 @@ def test_existing_numbers():
     data = list(range(len(mylist)))
     assert list(mylist) == data
 
-    rmtree(PATH)
-
 
 def test_FileReader():
     bl = Biglist.new(batch_size=4, storage_format='pickle')
     bl.extend(range(22))
     bl.flush()
-    assert len(bl._get_data_files()[0]) == 6
 
-    assert list(bl.file_readers()[1]) == [4, 5, 6, 7]
-
-    vs = bl.file_readers()
-    list(vs[2]) == [8, 9, 10, 11]
-
-    vvs = vs[2][1:3]
-    assert list(vvs) == [9, 10]
+    vs = bl.files
+    assert len(vs) == 6
+    assert list(vs[1]) == [4, 5, 6, 7]
+    assert list(vs[2]) == [8, 9, 10, 11]
+    assert list(vs[2][1:3]) == [9, 10]
 
 
 def test_iter_cancel():
     bl = Biglist.new(batch_size=7)
     bl.extend(range(27))
+    bl.flush()
     n = 0
     total = 0
     for x in bl:
@@ -125,6 +119,7 @@ def test_multi_appenders():
         bl.append(f'{prefix}-{i}')
     bl.flush()
 
+    print('')
     pool1 = ThreadPoolExecutor(2)
     t1 = pool1.submit(add_to_biglist, bl.path, *sets[1])
     t2 = pool1.submit(add_to_biglist, bl.path, *sets[2])
@@ -133,6 +128,7 @@ def test_multi_appenders():
     t4 = pool2.submit(add_to_biglist, bl.path, *sets[4])
 
     wait([t1, t2, t3, t4])
+    bl.reload()
 
     data = []
     for prefix, ll in sets:
@@ -158,23 +154,27 @@ def test_file_readers():
     nn = 567
     bl.extend(range(nn))
     bl.flush()
-    task_id = bl.new_concurrent_file_iter()
-    print(bl.concurrent_file_iter_done(task_id))
+    task_id = bl.files.new_concurrent_iter()
+    print(bl.files.concurrent_iter_done(task_id))
 
     executor = ProcessPoolExecutor(6)
     tasks = [
         executor.submit(iter_file, bl.path, task_id)
         for _ in range(6)
     ]
-    print(bl.concurrent_file_iter_done(task_id))
+    print(bl.files.concurrent_iter_done(task_id))
 
     data = []
     for t in as_completed(tasks):
         data.extend(t.result())
 
-    assert sorted(data) == list(bl)
-    assert bl.concurrent_file_iter_done(task_id)
-    print(bl.concurrent_file_iter_done(task_id))
+    try:
+        assert sorted(data) == list(bl)
+    except AssertionError:
+        bl.keep_files = True
+        print('\npath:', bl.path, '\n')
+        raise
+    assert bl.files.concurrent_iter_done(task_id)
 
 
 def square_sum(x):
@@ -192,7 +192,7 @@ def test_mp1():
     biglist.flush()
 
     print('')
-    assert len(biglist._get_data_files()[0]) == len(data) // biglist.batch_size + 1
+    assert len(biglist.files) == len(data) // biglist.batch_size + 1
 
     results = []
     for batch in iterutils.chunked_iter(biglist, biglist.batch_size):
@@ -201,7 +201,7 @@ def test_mp1():
     with ProcessPoolExecutor(3, mp_context=multiprocessing.get_context('spawn')) as pool:
         jobs = [
             pool.submit(square_sum, v)
-            for v in biglist.file_readers()
+            for v in biglist.files
         ]
         for j, result in zip(jobs, results):
             assert j.result() == result
@@ -224,7 +224,7 @@ def test_mp2():
 
     yourlist = Biglist.new(batch_size=33)
     with multiprocessing.get_context('spawn').Pool(10) as pool:
-        for path in pool.imap_unordered(find_big, biglist.file_readers()):
+        for path in pool.imap_unordered(find_big, biglist.files):
             z = Biglist(path)
             yourlist.extend(z)
             del z
@@ -248,7 +248,7 @@ async def test_async():
     biglist.extend(data)
     biglist.flush()
 
-    tasks = (sum_square(x) for x in biglist.file_readers())
+    tasks = (sum_square(x) for x in biglist.files)
     results = await asyncio.gather(*tasks)
     assert sum(results) == sum(v*v for v in biglist)
 

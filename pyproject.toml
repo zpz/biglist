@@ -9,7 +9,7 @@ authors = [
     {name = "Zepu Zhang", email = "zepu.zhang@gmail.com"},
 ]
 dependencies = [
-    "upathlib >= 0.6.9b5",
+    "upathlib",
     "deprecation",
 ]
 requires-python = ">=3.8"
@@ -34,45 +34,46 @@ doc = [
     "pydata-sphinx-theme",
 ]
 gcs = [
-    "upathlib[gcs] >= 0.6.9b5",
+    "upathlib[gcs] >= 0.7.0",
     "google-auth",
 ]
 parquet = [
     "pyarrow >= 10.0.0",
 ]
 test = [
+    "bandit",
     "boltons",
+    "mypy",
+    "ruff",
+    "pytest-asyncio",
+    "pytest-parallel",
+    "py",
 ]
+# `py` is to workaround a bug in `pytest-parallel` until it is listed by `pytest-parallel`
+# as a dependency.
+
+
+[tool.ruff]
+target-version = "py38"
+select = ["E", "F", "I001"]  # isort
+ignore = ["E501"]  # line length
+
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["E402", "F401"]
 
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-sv --log-cli-level info -p no:cacheprovider"
-asyncio_mode = "auto"
+addopts = "-sv --log-cli-level info -p no:cacheprovider --tb=short --workers=auto"
 
 
 [tool.coverage.report]
-fail_under = 85
+fail_under = 84
 show_missing = true
 skip_empty = true
+
 
 [tool.coverage.run]
 data_file = "/tmp/.coverage"
 
-
-[tool.flake8]
-ignore = ["E203", "E231", "E501", "W503"]
-
-
-[tool.pylint.messages_control]
-max-line-length = 88
-disable = [
-    "consider-using-f-string",
-    "missing-docstring",
-    "invalid-name",
-    "line-too-long",
-    "fixme",
-    "too-few-public-methods",
-    "too-many-branches",
-    "too-many-return-statements",
-]

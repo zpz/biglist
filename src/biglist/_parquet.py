@@ -1,18 +1,28 @@
 from __future__ import annotations
-from datetime import datetime
+
 import itertools
 import logging
 from collections.abc import Iterable, Iterator, Sequence
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
 import pyarrow
-from pyarrow.parquet import ParquetFile, FileMetaData
 from pyarrow.fs import FileSystem, GcsFileSystem
+from pyarrow.parquet import FileMetaData, ParquetFile
 from upathlib import LocalUpath
-from ._base import BiglistBase, Upath, PathType, ListView, FileReader
-from ._util import locate_idx_in_chunked_seq
 
+from ._base import (
+    BiglistBase,
+    FileReader,
+    FileSeq,
+    PathType,
+    Seq,
+    Upath,
+    _get_thread_pool,
+    resolve_path,
+)
+from ._util import locate_idx_in_chunked_seq
 
 # If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
 # and "credential_token_expiration". These can be obtained via
@@ -78,6 +88,7 @@ class ParquetBiglist(BiglistBase):
         Load the data file given by ``path``.
 
         This function is used as the argument ``loader`` to :meth:`ParquetFileReader.__init__`.
+        The value it returns is contained in :class:`FileReader` for subsequent use.
         """
         ff, pp = FileSystem.from_uri(str(path))
         if isinstance(ff, GcsFileSystem):
@@ -135,9 +146,9 @@ class ParquetBiglist(BiglistBase):
         """
         if isinstance(data_path, (str, Path, Upath)):
             #  TODO: in py 3.10, we will be able to do `isinstance(data_path, PathType)`
-            data_path = [cls.resolve_path(data_path)]
+            data_path = [resolve_path(data_path)]
         else:
-            data_path = [cls.resolve_path(p) for p in data_path]
+            data_path = [resolve_path(p) for p in data_path]
 
         def get_file_meta(f, p: Upath):
             meta = f(p).metadata
@@ -149,7 +160,7 @@ class ParquetBiglist(BiglistBase):
                 ],
             }
 
-        pool = cls._get_thread_pool()
+        pool = _get_thread_pool()
         tasks = []
         read_parquet = cls.load_data_file
         for p in data_path:
@@ -180,8 +191,18 @@ class ParquetBiglist(BiglistBase):
 
         obj = super().new(path, **kwargs)  # type: ignore
         obj.info["datapath"] = [str(p) for p in data_path]
-        obj.info["datafiles"] = datafiles
-        obj.info["datafiles_cumlength"] = datafiles_cumlength
+
+        # Removed in 0.7.4
+        # obj.info["datafiles"] = datafiles
+        # obj.info["datafiles_cumlength"] = datafiles_cumlength
+
+        # Added in 0.7.4
+        data_files_info = [
+            (a["path"], a["num_rows"], b)
+            for a, b in zip(datafiles, datafiles_cumlength)
+        ]
+        obj.info["data_files_info"] = data_files_info
+
         obj.info["storage_format"] = "parquet"
         obj._info_file.write_json(obj.info)
 
@@ -196,36 +217,33 @@ class ParquetBiglist(BiglistBase):
         This does *not* affect the external Parquet data files.
         """
 
+        # Added in 0.7.4, for back compat.
+        if "data_files_cumlength" in self.info:
+            data_files_info = [
+                (a["path"], a["num_rows"], b)
+                for a, b in zip(
+                    self.info["datafiles"], self.info["datafiles_cumlength"]
+                )
+            ]
+            self.info["data_files_info"] = data_files_info
+            with self._info_file.with_suffix(".lock").lock(timeout=120):
+                self._info_file.write_json(self.info, overwrite=True)
+
     def __del__(self) -> None:
         if not self.keep_files:
             self.path.rmrf()
 
     def __repr__(self):
-        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {self.num_datafiles} data file(s) stored at {self.info['datapath']}>"
-
-    def _get_data_files(self):
-        return self.info["datafiles"], self.info["datafiles_cumlength"]
-
-    def _get_data_file(self, datafiles, idx):
-        return self.resolve_path(datafiles[idx]["path"])
-
-    def file_reader(self, file: Upath | int) -> ParquetFileReader:
-        if isinstance(file, int):
-            datafiles, _ = self._get_data_files()
-            file = self._get_data_file(datafiles, file)
-        return ParquetFileReader(file, self.load_data_file)
+        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {len(self.files)} data file(s) stored at {self.info['datapath']}>"
 
     @property
-    def datafiles(self) -> list[str]:
-        return [f["path"] for f in self.info["datafiles"]]
-
-    @property
-    def datafiles_info(self) -> list[tuple[str, int, int]]:
-        files = self.info["datafiles"]
-        cumlen = self.info["datafiles_cumlength"]
-        return [
-            (file["path"], file["num_rows"], cum) for file, cum in zip(files, cumlen)
-        ]
+    def files(self):
+        # This method should be cheap to call.
+        return ParquetFileSeq(
+            self.path,
+            self.info["data_files_info"],
+            self.load_data_file,
+        )
 
 
 class ParquetFileReader(FileReader):
@@ -511,7 +529,47 @@ class ParquetFileReader(FileReader):
         return z
 
 
-class ParquetBatchData(Sequence):
+class ParquetFileSeq(FileSeq[ParquetFileReader]):
+    def __init__(
+        self,
+        root_dir: Upath,
+        data_files_info: list[tuple[str, int, int]],
+        file_loader: Callable[[Upath], Any],
+    ):
+        """
+        Parameters
+        ----------
+        root_dir
+            Root directory for storage of meta info.
+        data_files_info
+            A list of data files that constitute the file sequence.
+            Each tuple in the list is comprised of a file path (relative to
+            ``root_dir``), number of data items in the file, and cumulative
+            number of data items in the files up to the one at hand.
+            Therefore, the order of the files in the list is significant.
+        file_loader
+            A function that will be used to load a data file.
+        """
+        self._root_dir = root_dir
+        self._data_files_info = data_files_info
+        self._file_loader = file_loader
+
+    @property
+    def path(self):
+        return self._root_dir
+
+    @property
+    def data_files_info(self):
+        return self._data_files_info
+
+    def __getitem__(self, idx: int):
+        return ParquetFileReader(
+            self._data_files_info[idx][0],
+            self._file_loader,
+        )
+
+
+class ParquetBatchData(Seq):
     """
     ``ParquetBatchData`` wraps a `pyarrow.Table`_ or `pyarrow.RecordBatch`_.
     The data is already in memory; this class does not involve file reading.
@@ -553,9 +611,6 @@ class ParquetBatchData(Sequence):
 
     def __len__(self) -> int:
         return self.num_rows
-
-    def __bool__(self) -> bool:
-        return self.num_rows > 0
 
     def __getitem__(self, idx: int):
         """
@@ -606,10 +661,6 @@ class ParquetBatchData(Sequence):
             else:
                 for row in zip(*self._data.columns):
                     yield dict(zip(names, row))
-
-    def view(self) -> ListView:
-        """Return a :class:`ListView` to gain slicing capabilities."""
-        return ListView(self)
 
     def columns(self, cols: Sequence[str]) -> ParquetBatchData:
         """
@@ -709,7 +760,7 @@ def write_parquet_file(
         data = pyarrow.Table.from_arrays(arrays, names=names)
     else:
         assert names is None
-    path = ParquetBiglist.resolve_path(path)
+    path = resolve_path(path)
     if isinstance(path, LocalUpath):
         path.parent.path.mkdir(exist_ok=True, parents=True)
 

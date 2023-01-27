@@ -28,27 +28,29 @@ Additional utilities provide mechanisms for "slicing and dicing" a biglist,
 as well as "chaining up" a series of biglists. These utilities work not only for biglist,
 but also for any |Sequence|_.
 """
-# flake8: noqa
 from __future__ import annotations
-from ._base import FileReader, ListView, ChainedList
-from ._biglist import Biglist, BiglistFileReader
 
-__version__ = "0.7.4b1"
+from ._base import FileReader, FileSeq
+from ._biglist import Biglist, BiglistFileReader, BiglistFileSeq
+from ._util import Chain, Seq, Slicer
 
-# Back compat; will be removed >=0.8.0
+__version__ = "0.7.4b2"
+
+# Back compat; will be removed >=0.7.6
 FileView = FileReader
 BiglistFileView = BiglistFileReader
 
 try:
     from ._parquet import (
+        ParquetBatchData,
         ParquetBiglist,
         ParquetFileReader,
-        ParquetBatchData,
+        ParquetFileSeq,
         read_parquet_file,
         write_parquet_file,
     )
 
-    # Back compat; will be removed after >=0.8.0
+    # Back compat; will be removed after >=0.7.6
     ParquetFileData = ParquetFileReader
 
 except ImportError:

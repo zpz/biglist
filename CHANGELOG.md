@@ -5,11 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
-## [in progress]
+## [0.7.4] - [in progress]
 
-### Deprecated or removed
+This release contains a large refactor, creating classes `Seq` and `FileSeq` and using them in many places
+in the code.
 
-- Parameter `thread_pool_executor` to `BiglistBase.__init__` and `ParquetBiglist.new`.
+`BiglistBase` gets a new method `files`, returning a `FileSeq`.
+The functions related to iterating over `FileReader`s (sequentially or concurrently) are moved to
+`FileSeq`. Many related methods in `BiglistBase` are deprecated.
+
+There are other deprecations and renamings, for example,
+
+- Parameter `thread_pool_executor` to `BiglistBase.__init__` and `ParquetBiglist.new` is removed.
+- Class renamings: `ListView` -> `Slicer`; `ChainedList` -> `Chain`.
+
+The new class `Seq` and the renamed classes `Chain` and `Slicer` are in the module `util`.
 
 
 ## [0.7.3] - 2022-12-27
@@ -58,7 +68,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - Added "external" Biglist variant---class `ParquetBiglist`---backed by Parquet data. This exposes a few new classes as part of the public API. To this purpose, there was a code re-org.
-- New class `ChainedList`.
+- New class `Chain`.
 - New class `BiglistFileData`. Although currently the data file content of a `Biglist` is always a Python `list`, the class prepares for possible changes in the future. In addition, this achieves consistency between `Biglist`/`BiglistFileData` and `ParquetBiglist`/`ParquetFileData`.
 
 ### Removed

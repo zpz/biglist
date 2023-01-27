@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import atexit
 import concurrent.futures
 import itertools
@@ -6,31 +7,38 @@ import json
 import logging
 import multiprocessing
 import string
-import time
 import threading
 import weakref
 from collections.abc import Iterable, Iterator
-from concurrent.futures import ThreadPoolExecutor, Future
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
 from typing import (
+    Any,
     Callable,
     Optional,
-    Any,
 )
 from uuid import uuid4
 
 from upathlib.serializer import (
     ByteSerializer,
-    _loads,
-    PickleSerializer,
-    ZPickleSerializer,
-    ZstdPickleSerializer,
     OrjsonSerializer,
+    PickleSerializer,
     ZOrjsonSerializer,
+    ZPickleSerializer,
     ZstdOrjsonSerializer,
+    ZstdPickleSerializer,
+    _loads,
 )
-from ._base import BiglistBase, FileReader, Upath, PathType, Element, ListView
 
+from ._base import (
+    BiglistBase,
+    Element,
+    FileReader,
+    FileSeq,
+    PathType,
+    Upath,
+    _get_thread_pool,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +46,7 @@ logger = logging.getLogger(__name__)
 _biglist_objs = weakref.WeakSet()
 
 
+# TODO: rethink this.
 def _cleanup():
     # Use this to guarantee proper execution of ``Biglist.__del__``.
     # An error case was observed in this scenario:
@@ -61,88 +70,6 @@ def _cleanup():
 
 
 atexit.register(_cleanup)
-
-
-class Dumper:
-    """
-    This class performs file-saving in a thread pool.
-
-    Parameters
-    ----------
-    n_threads
-        Max number of threads to use. There are at most
-        this many submitted and unfinished file-dumping tasks
-        at any time.
-    """
-
-    def __init__(self, executor: ThreadPoolExecutor, n_threads: int):
-        self._executor: executor = executor
-        self._n_threads = n_threads
-        self._sem: Optional[threading.Semaphore] = None  # type: ignore
-        self._task_file_data: dict[Future, tuple] = {}
-
-    def _callback(self, t):
-        self._sem.release()
-        del self._task_file_data[t]
-        if t.exception():
-            raise t.exception()
-
-    def dump_file(
-        self, file_dumper: Callable[[Upath, list], None], data_file: Upath, data: list
-    ):
-        """
-        Parameters
-        ----------
-        file_dumper
-            This function takes a file path and the data as a list, and saves
-            the data in the file named by the path.
-
-        data_file, data
-            Parameters to ``file_dumper``.
-        """
-        if self._sem is None:
-            self._sem = threading.Semaphore(
-                min(self._n_threads, self._executor._max_workers)
-            )
-        self._sem.acquire()
-        # Wait here if the executor is busy at capacity.
-        # The `Dumper` object runs in the same thread as the `Biglist` object,
-        # hence if it's waiting for the semaphore here, it is blocking
-        # further actions of the `Biglist` and waiting for one file-dumping
-        # to finish.
-
-        task = self._executor.submit(file_dumper, data_file, data)
-        self._task_file_data[task] = (data_file.name, data)
-        # It's useful to keep the data here, as it will be needed
-        # by `get_file_data`.
-        task.add_done_callback(self._callback)
-        # If task is already finished when this callback is being added,
-        # then it is called immediately.
-
-    def get_file_data(self, data_file: Upath):
-        """
-        This is for such a special need:
-
-            Suppose 2 files are in the dump queue, hence not saved on disk yet,
-            however, they're already in the file-list of the ``Biglist``s meta info.
-            Now if we access one element by index, and the code determines based on
-            meta info that the element is in one of the files in-queue here.
-            Then we can't load the file from disk (as it is not persisted yet);
-            we can only get that file's data from the dump-queue via calling
-            this method.
-        """
-        file_name = data_file.name
-        for name, data in self._task_file_data.values():
-            # `_task_file_data` is not long, so this is OK.
-            if name == file_name:
-                return data
-        return None
-
-    def wait(self):
-        """
-        Wait to finish all the submitted dumping tasks.
-        """
-        concurrent.futures.wait(list(self._task_file_data.keys()))
 
 
 class Biglist(BiglistBase[Element]):
@@ -218,6 +145,7 @@ class Biglist(BiglistBase[Element]):
         """Load the data file given by ``path``.
 
         This function is used as the argument ``loader`` to :meth:`BiglistFileReader.__init__`.
+        The value it returns is contained in :class:`FileReader` for subsequent use.
 
         See Also
         --------
@@ -310,13 +238,17 @@ class Biglist(BiglistBase[Element]):
         if storage_format.replace("_", "-") not in cls.registered_storage_formats:
             raise ValueError(f"invalid value of `storage_format`: '{storage_format}'")
         obj.info["storage_format"] = storage_format.replace("_", "-")
-        obj.info["storage_version"] = 1
+        obj.info["storage_version"] = 2
         # `storage_version` is a flag for certain breaking changes in the implementation,
         # such that certain parts of the code (mainly concerning I/O) need to
         # branch into different treatments according to the version.
         # This has little relation to `storage_format`.
         # version 0 designator introduced on 2022/3/8
         # version 1 designator introduced on 2022/7/25
+        # version 2 designator introduced in version 0.7.4.
+
+        obj.info["data_files_info"] = []
+
         obj._info_file.write_json(obj.info, overwrite=False)
 
         return obj
@@ -324,15 +256,23 @@ class Biglist(BiglistBase[Element]):
     def __init__(self, *args, **kwargs):
         """Please see doc of the base class."""
         super().__init__(*args, **kwargs)
-        self._data_files: Optional[list] = None
-        self._data_files_cumlength_ = []
         self.keep_files: bool = True
         """Indicates whether the persisted files should be kept or deleted when the object is garbage-collected."""
 
+        self._append_buffer: list = []
+        self._file_dumper = None
+
         _biglist_objs.add(self)
 
+        # For back compat. Added in 0.7.4.
+        if self.info and "data_files_info" not in self.info:
+            # This is not called by ``new``, instead is opening an existing dataset
+            self.info["data_files_info"] = self._get_data_files_info()
+            with self._info_file.with_suffix(".lock").lock(timeout=120):
+                self._info_file.write_json(self.info, overwrite=True)
+
     def __del__(self) -> None:
-        if getattr(self, "keep_files"):
+        if getattr(self, "keep_files", False):
             if self.keep_files:
                 self.flush()
             else:
@@ -340,6 +280,7 @@ class Biglist(BiglistBase[Element]):
 
     @property
     def batch_size(self) -> int:
+        """The max number of data items in one data file."""
         return self.info["batch_size"]
 
     @property
@@ -355,6 +296,44 @@ class Biglist(BiglistBase[Element]):
     def storage_version(self) -> int:
         """The internal format used in persistence. This is a read-only attribute for information only."""
         return self.info.get("storage_version", 0)
+
+    def __len__(self) -> int:
+        """
+        Number of data items in this biglist.
+
+        If data is being appended to this biglist, then this method only includes the items
+        that have been "flushed" to storage. Data items in the internal memory buffer
+        are not counted. The buffer is empty upon calling :meth:`_flush` (internally and automatically)
+        or :meth:`flush` (explicitly by user).
+
+        .. versionchanged:: 0.7.4
+            In previous versions, this count includes items that are not yet flushed.
+        """
+        return super().__len__()
+
+    def __getitem__(self, idx: int) -> Element:
+        """
+        Access a data item by its index; negative index works as expected.
+
+        Items not yet "flushed" are not accessible by this method.
+        They are considered "invisible" to this method.
+        Similarly, negative ``idx`` operates in the range of flushed items only.
+
+        .. versionchanged:: 0.7.4
+            In previous versions, the accessible items include those that are not yet flushed.
+        """
+        return super().__getitem__(idx)
+
+    def __iter__(self) -> Iterator[Element]:
+        """
+        Iterate over all the elements.
+
+        Items that are not yet "flushed" are invisible to this iteration.
+
+        .. versionchanged:: 0.7.4
+            In previous versions, this iteration includes those items that are not yet flushed.
+        """
+        return super().__iter__()
 
     def append(self, x: Element) -> None:
         """
@@ -396,6 +375,8 @@ class Biglist(BiglistBase[Element]):
         reaches ``self.batch_size``. This happens w/o the user's intervention.
         """
         if not self._append_buffer:
+            if self._file_dumper is not None and wait:
+                self._file_dumper.wait()
             return
 
         buffer = self._append_buffer
@@ -403,7 +384,7 @@ class Biglist(BiglistBase[Element]):
         self._append_buffer = []
 
         datafile_ext = self.storage_format.replace("-", "_")
-        filename = f"{time.time()}_{uuid4()}_{buffer_len}.{datafile_ext}"
+        filename = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S.%f')}_{uuid4()}_{buffer_len}.{datafile_ext}"
         # File name pattern introduced on 7/25/2022.
         # this should almost guarantee the file name is unique, hence
         # we do not need to verify this file name does not exist in `data_files`.
@@ -412,7 +393,7 @@ class Biglist(BiglistBase[Element]):
 
         data_file = self._data_dir / filename
         if self._file_dumper is None:
-            self._file_dumper = Dumper(self._get_thread_pool(), self._n_write_threads)
+            self._file_dumper = Dumper(_get_thread_pool(), self._n_write_threads)
         if wait:
             self._file_dumper.wait()
             self.dump_data_file(data_file, buffer)
@@ -428,14 +409,17 @@ class Biglist(BiglistBase[Element]):
             # what if dump fails later? The 'n_data_files' file is updated
             # already assuming everything will be fine.
 
-        with self.lockfile(self.path / "_n_datafiles_.txt.lock"):
-            try:
-                n = (self.path / "_n_datafiles_.txt").read_text()
-            except FileNotFoundError:
-                n = 0
-            else:
-                n = int(n)
-            (self.path / "_n_datafiles_.txt").write_text(str(n + 1), overwrite=True)
+        if self.info["data_files_info"]:
+            n = self.info["data_files_info"][-1][-1]
+        else:
+            n = 0
+        self.info["data_files_info"].append(
+            (str(data_file), buffer_len, n + buffer_len)
+        )
+        # This changes the ``info`` in this object only.
+        # When multiple workers are appending to the same big list concurrently,
+        # each of them will maintain their own ``info``. See ``flush`` for how
+        # they are merged and persisted.
 
     def flush(self) -> None:
         """
@@ -455,107 +439,85 @@ class Biglist(BiglistBase[Element]):
         """
         self._flush(wait=True)
 
-    def _get_data_files(self) -> list:
-        if self.storage_version < 1:
+        # Other workers in other threads, processes, or machines may have appended data
+        # to the list. This block merges the appends by the current worker with
+        # appends by other workers. The last call to ``flush`` across all workers
+        # will get the final meta info right.
+        with self._info_file.with_suffix(".lock").lock(timeout=120):
+            z0 = self._info_file.read_json()["data_files_info"]
+            z1 = self.info["data_files_info"]
+            z = sorted(set((*(tuple(v[:2]) for v in z0), *(tuple(v[:2]) for v in z1))))
+            # TODO: maybe a merge sort can be more efficient.
+            cum = list(itertools.accumulate(v[1] for v in z))
+            z = [(a, b, c) for (a, b), c in zip(z, cum)]
+            self.info["data_files_info"] = z
+            self._info_file.write_json(self.info, overwrite=True)
+
+    def _get_data_files_info(self) -> list:
+        if self.storage_version == 0:
             # This may not be totally reliable in every scenario.
             # The older version had a parameter `lazy`, which is gone now.
             # After some time we may stop supporting this storage version. (7/27/2022)
             # However, as long as older datasets are in a "read-only" status,
             # this is fine.
-            if self._data_files is None:
-                try:
-                    data_info_file = self.path / "datafiles_info.json"
-                    self._data_files = data_info_file.read_json()
-                except FileNotFoundError:
-                    self._data_files = []
-        else:
             try:
-                nfiles = (self.path / "_n_datafiles_.txt").read_text()
+                data_info_file = self.path / "datafiles_info.json"
+                data_files = data_info_file.read_json()
+                # A list of tuples, (file_name, item_count)
             except FileNotFoundError:
-                nfiles = 0
-            else:
-                nfiles = int(nfiles)
-
-            if self._data_files is None or len(self._data_files) != nfiles:
-                files = []
-                if nfiles > 0:
-                    for _ in range(5):
-                        # Starting with storage_version 1, data file name is
-                        #   <timestamp>_<uuid>_<itemcount>.<ext>
-                        # <timestamp> contains a '.', no '_';
-                        # <uuid> contains '-', no '_';
-                        # <itemcount> contains no '-' nor '_';
-                        # <ext> may contain '_'.
-                        files0 = (v.name for v in self._data_dir.iterdir())
-                        files1 = (v.split("_") + [v] for v in files0)
-                        files2 = (
-                            (float(v[0]), v[-1], int(v[2].partition(".")[0]))
-                            # timestamp, file name, item count
-                            for v in files1
-                        )
-                        files = sorted(files2)  # sort by timestamp
-                        if len(files) == nfiles:
-                            break
-                        time.sleep(0.2)
-                        # A few files may be being dumped and not done yet.
-                        # Wait for them.
-
-                    if len(files) != nfiles:
-                        raise RuntimeError(
-                            f"{nfiles} data files are expected, yet only {len(files)} are found"
-                        )
-
-                if files:
-                    self._data_files = [
-                        (v[1], v[2]) for v in files
-                    ]  # file name, item count
-                else:
-                    self._data_files = []
-
-        if self._data_files:
-            self._data_files_cumlength_ = list(
-                itertools.accumulate(v[1] for v in self._data_files)
-            )
+                return []
         else:
-            self._data_files_cumlength_ = []
+            # Starting with storage_version 1, data file name is
+            #   <timestamp>_<uuid>_<itemcount>.<ext>
+            # <timestamp> contains a '.', no '_';
+            # <uuid> contains '-', no '_';
+            # <itemcount> contains no '-' nor '_';
+            # <ext> may contain '_'.
+            files0 = (v.name for v in self._data_dir.iterdir())
+            files1 = (v.split("_") + [v] for v in files0)
+            files2 = (
+                (float(v[0]), v[-1], int(v[2].partition(".")[0]))
+                # timestamp, file name, item count
+                for v in files1
+            )
+            files = sorted(files2)  # sort by timestamp
 
-        return self._data_files, self._data_files_cumlength_  # type: ignore
+            if files:
+                data_files = [(v[1], v[2]) for v in files]  # file name, item count
+            else:
+                return []
+
+        data_files_cumlength = list(
+            itertools.accumulate(v[1] for v in self._data_files)
+        )
+        return [
+            (str(self._data_dir / filename), count, cumcount)
+            for (filename, count), cumcount in zip(data_files, data_files_cumlength)
+        ]
+        # Each element of the list is a tuple containing file path, item count in file, and cumsum of item counts.
+
+    def reload(self) -> None:
+        """
+        Reload the meta info.
+
+        This is used in this scenario: suppose we have this object pointing to a biglist
+        on the local disk; another object in another process is appending data to the same biglist
+        (that is, it points to the same storage location); then after a while, the meta info file
+        on the disk has been modified by the other process, hence the current object is out-dated;
+        calling this method will bring it up to date. The same idea applies if the storage is
+        in the cloud, and another machine is appending data to the same remote biglist.
+
+        Creating a new object pointing to the same storage location would achieve the same effect.
+        """
+        with self._info_file.with_suffix(".lock").lock(timeout=120):
+            self.info = self._info_file.read_json()
 
     @property
-    def datafiles(self) -> list[str]:
-        df, _ = self._get_data_files()
-        return [str(self._get_data_file(df, i)) for i in range(len(df))]
-
-    @property
-    def datafiles_info(self) -> list[tuple[str, int, int]]:
-        files = self.datafiles
-        counts = (v[1] for v in self._data_files)
-        cumcounts = self._data_files_cumlength_
-        return list(zip(files, counts, cumcounts))
-
-    def _get_data_file(self, datafiles, idx) -> Upath:
-        # `datafiles` is the return of `_get_datafiles`.
-        return self._data_dir / datafiles[idx][0]
-
-    def file_reader(self, file: Upath | int) -> BiglistFileReader[Element]:
-        if isinstance(file, int):
-            datafiles, _ = self._get_data_files()
-            file = self._get_data_file(datafiles, file)
-        return BiglistFileReader(file, self.load_data_file)
-
-    def iter_files(self) -> Iterator[BiglistFileReader[Element]]:
-        self.flush()
-        return super().iter_files()
-
-    def __iter__(self) -> Iterator[Element]:
-        yield from super().__iter__()
-
-        if self._append_buffer:
-            yield from self._append_buffer
-
-    def view(self) -> ListView[Biglist[Element]]:
-        self.flush()
-        return super().view()
+    def files(self):
+        # This method should be cheap to call.
+        return BiglistFileSeq(
+            self.path, self.info["data_files_info"], self.load_data_file
+        )
 
     def _multiplex_info_file(self, task_id: str) -> Upath:
         """
@@ -616,7 +578,7 @@ class Biglist(BiglistBase[Element]):
         finfo = self._multiplex_info_file(task_id)
         flock = finfo.with_suffix(finfo.suffix + ".lock")
         while True:
-            with self.lockfile(flock):
+            with flock.lock(timeout=120):
                 # In concurrent use cases, I've observed
                 # `upathlib.LockAcquireError` raised here.
                 # User may want to do retry here.
@@ -651,13 +613,74 @@ class Biglist(BiglistBase[Element]):
         return ss["next"] == ss["total"]
 
 
+class Dumper:
+    """
+    This class performs file-saving in a thread pool.
+
+    Parameters
+    ----------
+    n_threads
+        Max number of threads to use. There are at most
+        this many submitted and unfinished file-dumping tasks
+        at any time.
+    """
+
+    def __init__(self, executor: ThreadPoolExecutor, n_threads: int):
+        self._executor: executor = executor
+        self._n_threads = n_threads
+        self._sem: Optional[threading.Semaphore] = None  # type: ignore
+        self._tasks: set[Future] = set()
+
+    def _callback(self, t):
+        self._sem.release()
+        self._tasks.remove(t)
+        if t.exception():
+            raise t.exception()
+
+    def dump_file(
+        self, file_dumper: Callable[[Upath, list], None], data_file: Upath, data: list
+    ):
+        """
+        Parameters
+        ----------
+        file_dumper
+            This function takes a file path and the data as a list, and saves
+            the data in the file named by the path.
+
+        data_file, data
+            Parameters to ``file_dumper``.
+        """
+        if self._sem is None:
+            self._sem = threading.Semaphore(
+                min(self._n_threads, self._executor._max_workers)
+            )
+        self._sem.acquire()
+        # Wait here if the executor is busy at capacity.
+        # The `Dumper` object runs in the same thread as the `Biglist` object,
+        # hence if it's waiting for the semaphore here, it is blocking
+        # further actions of the `Biglist` and waiting for one file-dumping
+        # to finish.
+
+        task = self._executor.submit(file_dumper, data_file, data)
+        self._tasks.add(task)
+        task.add_done_callback(self._callback)
+        # If task is already finished when this callback is being added,
+        # then it is called immediately.
+
+    def wait(self):
+        """
+        Wait to finish all the submitted dumping tasks.
+        """
+        concurrent.futures.wait(self._tasks)
+
+
 class BiglistFileReader(FileReader[Element]):
     def __init__(self, path: PathType, loader: Callable[[Upath], Any]):
         """
         Parameters
         ----------
         path
-            Path of a Parquet file.
+            Path of a data file.
         loader
             Usually this is :meth:`Biglist.load_data_file`.
             If you customize this, please see the doc of :meth:`FileReader.__init__`.
@@ -682,6 +705,44 @@ class BiglistFileReader(FileReader[Element]):
 
     def __iter__(self) -> Iterator[Element]:
         return iter(self.data())
+
+
+class BiglistFileSeq(FileSeq[BiglistFileReader]):
+    def __init__(
+        self,
+        path: Upath,
+        data_files_info: list[tuple[str, int, int]],
+        file_loader: Callable[[Upath], Any],
+    ):
+        """
+        Parameters
+        ----------
+        path
+            Root directory for storage of meta info.
+        data_files_info
+            A list of data files that constitute the file sequence.
+            Each tuple in the list is comprised of a file path (relative to
+            ``root_dir``), number of data items in the file, and cumulative
+            number of data items in the files up to the one at hand.
+            Therefore, the order of the files in the list is significant.
+        file_loader
+            Function that will be used to load a data file.
+        """
+        self._root_dir = path
+        self._data_files_info = data_files_info
+        self._file_loader = file_loader
+
+    @property
+    def path(self):
+        return self._root_dir
+
+    @property
+    def data_files_info(self):
+        return self._data_files_info
+
+    def __getitem__(self, idx: int):
+        file = self._data_files_info[idx][0]
+        return BiglistFileReader(file, self._file_loader)
 
 
 class JsonByteSerializer(ByteSerializer):

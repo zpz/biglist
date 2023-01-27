@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 import pyarrow
 from upathlib import LocalUpath
-from biglist import ParquetBiglist, ParquetFileReader, write_parquet_file, read_parquet_file
+from biglist import ParquetBiglist, ParquetFileReader, write_parquet_file, read_parquet_file, Slicer
 import pytest
 
 
@@ -99,15 +99,14 @@ def test_big_parquet_list():
 
     biglist = ParquetBiglist.new(path)
     assert len(biglist) == N + N
-    assert biglist.num_datafiles == 2
+    assert len(biglist.files) == 2
     
     print('')
     print('datafiles')
-    z = biglist.datafiles
+    z = biglist.files.data_files_info
     print(z)
-    print('datafiles_info:\n', biglist.datafiles_info)
-    assert isinstance(z, list)
-    assert all(isinstance(v, str) for v in z)
+    print('datafiles_info:\n', z)
+    assert all(isinstance(v[0], str) for v in z)
     print('')
 
     print(biglist[0])
@@ -122,7 +121,7 @@ def test_big_parquet_list():
             break
 
     print('')
-    z = biglist.view()[100:130:2]
+    z = Slicer(biglist)[100:130:2]
     assert len(z) == 15
     print(z)
     print(z[2])
@@ -131,15 +130,15 @@ def test_big_parquet_list():
 
     print('')
     print(biglist)
-    print(biglist.view())
-    print(biglist.file_reader(0))
-    print(biglist.file_reader(1).data)
+    print(Slicer(biglist))
+    print(biglist.files[0])
+    print(biglist.files[1].data)
     print('')
-    print(biglist.file_reader(1).data())
+    print(biglist.files[1].data())
 
     # specify columns
     print('')
-    p = biglist._get_data_files()[0][0]['path']
+    p = biglist.files.data_files_info[0][0]
     d = read_parquet_file(p)
     d1 = d.columns(['key', 'value'])
     print(d1[3])
@@ -148,8 +147,8 @@ def test_big_parquet_list():
     print(d2[2])
     with pytest.raises(ValueError):
         d3 = d2.columns(['key'])
-    print(d.columns(['key']).view()[7:17].collect())
-    print(list(d.view()[:7]))
+    print(Slicer(d.columns(['key']))[7:17].collect())
+    print(list(Slicer(d)[:7]))
 
     #
     print('')

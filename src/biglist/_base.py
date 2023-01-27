@@ -7,6 +7,7 @@ import queue
 import tempfile
 import uuid
 import warnings
+import weakref
 from abc import abstractmethod
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -24,6 +25,28 @@ from upathlib import LocalUpath, PathType, Upath, resolve_path
 from ._util import Element, Seq, Slicer
 
 logger = logging.getLogger(__name__)
+
+
+_thread_pool = None
+
+
+def _get_thread_pool():
+    """
+    If this function is used in multiple processes, **you must use the "spawn" method
+    to start the processes**. This is related to data copying in "fork" processes
+    (the default on Linux), and a ``ThreadPoolExecutor`` copied into
+    the new processes is malfunctional.
+
+    I do not know whether it is possible to detect such corrupt thread pools.
+    If there is a way to do that, then it can be leveraged in this function to make
+    things work with forked processes.
+    """
+    global _thread_pool
+    if _thread_pool is None or _thread_pool() is None:
+        pool = ThreadPoolExecutor(min(32, (os.cpu_count() or 1) + 4))
+        pool.__enter__()
+        _thread_pool = weakref.ref(pool, lambda ref: pool.shutdown())
+    return _thread_pool()
 
 
 class FileReader(Seq[Element]):
@@ -120,12 +143,12 @@ class FileSeq(Seq[FileReaderType]):
     @property
     def num_data_files(self) -> int:
         """Number of data files."""
-        return len(self.info["data_files"])
+        return len(self.data_files_info)
 
     @property
     def num_data_items(self) -> int:
         """Total number of data items in the data files."""
-        z = self.info["data_files"]
+        z = self.data_files_info
         if not z:
             return 0
         return z[-1][-1]
@@ -254,33 +277,6 @@ class BiglistBase(Seq[Element]):
     For the subclass :class:`~biglist.ParquetBiglist`, this parameter is essentially ``Any``
     because the data items (or rows) in Parquet files are composite and flexible.
     """
-
-    _thread_pool: ThreadPoolExecutor = None
-
-    @classmethod
-    def _get_thread_pool(cls):
-        """
-        This method is called in three places:
-
-        - :meth:`iter_files` when there are more than one data files.
-        - :meth:`biglist.Biglist.append` (and :meth:`~biglist.Biglist.extend`).
-        - :meth:`biglist.ParquetBiglist.new`.
-
-        Once any of these has been called, the class object :class:`BiglistBase`
-        gets a ``concurrent.futures.ThreadPoolExecutor`` as an attribute.
-        After that, if you start using other processes, and in other processes
-        any of these methods is called again, **you must use the "spawn" method
-        to start the processes**. This is related to data copying in "fork" processes
-        (the default on Linux), and a ``ThreadPoolExecutor`` copied into
-        the new processes is malfunctional.
-
-        I do not know whether it is possible to detect such corrupt thread pools.
-        If there is a way to do that, then it can be used in this method to make
-        things work with forked processes.
-        """
-        if cls._thread_pool is None:
-            cls._thread_pool = ThreadPoolExecutor(min(32, (os.cpu_count() or 1) + 4))
-        return cls._thread_pool
 
     @classmethod
     def get_temp_path(cls) -> Upath:
@@ -516,7 +512,7 @@ class BiglistBase(Seq[Element]):
 
         files = self.files
         if files:
-            data_files_cumlength = [v[-1] for v in files.info["data_files"]]
+            data_files_cumlength = [v[-1] for v in files.data_files_info]
             length = data_files_cumlength[-1]
             nfiles = len(files)
         else:
@@ -588,7 +584,7 @@ class BiglistBase(Seq[Element]):
 
                 max_workers = min(self._n_read_threads, ndatafiles)
                 tasks = queue.Queue(max_workers)
-                executor = self._get_thread_pool()
+                executor = _get_thread_pool()
 
                 def _read_file(idx):
                     z = files[idx]
@@ -630,12 +626,7 @@ class BiglistBase(Seq[Element]):
     def files(self) -> FileSeq[FileReader[Element]]:
         raise NotImplementedError
 
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.8.0",
-        details="Use ``Slicer`` instead.",
-    )
-    def view(self):
+    def slicer(self):
         """
         By convention, a "slicing" method should return an object of the same class
         as the original object. This is not possible for :class:`~biglist._base.BiglistBase` (or its subclasses),
@@ -654,6 +645,14 @@ class BiglistBase(Seq[Element]):
         of the biglist; they open and read files independent of other slicers.
         """
         return Slicer(self)
+
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.8.0",
+        details="Use ``.slicer`` instead.",
+    )
+    def view(self):
+        return self.slicer()
 
     @deprecated(
         deprecated_in="0.7.4",
@@ -741,7 +740,7 @@ class BiglistBase(Seq[Element]):
         """
         Return the list of data file paths.
         """
-        return [v[0] for v in self.files.info["data_files"]]
+        return [v[0] for v in self.files.data_files_info]
 
     @property
     @deprecated(

@@ -103,11 +103,10 @@ def test_big_parquet_list():
     
     print('')
     print('datafiles')
-    z = biglist.files.info
+    z = biglist.files.data_files_info
     print(z)
-    print('datafiles_info:\n', z['data_files'])
-    assert isinstance(z, dict)
-    assert all(isinstance(v[0], str) for v in z['data_files'])
+    print('datafiles_info:\n', z)
+    assert all(isinstance(v[0], str) for v in z)
     print('')
 
     print(biglist[0])
@@ -139,7 +138,7 @@ def test_big_parquet_list():
 
     # specify columns
     print('')
-    p = biglist.files.info['data_files'][0][0]
+    p = biglist.files.data_files_info[0][0]
     d = read_parquet_file(p)
     d1 = d.columns(['key', 'value'])
     print(d1[3])

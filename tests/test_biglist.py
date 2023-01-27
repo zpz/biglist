@@ -17,7 +17,7 @@ def test_numbers():
     class MyBiglist(Biglist[int]):
         pass
 
-    PATH = os.path.join(os.environ.get('TMPDIR', '/tmp'), 'test', 'biglist')
+    PATH = os.path.join(os.environ.get('TMPDIR', '/tmp'), 'test', 'biglist-numbers')
     if os.path.isdir(PATH):
         rmtree(PATH)
 
@@ -30,15 +30,13 @@ def test_numbers():
     mylist.flush()
 
     n = len(mylist.files)
-    z = mylist.files.info
+    z = mylist.files.data_files_info
     print('')
     print('num datafiles:', n)
-    print('datafiles:\n', [v[0] for v in z['data_files']])
-    print('datafiles_info:\n', z['data_files'])
+    print('datafiles:\n', z)
 
-    assert isinstance(z, dict)
-    assert len(z['data_files']) == n
-    assert all(isinstance(v[0], str) for v in z['data_files'])
+    assert len(z) == n
+    assert all(isinstance(v[0], str) for v in z)
     print('')
 
     data = list(range(len(mylist)))
@@ -51,7 +49,7 @@ def test_numbers():
 
 
 def test_existing_numbers():
-    PATH = os.path.join(os.environ.get('TMPDIR', '/tmp'), 'test', 'biglist2')
+    PATH = os.path.join(os.environ.get('TMPDIR', '/tmp'), 'test', 'biglist-existing-numbers')
     if os.path.isdir(PATH):
         rmtree(PATH)
     yourlist = Biglist.new(PATH)

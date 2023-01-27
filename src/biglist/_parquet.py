@@ -20,6 +20,7 @@ from ._base import (
     Seq,
     Upath,
     resolve_path,
+    _get_thread_pool,
 )
 from ._util import locate_idx_in_chunked_seq
 
@@ -159,7 +160,7 @@ class ParquetBiglist(BiglistBase):
                 ],
             }
 
-        pool = cls._get_thread_pool()
+        pool = _get_thread_pool()
         tasks = []
         read_parquet = cls.load_data_file
         for p in data_path:
@@ -190,8 +191,18 @@ class ParquetBiglist(BiglistBase):
 
         obj = super().new(path, **kwargs)  # type: ignore
         obj.info["datapath"] = [str(p) for p in data_path]
-        obj.info["datafiles"] = datafiles
-        obj.info["datafiles_cumlength"] = datafiles_cumlength
+
+        # Removed in 0.7.4
+        # obj.info["datafiles"] = datafiles
+        # obj.info["datafiles_cumlength"] = datafiles_cumlength
+
+        # Added in 0.7.4
+        data_files_info = [
+                (a["path"], a["num_rows"], b)
+                for a, b in zip(datafiles, datafiles_cumlength)
+            ]
+        obj.info['data_files_info'] = data_files_info
+
         obj.info["storage_format"] = "parquet"
         obj._info_file.write_json(obj.info)
 
@@ -206,6 +217,16 @@ class ParquetBiglist(BiglistBase):
         This does *not* affect the external Parquet data files.
         """
 
+        # Added in 0.7.4, for back compat.
+        if 'data_files_cumlength' in self.info:
+            data_files_info = [
+                    (a["path"], a["num_rows"], b)
+                    for a, b in zip(self.info['datafiles'], self.info['datafiles_cumlength'])
+                ]
+            self.info['data_files_info'] = data_files_info
+            with self._info_file.with_suffix(".lock").lock(timeout=120):
+                self._info_file.write_json(self.info, overwrite=True)
+
     def __del__(self) -> None:
         if not self.keep_files:
             self.path.rmrf()
@@ -217,13 +238,8 @@ class ParquetBiglist(BiglistBase):
     def files(self):
         # This method should be cheap to call.
         return ParquetFileSeq(
-            self.path,
-            [
-                (a["path"], a["num_rows"], b)
-                for a, b in zip(
-                    self.info["datafiles"], self.info["datafiles_cumlength"]
-                )
-            ],
+            self.path, self.info['data_files_info'],
+            self.load_data_file,
         )
 
 
@@ -511,33 +527,36 @@ class ParquetFileReader(FileReader):
 
 
 class ParquetFileSeq(FileSeq[ParquetFileReader]):
-    def __init__(self, root_dir: Upath, data_files: list[tuple[str, int, int]]):
+    def __init__(self, root_dir: Upath, data_files_info: list[tuple[str, int, int]], file_loader: Callable[[Upath], Any]):
         """
         Parameters
         ----------
         root_dir
             Root directory for storage of meta info.
-        data_files
+        data_files_info
             A list of data files that constitute the file sequence.
             Each tuple in the list is comprised of a file path (relative to
             ``root_dir``), number of data items in the file, and cumulative
             number of data items in the files up to the one at hand.
             Therefore, the order of the files in the list is significant.
+        file_loader
+            A function that will be used to load a data file.
         """
         self._root_dir = root_dir
-        self._data_files = data_files
+        self._data_files_info = data_files_info
+        self._file_loader = file_loader
 
     @property
     def path(self):
         return self._root_dir
 
     @property
-    def info(self):
-        return {"data_files": self._data_files}
+    def data_files_info(self):
+        return self._data_files_info
 
     def __getitem__(self, idx: int):
         return ParquetFileReader(
-            self._data_files[idx][0], ParquetBiglist.load_data_file
+            self._data_files_info[idx][0], self._file_loader,
         )
 
 

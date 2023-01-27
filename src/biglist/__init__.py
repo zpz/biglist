@@ -36,7 +36,7 @@ from ._util import Chain, Seq, Slicer
 
 __version__ = "0.7.4b2"
 
-# Back compat; will be removed >=0.8.0
+# Back compat; will be removed >=0.7.6
 FileView = FileReader
 BiglistFileView = BiglistFileReader
 
@@ -50,7 +50,7 @@ try:
         write_parquet_file,
     )
 
-    # Back compat; will be removed after >=0.8.0
+    # Back compat; will be removed after >=0.7.6
     ParquetFileData = ParquetFileReader
 
 except ImportError:

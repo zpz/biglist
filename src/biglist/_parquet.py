@@ -19,8 +19,8 @@ from ._base import (
     PathType,
     Seq,
     Upath,
-    resolve_path,
     _get_thread_pool,
+    resolve_path,
 )
 from ._util import locate_idx_in_chunked_seq
 
@@ -198,10 +198,10 @@ class ParquetBiglist(BiglistBase):
 
         # Added in 0.7.4
         data_files_info = [
-                (a["path"], a["num_rows"], b)
-                for a, b in zip(datafiles, datafiles_cumlength)
-            ]
-        obj.info['data_files_info'] = data_files_info
+            (a["path"], a["num_rows"], b)
+            for a, b in zip(datafiles, datafiles_cumlength)
+        ]
+        obj.info["data_files_info"] = data_files_info
 
         obj.info["storage_format"] = "parquet"
         obj._info_file.write_json(obj.info)
@@ -218,12 +218,14 @@ class ParquetBiglist(BiglistBase):
         """
 
         # Added in 0.7.4, for back compat.
-        if 'data_files_cumlength' in self.info:
+        if "data_files_cumlength" in self.info:
             data_files_info = [
-                    (a["path"], a["num_rows"], b)
-                    for a, b in zip(self.info['datafiles'], self.info['datafiles_cumlength'])
-                ]
-            self.info['data_files_info'] = data_files_info
+                (a["path"], a["num_rows"], b)
+                for a, b in zip(
+                    self.info["datafiles"], self.info["datafiles_cumlength"]
+                )
+            ]
+            self.info["data_files_info"] = data_files_info
             with self._info_file.with_suffix(".lock").lock(timeout=120):
                 self._info_file.write_json(self.info, overwrite=True)
 
@@ -238,7 +240,8 @@ class ParquetBiglist(BiglistBase):
     def files(self):
         # This method should be cheap to call.
         return ParquetFileSeq(
-            self.path, self.info['data_files_info'],
+            self.path,
+            self.info["data_files_info"],
             self.load_data_file,
         )
 
@@ -527,7 +530,12 @@ class ParquetFileReader(FileReader):
 
 
 class ParquetFileSeq(FileSeq[ParquetFileReader]):
-    def __init__(self, root_dir: Upath, data_files_info: list[tuple[str, int, int]], file_loader: Callable[[Upath], Any]):
+    def __init__(
+        self,
+        root_dir: Upath,
+        data_files_info: list[tuple[str, int, int]],
+        file_loader: Callable[[Upath], Any],
+    ):
         """
         Parameters
         ----------
@@ -556,7 +564,8 @@ class ParquetFileSeq(FileSeq[ParquetFileReader]):
 
     def __getitem__(self, idx: int):
         return ParquetFileReader(
-            self._data_files_info[idx][0], self._file_loader,
+            self._data_files_info[idx][0],
+            self._file_loader,
         )
 
 

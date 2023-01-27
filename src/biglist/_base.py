@@ -648,7 +648,7 @@ class BiglistBase(Seq[Element]):
 
     @deprecated(
         deprecated_in="0.7.4",
-        removed_in="0.8.0",
+        removed_in="0.7.6",
         details="Use ``.slicer`` instead.",
     )
     def view(self):
@@ -656,7 +656,7 @@ class BiglistBase(Seq[Element]):
 
     @deprecated(
         deprecated_in="0.7.4",
-        removed_in="0.8.0",
+        removed_in="0.7.6",
         details="Use ``files`` instead.",
     )
     def iter_files(self) -> Iterator[FileReader[Element]]:
@@ -668,7 +668,7 @@ class BiglistBase(Seq[Element]):
 
     @deprecated(
         deprecated_in="0.7.4",
-        removed_in="0.8.0",
+        removed_in="0.7.6",
         details="Use ``.files.new_concurrent_iter`` instead.",
     )
     def new_concurrent_file_iter(self) -> str:
@@ -676,7 +676,7 @@ class BiglistBase(Seq[Element]):
 
     @deprecated(
         deprecated_in="0.7.4",
-        removed_in="0.8.0",
+        removed_in="0.7.6",
         details="Use ``.files.concurrent_iter`` instead.",
     )
     def concurrent_iter_files(self, task_id: str) -> Iterator[FileReader[Element]]:
@@ -684,7 +684,7 @@ class BiglistBase(Seq[Element]):
 
     @deprecated(
         deprecated_in="0.7.4",
-        removed_in="0.8.0",
+        removed_in="0.7.6",
         details="Use ``.files.concurrent_iter_stat`` instead.",
     )
     def concurrent_file_iter_stat(self, task_id: str) -> dict:
@@ -692,7 +692,7 @@ class BiglistBase(Seq[Element]):
 
     @deprecated(
         deprecated_in="0.7.4",
-        removed_in="0.8.0",
+        removed_in="0.7.6",
         details="Use ``.files.concurrent_iter_done`` instead.",
     )
     def concurrent_file_iter_done(self, task_id: str) -> bool:
@@ -700,7 +700,7 @@ class BiglistBase(Seq[Element]):
 
     @deprecated(
         deprecated_in="0.7.1",
-        removed_in="0.8.0",
+        removed_in="0.7.6",
         details="Use ``.files.__getitem__`` instead.",
     )
     def file_view(self, file: int):
@@ -708,7 +708,7 @@ class BiglistBase(Seq[Element]):
 
     @deprecated(
         deprecated_in="0.7.4",
-        removed_in="0.8.0",
+        removed_in="0.7.6",
         details="Use ``.files.__getitem__`` instead.",
     )
     def file_reader(self, file: int) -> FileReader[Element]:
@@ -716,7 +716,7 @@ class BiglistBase(Seq[Element]):
 
     @deprecated(
         deprecated_in="0.7.1",
-        removed_in="0.8.0",
+        removed_in="0.7.6",
         details="Use ``list(self.files)`` instead.",
     )
     def file_views(self):
@@ -724,7 +724,7 @@ class BiglistBase(Seq[Element]):
 
     @deprecated(
         deprecated_in="0.7.4",
-        removed_in="0.8.0",
+        removed_in="0.7.6",
         details="Use ``list(self.files)`` instead.",
     )
     def file_readers(self) -> list[FileReader[Element]]:
@@ -733,7 +733,7 @@ class BiglistBase(Seq[Element]):
     @property
     @deprecated(
         deprecated_in="0.7.4",
-        removed_in="0.8.0",
+        removed_in="0.7.6",
         details="Use ``self.files.info`` instead.",
     )
     def datafiles(self) -> list[str]:
@@ -745,7 +745,7 @@ class BiglistBase(Seq[Element]):
     @property
     @deprecated(
         deprecated_in="0.7.4",
-        removed_in="0.8.0",
+        removed_in="0.7.6",
         details="Use ``len(self.files)`` instead.",
     )
     def num_datafiles(self) -> int:

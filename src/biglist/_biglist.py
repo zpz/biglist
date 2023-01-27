@@ -19,7 +19,6 @@ from typing import (
 )
 from uuid import uuid4
 
-from deprecation import deprecated
 from upathlib.serializer import (
     ByteSerializer,
     OrjsonSerializer,
@@ -31,7 +30,15 @@ from upathlib.serializer import (
     _loads,
 )
 
-from ._base import BiglistBase, Element, FileReader, FileSeq, PathType, Upath, _get_thread_pool
+from ._base import (
+    BiglistBase,
+    Element,
+    FileReader,
+    FileSeq,
+    PathType,
+    Upath,
+    _get_thread_pool,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -273,7 +280,7 @@ class Biglist(BiglistBase[Element]):
 
     @property
     def batch_size(self) -> int:
-        '''The max number of data items in one data file.'''
+        """The max number of data items in one data file."""
         return self.info["batch_size"]
 
     @property
@@ -406,7 +413,9 @@ class Biglist(BiglistBase[Element]):
             n = self.info["data_files_info"][-1][-1]
         else:
             n = 0
-        self.info["data_files_info"].append((str(data_file), buffer_len, n + buffer_len))
+        self.info["data_files_info"].append(
+            (str(data_file), buffer_len, n + buffer_len)
+        )
         # This changes the ``info`` in this object only.
         # When multiple workers are appending to the same big list concurrently,
         # each of them will maintain their own ``info``. See ``flush`` for how
@@ -488,10 +497,10 @@ class Biglist(BiglistBase[Element]):
         # Each element of the list is a tuple containing file path, item count in file, and cumsum of item counts.
 
     def reload(self) -> None:
-        '''
+        """
         Reload the meta info.
 
-        This is used in this scenario: suppose we have this object pointing to a biglist 
+        This is used in this scenario: suppose we have this object pointing to a biglist
         on the local disk; another object in another process is appending data to the same biglist
         (that is, it points to the same storage location); then after a while, the meta info file
         on the disk has been modified by the other process, hence the current object is out-dated;
@@ -499,14 +508,16 @@ class Biglist(BiglistBase[Element]):
         in the cloud, and another machine is appending data to the same remote biglist.
 
         Creating a new object pointing to the same storage location would achieve the same effect.
-        '''
+        """
         with self._info_file.with_suffix(".lock").lock(timeout=120):
             self.info = self._info_file.read_json()
 
     @property
     def files(self):
         # This method should be cheap to call.
-        return BiglistFileSeq(self.path, self.info["data_files_info"], self.load_data_file)
+        return BiglistFileSeq(
+            self.path, self.info["data_files_info"], self.load_data_file
+        )
 
     def _multiplex_info_file(self, task_id: str) -> Upath:
         """
@@ -697,7 +708,12 @@ class BiglistFileReader(FileReader[Element]):
 
 
 class BiglistFileSeq(FileSeq[BiglistFileReader]):
-    def __init__(self, path: Upath, data_files_info: list[tuple[str, int, int]], file_loader: Callable[[Upath], Any]):
+    def __init__(
+        self,
+        path: Upath,
+        data_files_info: list[tuple[str, int, int]],
+        file_loader: Callable[[Upath], Any],
+    ):
         """
         Parameters
         ----------

@@ -21,6 +21,11 @@ There are other deprecations and renamings, for example,
 
 The new class `Seq` and the renamed classes `Chain` and `Slicer` are in the module `util`.
 
+A behavior change to call out: previously, as new data items are `append`ed to a `Biglist`,
+data items that are not yet `flush`ed, i.e. not persisted, hence only in memory buffer,
+are immediately included in item access (by `__getitem__`), iteration (by `__iter__`),
+and counted in the length of the Biglist. Now these elements are not included in these operations.
+
 
 ## [0.7.3] - 2022-12-27
 

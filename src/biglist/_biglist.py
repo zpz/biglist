@@ -390,6 +390,7 @@ class Biglist(BiglistBase[Element]):
         # we do not need to verify this file name does not exist in `data_files`.
         # Also include timestamp and item count in the file name, in case
         # later we decide to use these pieces of info.
+        # Changes in 0.7.4: the time part changes from epoch to datetime, with guaranteed fixed length.
 
         data_file = self._data_dir / filename
         if self._file_dumper is None:

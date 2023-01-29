@@ -335,3 +335,6 @@ class Chain(Generic[SeqType]):
         object.
         """
         return self._lists
+
+    def slicer(self):
+        return Slicer(self)

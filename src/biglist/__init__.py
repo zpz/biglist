@@ -9,7 +9,7 @@ Currently, two kinds of "biglists" are provided, namely :class:`Biglist` and :cl
 :class:`Biglist` manages writing and reading.
 Here, "writing" refers to adding data to this facility and be managed by it.
 The class manages its data files in addition to meta info.
-Writing is append-only; updating existing data elements is not supported.
+Writing is append-only; updating existing data is not supported.
 Appending can be conducted by a number of distributed workers.
 
 :class:`ParquetBiglist` defines a kind of "external biglist". When given the paths to a set of
@@ -22,7 +22,8 @@ and is not the target usage pattern. The intended way of data consumption is by 
 Iteration can be done by distributed workers *collectively*.
 
 Persistence can be on local disk or in cloud storage.
-Thanks to the package `upathlib <https://github.com/zpz/upathlib>`_, the user API is agnostic to the location of storage.
+Thanks to the package `upathlib <https://github.com/zpz/upathlib>`_, the user API as well as
+the implementation is agnostic to the location of storage.
 
 Additional utilities provide mechanisms for "slicing and dicing" a biglist,
 as well as "chaining up" a series of biglists. These utilities work not only for biglist,

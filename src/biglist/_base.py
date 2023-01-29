@@ -92,10 +92,10 @@ class FileReader(Seq[Element]):
         """A function that will be used to read the data file."""
 
     def __repr__(self):
-        return f"{self.__class__.__name__}('{self.path}', <{self.loader}>)"
+        return f"<{self.__class__.__name__} for '{self.path}'>"
 
     def __str__(self):
-        return f"{self.__class__.__name__} for '{self.path}'"
+        return self.__repr__()
 
     @abstractmethod
     def load(self) -> None:
@@ -113,6 +113,9 @@ class FileReader(Seq[Element]):
         """
         raise NotImplementedError
 
+    def slicer(self):
+        return Slicer(self)
+
 
 FileReaderType = TypeVar("FileReaderType", bound=FileReader)
 
@@ -125,6 +128,12 @@ class FileSeq(Seq[FileReaderType]):
     methods such as ``__len__`` and ``__iter__`` are in terms of data *files*
     rather than data *items*. (One data file contains a sequence of data items.)
     """
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} at '{self.path}' with {self.num_data_items} elements in {self.num_data_files} data file(s)>"
+
+    def __str__(self):
+        return self.__repr__()
 
     @property
     @abstractmethod
@@ -469,7 +478,7 @@ class BiglistBase(Seq[Element]):
         self._n_write_threads = 3
 
     def __repr__(self):
-        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} elements in {self.num_data_files} data file(s)>"
+        return f"<{self.__class__.__name__} at '{self.path}' with {self.num_data_items} elements in {self.num_data_files} data file(s)>"
 
     def __str__(self):
         return self.__repr__()
@@ -481,6 +490,8 @@ class BiglistBase(Seq[Element]):
     def __len__(self) -> int:
         """
         Number of data items in this biglist.
+
+        This is an alias to :meth:`num_data_items`.
         """
         # This assumes the current object is the only one
         # that may be appending to the biglist.
@@ -616,9 +627,6 @@ class BiglistBase(Seq[Element]):
 
     @property
     def num_data_items(self) -> int:
-        """
-        Aliast to :meth:`__len__`.
-        """
         return self.__len__()
 
     @property

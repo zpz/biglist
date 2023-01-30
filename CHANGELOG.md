@@ -26,6 +26,14 @@ data items that are not yet `flush`ed, i.e. not persisted, hence only in memory 
 are immediately included in item access (by `__getitem__`), iteration (by `__iter__`),
 and counted in the length of the Biglist. Now these elements are not included in these operations.
 
+Removed:
+
+- `BiglistBase.{resolve_path, lockfile}`. These methods are replaced by direct calls to functions from `upathlib`.
+
+Marked for removal (i.e. deprecated):
+
+- Parameter `thread_pool_executor` to `BiglistBase.__init__`.
+
 
 ## [0.7.3] - 2022-12-27
 

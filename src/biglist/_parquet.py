@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 import pyarrow
+from deprecation import deprecated
 from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
 from upathlib import LocalUpath
@@ -118,7 +119,7 @@ class ParquetBiglist(BiglistBase):
         Parameters
         ----------
         path
-            Passed on to :meth:`~biglist._base.BiglistBase.new` of :class:`~biglist._base.BiglistBase`.
+            Passed on to :meth:`BiglistBase.new` of :class:`BiglistBase`.
         data_path
             Parquet file(s) or folder(s) containing Parquet files.
 
@@ -716,7 +717,12 @@ class ParquetBatchData(Seq):
         """
         return self._data.column(idx_or_name)
 
-    def slicer(self):
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.7.6",
+        details="Use ``Slicer`` instead.",
+    )
+    def view(self):
         return Slicer(self)
 
 

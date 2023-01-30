@@ -113,7 +113,12 @@ class FileReader(Seq[Element]):
         """
         raise NotImplementedError
 
-    def slicer(self):
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.7.6",
+        details="Use ``Slicer`` instead.",
+    )
+    def view(self):
         return Slicer(self)
 
 
@@ -304,18 +309,6 @@ class BiglistBase(Seq[Element]):
         )  # type: ignore
         return path  # type: ignore
 
-    # @classmethod
-    # @abstractmethod
-    # def load_data_file(cls, path: Upath):
-    #     """
-    #     Load the data file given by ``path``.
-
-    #     This function is used as the argument ``loader`` to :meth:`biglist.FileReader.__init__`.
-    #     Its return type depends on the subclass.
-    #     The value it returns is contained in :class:`FileReader` for subsequent use.
-    #     """
-    #     raise NotImplementedError
-
     @classmethod
     def new(
         cls,
@@ -337,7 +330,7 @@ class BiglistBase(Seq[Element]):
 
             This path can be either on local disk or in a cloud storage.
 
-            If not specified, :meth:`~biglist._base.BiglistBase.get_temp_path`
+            If not specified, :meth:`BiglistBase.get_temp_path`
             is called to determine a temporary path.
 
             The subclass :class:`~biglist.Biglist` saves both data and meta-info in this path.
@@ -347,9 +340,9 @@ class BiglistBase(Seq[Element]):
             If not specified, the default behavior is the following:
 
             - If ``path`` is ``None``, then this is ``False``---the temporary directory
-              will be deleted when this :class:`~biglist._base.BiglistBase` object goes away.
+              will be deleted when this :class:`BiglistBase` object goes away.
             - If ``path`` is not ``None``, i.e. user has deliberately specified a location,
-              then this is ``True``---files saved by this :class:`~biglist._base.BiglistBase` object will stay.
+              then this is ``True``---files saved by this :class:`BiglistBase` object will stay.
 
             User can pass in ``True`` or ``False`` explicitly to override the default behavior.
 
@@ -358,12 +351,12 @@ class BiglistBase(Seq[Element]):
 
         Notes
         -----
-        A :class:`~biglist._base.BiglistBase` object construction is in either of the two modes
+        A :class:`BiglistBase` object construction is in either of the two modes
         below:
 
-        a) create a new :class:`~biglist._base.BiglistBase` to store new data.
+        a) create a new :class:`BiglistBase` to store new data.
 
-        b) create a :class:`~biglist._base.BiglistBase` object pointing to storage of
+        b) create a :class:`BiglistBase` object pointing to storage of
            existing data, which was created by a previous call to :meth:`new`.
 
         In case (a), one has called :meth:`new`. In case (b), one has called
@@ -383,7 +376,7 @@ class BiglistBase(Seq[Element]):
         both a barebone object that is created in this :meth:`new`, as well as a
         fleshed out object that already has data in persistence.
 
-        Some settings may be applicable to an existing :class:`~biglist._base.BiglistBase` object, e.g.,
+        Some settings may be applicable to an existing :class:`BiglistBase` object, e.g.,
         they control styles of display and not intrinsic attributes persisted along
         with the BiglistBase.
         Such settings should be parameters to :meth:`__init__` but not to :meth:`new`.
@@ -634,17 +627,22 @@ class BiglistBase(Seq[Element]):
     def files(self) -> FileSeq[FileReader[Element]]:
         raise NotImplementedError
 
-    def slicer(self):
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.7.6",
+        details="Use ``Slicer`` instead.",
+    )
+    def view(self):
         """
         By convention, a "slicing" method should return an object of the same class
-        as the original object. This is not possible for :class:`~biglist._base.BiglistBase` (or its subclasses),
-        hence its :meth:`~biglist._base.BiglistBase.__getitem__` does not support slicing. Slicing is supported
+        as the original object. This is not possible for :class:`BiglistBase` (or its subclasses),
+        hence its :meth:`BiglistBase.__getitem__` does not support slicing. Slicing is supported
         by the object returned from this method, e.g.,
 
         ::
 
             biglist = Biglist(...)
-            s = biglist.slicer()
+            s = biglist.view()
             print(s[2:8].collect())
             print(s[3::2].collect())
 
@@ -653,14 +651,6 @@ class BiglistBase(Seq[Element]):
         of the biglist; they open and read files independent of other slicers.
         """
         return Slicer(self)
-
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.7.6",
-        details="Use ``.slicer`` instead.",
-    )
-    def view(self):
-        return self.slicer()
 
     @deprecated(
         deprecated_in="0.7.4",
@@ -742,7 +732,17 @@ class BiglistBase(Seq[Element]):
     @deprecated(
         deprecated_in="0.7.4",
         removed_in="0.7.6",
-        details="Use ``self.files.info`` instead.",
+        details="Use ``.num_data_files`` instead.",
+    )
+    def num_datafiles(self) -> int:
+        """Number of data files."""
+        return len(self.files)
+
+    @property
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.7.6",
+        details="Use ``self.files`` instead.",
     )
     def datafiles(self) -> list[str]:
         """
@@ -754,8 +754,13 @@ class BiglistBase(Seq[Element]):
     @deprecated(
         deprecated_in="0.7.4",
         removed_in="0.7.6",
-        details="Use ``len(self.files)`` instead.",
+        details="Use ``self.files.data_files_info`` instead.",
     )
-    def num_datafiles(self) -> int:
-        """Number of data files."""
-        return len(self.files)
+    def datafiles_info(self) -> list[tuple[str, int, int]]:
+        """
+        Return a list of tuples for the data files.
+        Each tuple, representing one data file, consists of
+        "file path", "element count in the file",
+        and "cumulative element count in the data files so far".
+        """
+        return self.files.data_files_info

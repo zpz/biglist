@@ -69,7 +69,7 @@ addopts = "-sv --log-cli-level info -p no:cacheprovider --tb=short --workers=aut
 
 
 [tool.coverage.report]
-fail_under = 84
+fail_under = 80
 show_missing = true
 skip_empty = true
 

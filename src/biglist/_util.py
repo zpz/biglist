@@ -5,6 +5,8 @@ import itertools
 from collections.abc import Iterator, Sequence
 from typing import Generic, Optional, Protocol, TypeVar, runtime_checkable
 
+from deprecation import deprecated
+
 
 def locate_idx_in_chunked_seq(
     idx: int,
@@ -336,5 +338,10 @@ class Chain(Generic[SeqType]):
         """
         return self._lists
 
-    def slicer(self):
+    @deprecated(
+        deprecated_in="0.7.4",
+        removed_in="0.7.6",
+        details="Use ``Slicer`` instead.",
+    )
+    def view(self):
         return Slicer(self)

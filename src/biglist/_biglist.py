@@ -170,7 +170,7 @@ class Biglist(BiglistBase[Element]):
         Parameters
         ----------
         path
-            Passed on to :meth:`~biglist._base.BiglistBase.new` of ``BiglistBase``.
+            Passed on to :meth:`BiglistBase.new` of ``BiglistBase``.
         batch_size
             Max number of data elements in each persisted data file.
 
@@ -218,7 +218,7 @@ class Biglist(BiglistBase[Element]):
             If not specified, :data:`DEFAULT_STORAGE_FORMAT` is used.
 
         **kwargs
-            additional arguments are passed on to :meth:`~biglist._base.BiglistBase.new`.
+            additional arguments are passed on to :meth:`BiglistBase.new`.
 
         Returns
         -------

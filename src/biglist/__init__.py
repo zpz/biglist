@@ -31,15 +31,18 @@ but also for any |Sequence|_.
 """
 from __future__ import annotations
 
-from ._base import FileReader, FileSeq
+from ._base import BiglistBase, FileReader, FileSeq
 from ._biglist import Biglist, BiglistFileReader, BiglistFileSeq
 from ._util import Chain, Seq, Slicer
 
-__version__ = "0.7.4b2"
+__version__ = "0.7.4b3"
 
 # Back compat; will be removed >=0.7.6
 FileView = FileReader
 BiglistFileView = BiglistFileReader
+ListView = Slicer
+ChainedList = Chain
+
 
 try:
     from ._parquet import (

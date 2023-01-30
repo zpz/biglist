@@ -124,7 +124,7 @@ The Seq protocol and FileReader class
 
 Before going further with Biglist, let's digress a bit and introduce a few helper facilities.
 
-:class:`~biglist._base.BiglistBase`
+:class:`BiglistBase`
 (and its subclasses :class:`Biglist` and :class:`ParquetBiglist`)
 could have implemented the |Sequence|_ interface in the standard library.
 However, that interface contains a few methods that are potentially hugely inefficient for Biglist,
@@ -143,7 +143,7 @@ and support random element access by index. Most classes in the ``biglist`` pack
 implement this protocol rather than the standard |Sequence|_.
 
 Because a biglist manages any number of data files, a basic operation concerns reading one data file.
-Each subclass of :class:`~biglist._base.BiglistBase` implements its file-reading class as a subclass of
+Each subclass of :class:`BiglistBase` implements its file-reading class as a subclass of
 :class:`FileReader`. FileReader implements the :class:`Seq` protocol, hence
 the data items in one data file can be used like a list.
 Importantly, a FileReader instance does not load the data file upon initialization.
@@ -151,12 +151,12 @@ At that moment, the instance can be *pickled*. This lends itself to uses in mult
 This point of the design will be showcased later.
 
 The centerpiece of a biglist is a sequence of data files in persistence, or correspondingly,
-a sequence of FileReader's in memory. The property :meth:`~biglist._base.BiglistBase.files` of BiglistBase
+a sequence of FileReader's in memory. The property :meth:`BiglistBase.files` of BiglistBase
 returns a :class:`FileSeq` to manage the FileReader objects of the biglist.
 Besides implementing the :class:`Seq` protocol, FileSeq provides ways to use the FileReader's
 by distributed workers.
 
-Finally, :class:`~biglist._base.BiglistBase`
+Finally, :class:`BiglistBase`
 implements the :class:`Seq` protocol for its data items across the data files.
 
 To sum up,
@@ -180,9 +180,10 @@ We can access any element of a :class:`Biglist` like we do a list:
 10020
 
 Biglist does not support slicing directly.
-However, the method :meth:`~Biglist.slicer` returns an object that supports element access by a single index, by a slice, or by a list of indices:
+However, the class :class:`Slicer` wraps a :class:`Seq` and enables element access by a single index, by a slice, or by a list of indices:
 
->>> v = mylist.slicer()
+>>> from biglist import Slicer
+>>> v = Slicer(mylist)
 >>> len(v)
 10023
 >>> v
@@ -599,8 +600,8 @@ Reading a ParquetBiglist
 ========================
 
 The fundamental reading API is the same between :class:`Biglist` and :class:`ParquetBiglist`:
-random access, slicing/dicing via :meth:`~biglist._base.BiglistBase.slicer`, iteration,
-distributed reading via :meth:`~FileSeq.concurrent_iter`---these are all used the same way.
+random access, slicing/dicing using :class:`Slicer`, iteration,
+distributed reading via :meth:`FileSeq.concurrent_iter`---these are all used the same way.
 
 However, the structures of the data files are very different between :class:`Biglist` and :class:`ParquetBiglist`.
 For Biglist, each data file contains a straight Python list, elements of which being whatever have been
@@ -643,7 +644,7 @@ First of all, a :class:`FileReader` object is a :class:`Seq`, providing row-base
 {'make': 'ford', 'year': 1962, 'sales': 311}
 >>> f0[-10]
 {'make': 'ford', 'year': 2011, 'sales': 116}
->>> f0.slicer()[-3:].collect()
+>>> Slicer(f0)[-3:].collect()
 [{'make': 'ford', 'year': 2018, 'sales': 248}, {'make': 'ford', 'year': 2019, 'sales': 354}, {'make': 'ford', 'year': 2020, 'sales': 216}]
 >>> for i, x in enumerate(f0):
 ...     print(x)
@@ -713,7 +714,7 @@ All of our row access tools are available:
 {'make': 'ford', 'year': 1963, 'sales': 249}
 >>> rg[-2]
 {'make': 'ford', 'year': 1968, 'sales': 381}
->>> rg.slicer()[4:7].collect()
+>>> Slicer(rg)[4:7].collect()
 [{'make': 'ford', 'year': 1964, 'sales': 249}, {'make': 'ford', 'year': 1965, 'sales': 167}, {'make': 'ford', 'year': 1966, 'sales': 170}]
 >>> rg.scalar_as_py = False
 >>> rg[3]
@@ -803,7 +804,7 @@ It's an interesting case when there's only one column:
 249
 >>> list(sales)
 [78, 50, 311, 249, 249, 167, 170, 410, 381, 456, 106, 140, 104, 87, 127, 385, 443, 381, 294, 403, 74, 495, 97, 341, 276, 364, 421, 93, 378, 256, 352, 464, 413, 192, 436, 500, 103, 489, 197, 386, 454, 409, 450, 325, 484, 361, 201, 88, 446, 433, 475, 116, 388, 427, 275, 216, 332, 168, 248, 354, 216]
->>> sales.slicer()[:8].collect()
+>>> Slicer(sales)[:8].collect()
 [78, 50, 311, 249, 249, 167, 170, 410]
 
 Notice the type of the values (rows) returned from the element access methods: it's *not* ``dict``.
@@ -812,7 +813,7 @@ Also note that the values have been converted to Python builtin types.
 The original `pyarrow`_ values will not look as nice:
    
 >>> sales.scalar_as_py = False
->>> sales.slicer()[:8].collect()
+>>> Slicer(sales)[:8].collect()
 [<pyarrow.Int64Scalar: 78>, <pyarrow.Int64Scalar: 50>, <pyarrow.Int64Scalar: 311>, <pyarrow.Int64Scalar: 249>, <pyarrow.Int64Scalar: 249>, <pyarrow.Int64Scalar: 167>, <pyarrow.Int64Scalar: 170>, <pyarrow.Int64Scalar: 410>]
 >>> sales.scalar_as_py = True
 
@@ -921,7 +922,7 @@ as demonstrated above, are ready for use:
 ['make', 'year', 'sales']
 >>> ff[3]
 {'make': 'honda', 'year': 1973, 'sales': 243}
->>> ff.columns(['year', 'sales']).slicer()[10:16].collect()
+>>> Slicer(ff.columns(['year', 'sales']))[10:16].collect()
 [{'year': 1980, 'sales': 136}, {'year': 1981, 'sales': 292}, {'year': 1982, 'sales': 200}, {'year': 1983, 'sales': 199}, {'year': 1984, 'sales': 214}, {'year': 1985, 'sales': 125}]
 >>> ff.num_row_groups
 6
@@ -969,19 +970,6 @@ a single index, or a slice, or a list of indices. A single-index access will ret
 the requested element; the other two scenarios return a new Slicer via a zero-copy operation.
 To get all the elements out of a Slicer, either iterate it or call its method :meth:`~Slicer.collect`.
 
-:class:`~_base.BiglistBase` (including :class:`Biglist` and :class:`ParquetBiglist`),
-:class:`FileReader` (including :class:`BiglistFileReader` and :class:`ParquetFileReader`),
-:class:`ParquetBatchData`, and :class:`Chain` all have a method ``slicer``, which returns
-a :class:`Slicer` to give them slicing capabilities. All these ``slicer`` methods are implemented
-by the one-liner
-
-::
-
-   def slicer(self):
-      return Slicer(self)
-
-because, after all, this ``self`` is a :class:`Seq`.
-
 We should emphasize that :class:`Chain` and :class:`Slicer` work with any :class:`Seq`,
 hence they are useful independent of the other ``biglist`` classes.
 
@@ -1015,7 +1003,7 @@ API reference
 .. autoclass:: biglist.Chain
 
 
-.. autoclass:: biglist._base.BiglistBase
+.. autoclass:: BiglistBase
    :private-members: _get_thread_pool
 
 
@@ -1032,6 +1020,7 @@ API reference
 
 
 .. autoclass:: biglist.ParquetFileReader
+
 
 .. autoclass:: biglist.ParquetFileSeq
 

@@ -1,6 +1,6 @@
 """
 The package `biglist <https://github.com/zpz/biglist>`_ provides persisted, out-of-memory Python data structures
-that implement the |Sequence|_ and |Iterable|_ interfaces with the capabilities of
+that implement the :class:`Seq` interface (a simplified |Sequence|_) with the capabilities of
 concurrent and distributed reading and writing.
 The main use case is processing large amounts of data that can not fit in memory.
 
@@ -27,7 +27,7 @@ the implementation is agnostic to the location of storage.
 
 Additional utilities provide mechanisms for "slicing and dicing" a biglist,
 as well as "chaining up" a series of biglists. These utilities work not only for biglist,
-but also for any |Sequence|_.
+but also for any :class:`Seq`.
 """
 from __future__ import annotations
 

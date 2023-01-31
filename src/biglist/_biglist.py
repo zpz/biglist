@@ -267,7 +267,55 @@ class Biglist(BiglistBase[Element]):
         # For back compat. Added in 0.7.4.
         if self.info and "data_files_info" not in self.info:
             # This is not called by ``new``, instead is opening an existing dataset
-            self.info["data_files_info"] = self._get_data_files_info()
+            if self.storage_version == 0:
+                # This may not be totally reliable in every scenario.
+                # The older version had a parameter `lazy`, which is gone now.
+                # After some time we may stop supporting this storage version. (7/27/2022)
+                # However, as long as older datasets are in a "read-only" status,
+                # this is fine.
+                try:
+                    data_info_file = self.path / "datafiles_info.json"
+                    data_files = data_info_file.read_json()
+                    # A list of tuples, (file_name, item_count)
+                except FileNotFoundError:
+                    data_files = []
+            else:
+                assert self.storage_version == 1
+                # Starting with storage_version 1, data file name is
+                #   <timestamp>_<uuid>_<itemcount>.<ext>
+                # <timestamp> contains a '.', no '_';
+                # <uuid> contains '-', no '_';
+                # <itemcount> contains no '-' nor '_';
+                # <ext> may contain '_'.
+                files0 = (v.name for v in self._data_dir.iterdir())
+                files1 = (v.split("_") + [v] for v in files0)
+                files2 = (
+                    (float(v[0]), v[-1], int(v[2].partition(".")[0]))
+                    # timestamp, file name, item count
+                    for v in files1
+                )
+                files = sorted(files2)  # sort by timestamp
+
+                if files:
+                    data_files = [(v[1], v[2]) for v in files]  # file name, item count
+                else:
+                    data_files = []
+
+            if data_files:
+                data_files_cumlength = list(
+                    itertools.accumulate(v[1] for v in data_files)
+                )
+                data_files_info = [
+                    (str(self._data_dir / filename), count, cumcount)
+                    for (filename, count), cumcount in zip(
+                        data_files, data_files_cumlength
+                    )
+                ]
+                # Each element of the list is a tuple containing file path, item count in file, and cumsum of item counts.
+            else:
+                data_files_info = []
+
+            self.info["data_files_info"] = data_files_info
             with self._info_file.with_suffix(".lock").lock(timeout=120):
                 self._info_file.write_json(self.info, overwrite=True)
 
@@ -453,49 +501,6 @@ class Biglist(BiglistBase[Element]):
             z = [(a, b, c) for (a, b), c in zip(z, cum)]
             self.info["data_files_info"] = z
             self._info_file.write_json(self.info, overwrite=True)
-
-    def _get_data_files_info(self) -> list:
-        if self.storage_version == 0:
-            # This may not be totally reliable in every scenario.
-            # The older version had a parameter `lazy`, which is gone now.
-            # After some time we may stop supporting this storage version. (7/27/2022)
-            # However, as long as older datasets are in a "read-only" status,
-            # this is fine.
-            try:
-                data_info_file = self.path / "datafiles_info.json"
-                data_files = data_info_file.read_json()
-                # A list of tuples, (file_name, item_count)
-            except FileNotFoundError:
-                return []
-        else:
-            # Starting with storage_version 1, data file name is
-            #   <timestamp>_<uuid>_<itemcount>.<ext>
-            # <timestamp> contains a '.', no '_';
-            # <uuid> contains '-', no '_';
-            # <itemcount> contains no '-' nor '_';
-            # <ext> may contain '_'.
-            files0 = (v.name for v in self._data_dir.iterdir())
-            files1 = (v.split("_") + [v] for v in files0)
-            files2 = (
-                (float(v[0]), v[-1], int(v[2].partition(".")[0]))
-                # timestamp, file name, item count
-                for v in files1
-            )
-            files = sorted(files2)  # sort by timestamp
-
-            if files:
-                data_files = [(v[1], v[2]) for v in files]  # file name, item count
-            else:
-                return []
-
-        data_files_cumlength = list(
-            itertools.accumulate(v[1] for v in self._data_files)
-        )
-        return [
-            (str(self._data_dir / filename), count, cumcount)
-            for (filename, count), cumcount in zip(data_files, data_files_cumlength)
-        ]
-        # Each element of the list is a tuple containing file path, item count in file, and cumsum of item counts.
 
     def reload(self) -> None:
         """

@@ -302,10 +302,14 @@ class Biglist(BiglistBase[Element]):
                     data_files = []
 
             if data_files:
-                data_files_cumlength = list(itertools.accumulate(v[1] for v in data_files))
+                data_files_cumlength = list(
+                    itertools.accumulate(v[1] for v in data_files)
+                )
                 data_files_info = [
                     (str(self._data_dir / filename), count, cumcount)
-                    for (filename, count), cumcount in zip(data_files, data_files_cumlength)
+                    for (filename, count), cumcount in zip(
+                        data_files, data_files_cumlength
+                    )
                 ]
                 # Each element of the list is a tuple containing file path, item count in file, and cumsum of item counts.
             else:

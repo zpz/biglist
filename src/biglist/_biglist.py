@@ -489,7 +489,7 @@ class Biglist(BiglistBase[Element]):
                 return []
 
         data_files_cumlength = list(
-            itertools.accumulate(v[1] for v in self._data_files)
+            itertools.accumulate(v[1] for v in data_files)
         )
         return [
             (str(self._data_dir / filename), count, cumcount)

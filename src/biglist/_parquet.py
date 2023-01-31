@@ -205,6 +205,14 @@ class ParquetBiglist(BiglistBase):
         obj.info["data_files_info"] = data_files_info
 
         obj.info["storage_format"] = "parquet"
+        obj.info["storage_version"] = 1
+        # `storage_version` is a flag for certain breaking changes in the implementation,
+        # such that certain parts of the code (mainly concerning I/O) need to
+        # branch into different treatments according to the version.
+        # This has little relation to `storage_format`.
+        # version 1 designator introduced in version 0.7.4.
+        # prior to 0.7.4 it is absent, and considered 0.
+
         obj._info_file.write_json(obj.info)
 
         return obj
@@ -218,8 +226,10 @@ class ParquetBiglist(BiglistBase):
         This does *not* affect the external Parquet data files.
         """
 
-        # Added in 0.7.4, for back compat.
-        if "data_files_cumlength" in self.info:
+        # For back compat. Added in 0.7.4.
+        if self.info and "data_files_info" not in self.info:
+            # This is not called by ``new``, instead is opening an existing dataset
+            assert self.storage_version == 0
             data_files_info = [
                 (a["path"], a["num_rows"], b)
                 for a, b in zip(
@@ -236,6 +246,10 @@ class ParquetBiglist(BiglistBase):
 
     def __repr__(self):
         return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {len(self.files)} data file(s) stored at {self.info['datapath']}>"
+
+    @property
+    def storage_version(self) -> int:
+        return self.info.get("storage_version", 0)
 
     @property
     def files(self):

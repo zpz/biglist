@@ -320,7 +320,7 @@ class Biglist(BiglistBase[Element]):
                 self._info_file.write_json(self.info, overwrite=True)
 
     def __del__(self) -> None:
-        if getattr(self, 'keep_files', True) is False:
+        if getattr(self, "keep_files", True) is False:
             self.destroy()
         else:
             self.flush()

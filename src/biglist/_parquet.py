@@ -3,7 +3,6 @@ from __future__ import annotations
 import itertools
 import logging
 from collections.abc import Iterable, Iterator, Sequence
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -68,7 +67,7 @@ class ParquetBiglist(BiglistBase):
         from upathlib.gcs import get_google_auth
 
         _, cred, _ = get_google_auth(
-            credentials=getattr(cls, '_GCP_CREDENTIALS', None),
+            credentials=getattr(cls, "_GCP_CREDENTIALS", None),
             valid_for_seconds=good_for_seconds,
         )
         return GcsFileSystem(

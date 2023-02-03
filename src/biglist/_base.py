@@ -501,7 +501,7 @@ class BiglistBase(Seq[Element]):
         self.path.rmrf()
 
     def __del__(self):
-        if getattr(self, 'keep_files', True) is False:
+        if getattr(self, "keep_files", True) is False:
             self.destroy()
 
     def __getitem__(self, idx: int) -> Element:

@@ -320,11 +320,10 @@ class Biglist(BiglistBase[Element]):
                 self._info_file.write_json(self.info, overwrite=True)
 
     def __del__(self) -> None:
-        if getattr(self, "keep_files", False):
-            if self.keep_files:
-                self.flush()
-            else:
-                self.path.rmrf()
+        if getattr(self, 'keep_files', True) is False:
+            self.destroy()
+        else:
+            self.flush()
 
     @property
     def batch_size(self) -> int:

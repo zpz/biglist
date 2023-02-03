@@ -65,20 +65,12 @@ class ParquetBiglist(BiglistBase):
         default credential inference process is a high overhead.
         """
         # Import here b/c user may not be on GCP
-        import google.auth
+        from upathlib.gcs import get_google_auth
 
-        cred = getattr(cls, "_GCP_CREDENTIALS", None)
-        if cred is None:
-            cred, _ = google.auth.default(
-                scopes=["https://www.googleapis.com/auth/cloud-platform"]
-            )
-            cls._GCP_CREDENTIALS = cred
-        if (
-            not cred.token
-            or (cred.expiry - datetime.utcnow()).total_seconds() < good_for_seconds
-        ):
-            cred.refresh(google.auth.transport.requests.Request())
-            # One check shows this token expires in one hour.
+        _, cred, _ = get_google_auth(
+            credentials=getattr(cls, '_GCP_CREDENTIALS', None),
+            valid_for_seconds=good_for_seconds,
+        )
         return GcsFileSystem(
             access_token=cred.token, credential_token_expiration=cred.expiry
         )
@@ -239,10 +231,6 @@ class ParquetBiglist(BiglistBase):
             self.info["data_files_info"] = data_files_info
             with self._info_file.with_suffix(".lock").lock(timeout=120):
                 self._info_file.write_json(self.info, overwrite=True)
-
-    def __del__(self) -> None:
-        if not self.keep_files:
-            self.path.rmrf()
 
     def __repr__(self):
         return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {len(self.files)} data file(s) stored at {self.info['datapath']}>"

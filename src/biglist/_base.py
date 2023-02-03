@@ -496,6 +496,14 @@ class BiglistBase(Seq[Element]):
             return files.num_data_items
         return 0
 
+    def destroy(self) -> None:
+        self.keep_files = False
+        self.path.rmrf()
+
+    def __del__(self):
+        if getattr(self, 'keep_files', True) is False:
+            self.destroy()
+
     def __getitem__(self, idx: int) -> Element:
         """
         Access a data item by its index; negative index works as expected.

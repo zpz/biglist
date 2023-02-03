@@ -94,11 +94,11 @@ among larger files with no problem.
 
 Now let's take a look at the biglist object:
 
->>> mylist
+>>> mylist  # doctest: +SKIP
 <Biglist at '/tmp/19f88a17-3e78-430f-aad0-a35d39485f80' with 10023 elements in 101 data file(s)>
 >>> len(mylist)
 10023
->>> mylist.path
+>>> mylist.path  # doctest: +SKIP
 LocalUpath('/tmp/19f88a17-3e78-430f-aad0-a35d39485f80')
 >>> mylist.num_data_files
 101
@@ -109,11 +109,16 @@ When the object ``mylist`` gets garbage collected, this directory will be delete
 This has its uses, but often we want to save the data for future use. In that case, just pass 
 a currently non-existent directory to :meth:`~Biglist.new`, for example,
 
->>> yourlist = Biglist.new('/project/data/store-a', batch_size=10_000)
+>>> yourlist = Biglist.new('/tmp/project/data/store-a', batch_size=10_000)
 
 Later, initiate a :class:`Biglist` object for reading the existing dataset:
 
->>> yourlist = Biglist('/project/data/store-a')
+>>> yourlist = Biglist('/tmp/project/data/store-a')
+
+.. doctest::
+   :hide:
+
+   >>> yourlist.destroy()
 
 If we want to persist the data in Google Cloud Storage, we would specify a path in the
 ``'gs://bucket-name/path/to/data'`` format.
@@ -186,11 +191,11 @@ However, the class :class:`Slicer` wraps a :class:`Seq` and enables element acce
 >>> v = Slicer(mylist)
 >>> len(v)
 10023
->>> v
+>>> v  # doctest: +SKIP
 <Slicer into 10023/10023 of <Biglist at '/tmp/dc260854-8041-40e8-801c-34084451d7a3' with 10023 elements in 101 data file(s)>>
 >>> v[83]
 83
->>> v[100:104]
+>>> v[100:104]  # doctest: +SKIP
 <Slicer into 4/10023 of <Biglist at '/tmp/dc260854-8041-40e8-801c-34084451d7a3' with 10023 elements in 101 data file(s)>>
 >>>
 
@@ -216,7 +221,7 @@ A few more examples:
 [10015, 10016, 10017, 10018, 10019, 10020, 10021, 10022]
 >>> v[-8::2].collect()
 [10015, 10017, 10019, 10021]
->>> v[[1, 83, 250, -2]]
+>>> v[[1, 83, 250, -2]]  # doctest: +SKIP
 <Slicer into 4/10023 of <Biglist at '/tmp/dc260854-8041-40e8-801c-34084451d7a3' with 10023 elements in 101 data file(s)>>
 >>> v[[1, 83, 250, -2]].collect()
 [1, 83, 250, 10021]
@@ -260,7 +265,7 @@ we can distribute :class:`FileReader`\s to the processes.
 The FileReader's of ``mylist`` is accessed via its property ``files``, which returns a :class:`FileSeq`:
 
 >>> files = mylist.files
->>> files
+>>> files  # doctest: +SKIP
 <BiglistFileSeq at '/tmp/dc260854-8041-40e8-801c-34084451d7a3' with 10023 elements in 101 data file(s)>
 >>> len(files)
 101
@@ -268,7 +273,7 @@ The FileReader's of ``mylist`` is accessed via its property ``files``, which ret
 101
 >>> files.num_data_items
 10023
->>> files[0]
+>>> files[0]  # doctest: +SKIP
 <BiglistFileReader for '/tmp/cfb39dc0-94bb-4557-a056-c7cea20ea653/store/1669667946.647939_46eb97f6-bdf3-45d2-809c-b90c613d69c7_100.pickle_zstd'>
 
 A :class:`FileReader` object is light-weight. Upon initialization, it has not loaded the file yet---it merely records the file path along with the function that will be used to load the file.

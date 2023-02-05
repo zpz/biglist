@@ -16,23 +16,21 @@ The functions related to iterating over `FileReader`s (sequentially or concurren
 
 There are other deprecations and renamings, for example,
 
-- Parameter `thread_pool_executor` to `BiglistBase.__init__` and `ParquetBiglist.new` is removed.
 - Class renamings: `ListView` -> `Slicer`; `ChainedList` -> `Chain`.
 
-The new class `Seq` and the renamed classes `Chain` and `Slicer` are in the module `util`.
+The new class `Seq` and the renamed classes `Chain` and `Slicer` are in the module `_util`.
 
-A behavior change to call out: previously, as new data items are `append`ed to a `Biglist`,
+### Breaking changes
+
+Previously, as new data items are `append`ed to a `Biglist`,
 data items that are not yet `flush`ed, i.e. not persisted, hence only in memory buffer,
 are immediately included in item access (by `__getitem__`), iteration (by `__iter__`),
 and counted in the length of the Biglist. Now these elements are not included in these operations.
 
-Removed:
+### Removed
 
 - `BiglistBase.{resolve_path, lockfile}`. These methods are replaced by direct calls to functions from `upathlib`.
-
-Marked for removal (i.e. deprecated):
-
-- Parameter `thread_pool_executor` to `BiglistBase.__init__`.
+- Parameter `require_exists` to `BiglistBase.__init__`.
 
 
 ## [0.7.3] - 2022-12-27

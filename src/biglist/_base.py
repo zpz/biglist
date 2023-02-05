@@ -7,7 +7,6 @@ import queue
 import tempfile
 import uuid
 import warnings
-import weakref
 from abc import abstractmethod
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -25,28 +24,6 @@ from upathlib import LocalUpath, PathType, Upath, resolve_path
 from ._util import Element, Seq, Slicer
 
 logger = logging.getLogger(__name__)
-
-
-_thread_pool = None
-
-
-def _get_thread_pool():
-    """
-    If this function is used in multiple processes, **you must use the "spawn" method
-    to start the processes**. This is related to data copying in "fork" processes
-    (the default on Linux), and a ``ThreadPoolExecutor`` copied into
-    the new processes is malfunctional.
-
-    I do not know whether it is possible to detect such corrupt thread pools.
-    If there is a way to do that, then it can be leveraged in this function to make
-    things work with forked processes.
-    """
-    global _thread_pool
-    if _thread_pool is None or _thread_pool() is None:
-        pool = ThreadPoolExecutor(min(32, (os.cpu_count() or 1) + 4))
-        pool.__enter__()
-        _thread_pool = weakref.ref(pool, lambda ref: pool.shutdown())
-    return _thread_pool()
 
 
 class FileReader(Seq[Element]):
@@ -390,14 +367,15 @@ class BiglistBase(Seq[Element]):
             if keep_files is None:
                 keep_files = False
         else:
-            path = resolve_path(path)
             if keep_files is None:
                 keep_files = True
+        path = resolve_path(path)
         if path.is_dir():
             raise Exception(f'directory "{path}" already exists')
         if path.is_file():
             raise FileExistsError(path)
-        obj = cls(path, require_exists=False, **kwargs)
+        (path / "info.json").write_json({}, overwrite=False)
+        obj = cls(path, **kwargs)
         obj.keep_files = keep_files
         return obj
 
@@ -405,8 +383,8 @@ class BiglistBase(Seq[Element]):
         self,
         path: PathType,
         *,
-        require_exists: bool = True,
-        thread_pool_executor: Optional[ThreadPoolExecutor] = _unspecified,
+        require_exists: bool = _unspecified,
+        thread_pool_executor: Optional[ThreadPoolExecutor] = None,
     ):
         """
         Parameters
@@ -423,9 +401,6 @@ class BiglistBase(Seq[Element]):
             at the same time, because the provided thread pool
             controls the max number of threads.
 
-            .. deprecated:: 0.7.4
-                The input is ignored. Will be removed in 0.7.6.
-
         require_exists
             When initializing an object of this class,
             contents of the directory ``path`` should be already in place.
@@ -433,6 +408,9 @@ class BiglistBase(Seq[Element]):
             classmethod :meth:`new` of a subclass, when creating an instance
             before any file is written, ``require_exists=False`` is used.
             User should usually leave this parameter at its default value.
+
+            .. deprecated:: 0.7.4
+                This input is ignored. Will be removed in 0.7.6.
         """
         self.path: Upath = resolve_path(path)
         """Root directory of the storage space for this object."""
@@ -450,25 +428,21 @@ class BiglistBase(Seq[Element]):
                 stacklevel=2,
             )
 
+        if require_exists is not _unspecified:
+            warnings.warn(
+                "`require_exists` is deprecated and ignored; will be removed in 0.7.6",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
         self.info: dict
         """Various meta info."""
 
-        try:
-            # Instantiate a Biglist object pointing to
-            # existing data.
-            with self._info_file.with_suffix(".lock").lock(timeout=120):
-                # Lock it because there could be multiple distributed workers
-                # accessing this file.
-                self.info = self._info_file.read_json()
-        except FileNotFoundError as e:
-            if require_exists:
-                raise RuntimeError(
-                    f"Cat not find {self.__class__.__name__} at path '{self.path}'"
-                ) from e
-            self.info = {}
-
+        self._info_file = self.path / "info.json"
+        self.info = self._info_file.read_json()
         self._n_read_threads = 3
         self._n_write_threads = 3
+        self._thread_pool_ = thread_pool_executor
 
     def __repr__(self):
         return f"<{self.__class__.__name__} at '{self.path}' with {self.num_data_items} elements in {self.num_data_files} data file(s)>"
@@ -477,8 +451,14 @@ class BiglistBase(Seq[Element]):
         return self.__repr__()
 
     @property
-    def _info_file(self) -> Upath:
-        return self.path / "info.json"
+    def _thread_pool(self):
+        if self._thread_pool_ is None:
+            executor = ThreadPoolExecutor(
+                max(self._n_read_threads, self._n_write_threads)
+            )
+            self._thread_pool_ = executor
+
+        return self._thread_pool_
 
     def __len__(self) -> int:
         """
@@ -495,6 +475,14 @@ class BiglistBase(Seq[Element]):
         if files:
             return files.num_data_items
         return 0
+
+    def destroy(self) -> None:
+        self.keep_files = False
+        self.path.rmrf()
+
+    def __del__(self):
+        if getattr(self, "keep_files", True) is False:
+            self.destroy()
 
     def __getitem__(self, idx: int) -> Element:
         """
@@ -588,7 +576,7 @@ class BiglistBase(Seq[Element]):
 
                 max_workers = min(self._n_read_threads, ndatafiles)
                 tasks = queue.Queue(max_workers)
-                executor = _get_thread_pool()
+                executor = self._thread_pool
 
                 def _read_file(idx):
                     z = files[idx]

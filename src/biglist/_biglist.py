@@ -37,7 +37,6 @@ from ._base import (
     FileSeq,
     PathType,
     Upath,
-    _get_thread_pool,
 )
 
 logger = logging.getLogger(__name__)
@@ -249,7 +248,7 @@ class Biglist(BiglistBase[Element]):
 
         obj.info["data_files_info"] = []
 
-        obj._info_file.write_json(obj.info, overwrite=False)
+        obj._info_file.write_json(obj.info, overwrite=True)
 
         return obj
 
@@ -319,12 +318,13 @@ class Biglist(BiglistBase[Element]):
             with self._info_file.with_suffix(".lock").lock(timeout=120):
                 self._info_file.write_json(self.info, overwrite=True)
 
+        self._flushed = True
+
     def __del__(self) -> None:
-        if getattr(self, "keep_files", False):
-            if self.keep_files:
-                self.flush()
-            else:
-                self.path.rmrf()
+        if getattr(self, "keep_files", True) is False:
+            self.destroy()
+        else:
+            self.flush()
 
     @property
     def batch_size(self) -> int:
@@ -408,6 +408,7 @@ class Biglist(BiglistBase[Element]):
         self._append_buffer.append(x)
         if len(self._append_buffer) >= self.batch_size:
             self._flush()
+        self._flushed = False  # This is about `flush`, not `_flush`.
 
     def extend(self, x: Iterable[Element]) -> None:
         """This simply calls :meth:`append` repeatedly."""
@@ -442,7 +443,7 @@ class Biglist(BiglistBase[Element]):
 
         data_file = self._data_dir / filename
         if self._file_dumper is None:
-            self._file_dumper = Dumper(_get_thread_pool(), self._n_write_threads)
+            self._file_dumper = Dumper(self._thread_pool, self._n_write_threads)
         if wait:
             self._file_dumper.wait()
             self.dump_data_file(data_file, buffer)
@@ -486,6 +487,9 @@ class Biglist(BiglistBase[Element]):
         This is a legitimate case in parallel or distributed writing, or writing in
         multiple sessions.
         """
+        if self._flushed:
+            return
+
         self._flush(wait=True)
 
         # Other workers in other threads, processes, or machines may have appended data
@@ -502,6 +506,8 @@ class Biglist(BiglistBase[Element]):
             self.info["data_files_info"] = z
             self._info_file.write_json(self.info, overwrite=True)
 
+        self._flushed = True
+
     def reload(self) -> None:
         """
         Reload the meta info.
@@ -515,8 +521,9 @@ class Biglist(BiglistBase[Element]):
 
         Creating a new object pointing to the same storage location would achieve the same effect.
         """
-        with self._info_file.with_suffix(".lock").lock(timeout=120):
-            self.info = self._info_file.read_json()
+        # with self._info_file.with_suffix(".lock").lock(timeout=120):
+        # self.info = self._info_file.read_json()
+        self.info = self._info_file.read_json()
 
     @property
     def files(self):

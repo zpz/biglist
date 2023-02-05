@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import itertools
 import logging
+import os
 from collections.abc import Iterable, Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -19,7 +21,6 @@ from ._base import (
     PathType,
     Seq,
     Upath,
-    _get_thread_pool,
     resolve_path,
 )
 from ._util import Slicer, locate_idx_in_chunked_seq
@@ -94,6 +95,7 @@ class ParquetBiglist(BiglistBase):
         path: Optional[PathType] = None,
         *,
         suffix: str = ".parquet",
+        thread_pool_executor: Optional[ThreadPoolExecutor] = None,
         **kwargs,
     ) -> ParquetBiglist:
         """
@@ -152,7 +154,9 @@ class ParquetBiglist(BiglistBase):
                 ],
             }
 
-        pool = _get_thread_pool()
+        pool = thread_pool_executor
+        if pool is None:
+            pool = ThreadPoolExecutor(min(32, (os.cpu_count() or 1) + 4))
         tasks = []
         read_parquet = cls.load_data_file
         for p in data_path:
@@ -177,11 +181,14 @@ class ParquetBiglist(BiglistBase):
             if (k + 1) % 1000 == 0:
                 logger.info("processed %d files", k + 1)
 
+        if pool is not thread_pool_executor:
+            pool.shutdown()
+
         datafiles_cumlength = list(
             itertools.accumulate(v["num_rows"] for v in datafiles)
         )
 
-        obj = super().new(path, **kwargs)  # type: ignore
+        obj = super().new(path, thread_pool_executor=thread_pool_executor, **kwargs)  # type: ignore
         obj.info["datapath"] = [str(p) for p in data_path]
 
         # Removed in 0.7.4
@@ -204,7 +211,7 @@ class ParquetBiglist(BiglistBase):
         # version 1 designator introduced in version 0.7.4.
         # prior to 0.7.4 it is absent, and considered 0.
 
-        obj._info_file.write_json(obj.info)
+        obj._info_file.write_json(obj.info, overwrite=True)
 
         return obj
 
@@ -472,14 +479,14 @@ class ParquetFileReader(FileReader):
 
         Examples
         --------
-        >>> obj = ParquetFileReader('file_path')
-        >>> obj1 = obj.columns(['a', 'b', 'c'])
-        >>> print(obj1[2])
-        >>> obj2 = obj1.columns(['b', 'c'])
-        >>> print(obj2[3])
-        >>> obj3 = obj.columns(['d'])
-        >>> for v in obj:
-        >>>     print(v)
+        >>> obj = ParquetFileReader('file_path', ParquetBiglist.load_data_file)  # doctest: +SKIP
+        >>> obj1 = obj.columns(['a', 'b', 'c'])  # doctest: +SKIP
+        >>> print(obj1[2])  # doctest: +SKIP
+        >>> obj2 = obj1.columns(['b', 'c'])  # doctest: +SKIP
+        >>> print(obj2[3])  # doctest: +SKIP
+        >>> obj3 = obj.columns(['d'])  # doctest: +SKIP
+        >>> for v in obj:  # doctest: +SKIP
+        >>>     print(v)  # doctest: +SKIP
         """
         assert len(set(cols)) == len(cols)  # no repeat values
 
@@ -685,14 +692,14 @@ class ParquetBatchData(Seq):
 
         Examples
         --------
-        >>> obj = ParquetBatchData(parquet_table)
-        >>> obj1 = obj.columns(['a', 'b', 'c'])
-        >>> print(obj1[2])
-        >>> obj2 = obj1.columns(['b', 'c'])
-        >>> print(obj2[3])
-        >>> obj3 = obj.columns(['d'])
-        >>> for v in obj:
-        >>>     print(v)
+        >>> obj = ParquetBatchData(parquet_table)  # doctest: +SKIP
+        >>> obj1 = obj.columns(['a', 'b', 'c'])  # doctest: +SKIP
+        >>> print(obj1[2])  # doctest: +SKIP
+        >>> obj2 = obj1.columns(['b', 'c'])  # doctest: +SKIP
+        >>> print(obj2[3])  # doctest: +SKIP
+        >>> obj3 = obj.columns(['d'])  # doctest: +SKIP
+        >>> for v in obj:  # doctest: +SKIP
+        >>>     print(v)  # doctest: +SKIP
         """
         assert len(set(cols)) == len(cols)  # no repeat values
 

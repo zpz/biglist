@@ -20,6 +20,16 @@
 .. _pyarrow.fs.GcsFileSystem: https://arrow.apache.org/docs/python/generated/pyarrow.fs.GcsFileSystem.html
 .. _upathlib.Upath: https://github.com/zpz/upathlib/blob/main/src/upathlib/_upath.py
 
+.. testsetup:: *
+
+   from biglist import *
+   from upathlib import LocalUpath
+
+.. testcleanup::
+
+   LocalUpath('/tmp/a/b/c').rmrf()
+
+
 =======
 biglist
 =======
@@ -287,12 +297,15 @@ Let's design a small experiment to consume this dataset in multiple processes:
 ...     return total
 >>> from concurrent.futures import ProcessPoolExecutor
 >>> total = 0
->>> with ProcessPoolExecutor(5) as pool:
-...     tasks = [pool.submit(worker, fr) for fr in files]
-...     for t in tasks:
-...         total += t.result()
->>> total
+>>> with ProcessPoolExecutor(5) as pool:  # doctest: +SKIP
+...     tasks = [pool.submit(worker, fr) for fr in mylist.files]  # doctest: +SKIP
+...     for t in tasks:  # doctest: +SKIP
+...         total += t.result()  # doctest: +SKIP
+>>> total  # doctest: +SKIP
 50225253
+
+.. using the ProcessPoolExecutor in a context manager causes it to hang;
+.. see https://stackoverflow.com/questions/48218897/python-doctest-hangs-using-processpoolexecutor
 
 What is the expected result?
 
@@ -316,7 +329,7 @@ dataset and multiprocessing to emulate the behavior of distributed reading.
 First, start a new "concurrent file iter" task on a :class:`FileSeq`:
 
 >>> task_id = mylist.files.new_concurrent_iter()
->>> task_id
+>>> task_id  # doctest: +SKIP
 '2022-11-28T21:59:49.709094'
 
 This creates a directory in the data folder to save whatever "meta" or "control" info the algorithm needs.
@@ -337,15 +350,15 @@ Each ``batch`` above is a :class:`FileReader` object, which implements the :clas
 
 Back in the main process:
 
->>> mylist.path
+>>> mylist.path  # doctest: +SKIP
 LocalUpath('/tmp/19f88a17-3e78-430f-aad0-a35d39485f80')
 >>>
 >>> total = 0
->>> with ProcessPoolExecutor(5) as pool:
-...     tasks = [pool.submit(worker, mylist.path, task_id) for _ in range(5)]
-...     for t in tasks:
-...         total += t.result()
->>> total
+>>> with ProcessPoolExecutor(5) as pool:  # doctest: +SKIP
+...     tasks = [pool.submit(worker, mylist.path, task_id) for _ in range(5)]  # doctest: +SKIP
+...     for t in tasks:  # doctest: +SKIP
+...         total += t.result()  # doctest: +SKIP
+>>> total  # doctest: +SKIP
 50225253
 
 By ``FileSeq.concurrent_iter``, a worker
@@ -412,7 +425,8 @@ Back in the main process,
 >>> tasks = [multiprocessing.Process(target=worker, args=(hyper.path, task_id)) for _ in range(5)]
 >>> for t in tasks:
 ...     t.start()
->>> 2 done in Process-13
+>>>
+2 done in Process-13
 0 done in Process-11
 1 done in Process-12
 4 done in Process-15
@@ -474,20 +488,20 @@ Then we can tell workers, "here is the location, add data to it." Let's design a
 From the main process, let's instruct the workers to write data to the same :class:`Biglist`:
 
 >>> import multiprocessing
->>> with ProcessPoolExecutor(10, mp_context=multiprocessing.get_context('spawn')) as pool:
-...     tasks = [pool.submit(worker, path, idx) for idx in range(10)]
-...     for t in tasks:
-...         _ = t.result()
+>>> with ProcessPoolExecutor(10, mp_context=multiprocessing.get_context('spawn')) as pool:  # doctest: +SKIP
+...     tasks = [pool.submit(worker, path, idx) for idx in range(10)]  # doctest: +SKIP
+...     for t in tasks:  # doctest: +SKIP
+...         _ = t.result()  # doctest: +SKIP
 
 Let's see what we've got:
 
 
->>> yourlist.reload()
->>> len(yourlist)
+>>> yourlist.reload()  # doctest: +SKIP
+>>> len(yourlist)  # doctest: +SKIP
 45
->>> yourlist.num_data_files
+>>> yourlist.num_data_files  # doctest: +SKIP
 12
->>> list(yourlist)
+>>> list(yourlist)  # doctest: +SKIP
 [400, 401, 402, 403, 500, 501, 502, 503, 504, 600, 601, 602, 603, 604, 605, 700, 701, 702, 703, 704, 705, 706, 900, 901, 902, 903, 904, 905, 906, 907, 908, 100, 800, 801, 802, 803, 804, 805, 806, 807, 200, 201, 300, 301, 302]
 >>>
 
@@ -500,8 +514,8 @@ It's not a problem that numbers in the 800 range come *after* those in the 900 r
 
 We can get more insights if we dive to the file level:
 
->>> for f in yourlist.files:
-...     print(f)
+>>> for f in yourlist.files:  # doctest: +SKIP
+...     print(f)  # doctest: +SKIP
 <BiglistFileReader for '/tmp/a/b/c/d/store/20230129073410.971439_f84d0cf3-e2c4-40a7-acf2-a09296ff73bc_1.pickle_zstd'>
 <BiglistFileReader for '/tmp/a/b/c/d/store/20230129073410.973651_63e4ca6d-4e44-49e1-a035-6d60a88f7789_.pickle_zstd'>
 <BiglistFileReader for '/tmp/a/b/c/d/store/20230129073410.975576_f59ab2f0-be9c-477d-a95b-70d3dfc00d94_6.pickle_zstd'>
@@ -523,8 +537,8 @@ The number in the file name before the suffix is the number of elements in the f
 
 We can get similar info in a more readable format:
 
->>> for v in yourlist.files.data_files_info:
-...     print(v)
+>>> for v in yourlist.files.data_files_info:  # doctest: +SKIP
+...     print(v)  # doctest: +SKIP
 ['/tmp/a/b/c/d/store/20230129073410.971439_f84d0cf3-e2c4-40a7-acf2-a09296ff73bc_4.pickle_zstd', 4, 4]
 ['/tmp/a/b/c/d/store/20230129073410.973651_63e4ca6d-4e44-49e1-a035-6d60a88f7789_5.pickle_zstd', 5, 9]
 ['/tmp/a/b/c/d/store/20230129073410.975576_f59ab2f0-be9c-477d-a95b-70d3dfc00d94_6.pickle_zstd', 6, 15]
@@ -565,15 +579,14 @@ Let's create a couple small Parquet files to demonstrate this API.
 >>> path = LocalUpath('/tmp/a/b/c/e')
 >>> path.rmrf()
 0
->>
 >>> year = list(range(1970, 2021))
 >>> make = ['honda'] * len(year)
->>> sales = [random.randint(100, 300) for _ in range(len(year))]
+>>> sales = list(range(123, 123 + len(make)))
 >>> write_parquet_file(path / 'honda.parquet', [make, year, sales], names=['make', 'year', 'sales'], row_group_size=10)
 >>>
 >>> year = list(range(1960, 2021))
 >>> make = ['ford'] * len(year)
->>> sales = [random.randint(50, 500) for _ in range(len(year))]
+>>> sales = list(range(234, 234 + len(make)))
 >>> write_parquet_file(path / 'ford.parquet', [make, year, sales], names=['make', 'year', 'sales'], row_group_size=10)
 
 Now we want to treat the contents of ``honda.parquet`` and ``ford.parquet`` combined as one dataset, and
@@ -581,9 +594,9 @@ use ``biglist`` tools to read it.
 
 >>> from biglist import ParquetBiglist
 >>> car_data = ParquetBiglist.new(path)
->>> car_data
+>>> car_data  # doctest: +SKIP
 <ParquetBiglist at '/tmp/edd9cefb-179b-46d2-8946-7dc8ae1bdc50' with 112 records in 2 data file(s) stored at ['/tmp/a/b/c/e']>
->>> car_data.path
+>>> car_data.path  # doctest: +SKIP
 LocalUpath('/tmp/edd9cefb-179b-46d2-8946-7dc8ae1bdc50')
 >>> len(car_data)
 112
@@ -622,13 +635,13 @@ A row perspective
 ...     print(x)
 ...     if i > 5:
 ...         break
-{'make': 'ford', 'year': 1960, 'sales': 78}
-{'make': 'ford', 'year': 1961, 'sales': 50}
-{'make': 'ford', 'year': 1962, 'sales': 311}
-{'make': 'ford', 'year': 1963, 'sales': 249}
-{'make': 'ford', 'year': 1964, 'sales': 249}
-{'make': 'ford', 'year': 1965, 'sales': 167}
-{'make': 'ford', 'year': 1966, 'sales': 170}
+{'make': 'ford', 'year': 1960, 'sales': 234}
+{'make': 'ford', 'year': 1961, 'sales': 235}
+{'make': 'ford', 'year': 1962, 'sales': 236}
+{'make': 'ford', 'year': 1963, 'sales': 237}
+{'make': 'ford', 'year': 1964, 'sales': 238}
+{'make': 'ford', 'year': 1965, 'sales': 239}
+{'make': 'ford', 'year': 1966, 'sales': 240}
 
 This is the most basic iteration, :class:`Biglist`-style, one row (or "record") at a time.
 When there are multiple columns, each row is presented as a dict with column names as keys.
@@ -646,22 +659,22 @@ First of all, a :class:`FileReader` object is a :class:`Seq`, providing row-base
 >>> len(f0)
 61
 >>> f0[2]
-{'make': 'ford', 'year': 1962, 'sales': 311}
+{'make': 'ford', 'year': 1962, 'sales': 236}
 >>> f0[-10]
-{'make': 'ford', 'year': 2011, 'sales': 116}
+{'make': 'ford', 'year': 2011, 'sales': 285}
 >>> Slicer(f0)[-3:].collect()
-[{'make': 'ford', 'year': 2018, 'sales': 248}, {'make': 'ford', 'year': 2019, 'sales': 354}, {'make': 'ford', 'year': 2020, 'sales': 216}]
+[{'make': 'ford', 'year': 2018, 'sales': 292}, {'make': 'ford', 'year': 2019, 'sales': 293}, {'make': 'ford', 'year': 2020, 'sales': 294}]
 >>> for i, x in enumerate(f0):
 ...     print(x)
 ...     if i > 5:
 ...         break
-{'make': 'ford', 'year': 1960, 'sales': 78}
-{'make': 'ford', 'year': 1961, 'sales': 50}
-{'make': 'ford', 'year': 1962, 'sales': 311}
-{'make': 'ford', 'year': 1963, 'sales': 249}
-{'make': 'ford', 'year': 1964, 'sales': 249}
-{'make': 'ford', 'year': 1965, 'sales': 167}
-{'make': 'ford', 'year': 1966, 'sales': 170}
+{'make': 'ford', 'year': 1960, 'sales': 234}
+{'make': 'ford', 'year': 1961, 'sales': 235}
+{'make': 'ford', 'year': 1962, 'sales': 236}
+{'make': 'ford', 'year': 1963, 'sales': 237}
+{'make': 'ford', 'year': 1964, 'sales': 238}
+{'make': 'ford', 'year': 1965, 'sales': 239}
+{'make': 'ford', 'year': 1966, 'sales': 240}
 
 :class:`ParquetFileReader` uses `pyarrow`_ to read the Parquet files.
 The values above are nice and simple Python types, but they are not the original
@@ -670,10 +683,10 @@ they have undergone a conversion. This conversion can be toggled by the property
 :data:`ParquetFileReader.scalar_as_py`:
 
 >>> f0[8]
-{'make': 'ford', 'year': 1968, 'sales': 381}
+{'make': 'ford', 'year': 1968, 'sales': 242}
 >>> f0.scalar_as_py = False
 >>> f0[8]
-{'make': <pyarrow.StringScalar: 'ford'>, 'year': <pyarrow.Int64Scalar: 1968>, 'sales': <pyarrow.Int64Scalar: 381>}
+{'make': <pyarrow.StringScalar: 'ford'>, 'year': <pyarrow.Int64Scalar: 1968>, 'sales': <pyarrow.Int64Scalar: 242>}
 >>> f0.scalar_as_py = True
 
 A Parquet file consists of one or more "row groups". Each row-group is a batch of rows stored column-wise.
@@ -681,24 +694,24 @@ We can get info about the row-groups, or even retrieve a row-group as the unit o
 
 >>> f0.num_row_groups
 7
->>> f0.metadata
-<pyarrow._parquet.FileMetaData object at 0x7faa8c0bb2c0>
-created_by: parquet-cpp-arrow version 10.0.1
-num_columns: 3
-num_rows: 61
-num_row_groups: 7
-format_version: 2.6
-serialized_size: 2375
->>> f0.metadata.row_group(1)
-<pyarrow._parquet.RowGroupMetaData object at 0x7faa7fae5400>
-num_columns: 3
-num_rows: 10
-total_byte_size: 408
->>> f0.metadata.row_group(0)
-<pyarrow._parquet.RowGroupMetaData object at 0x7faa6f1ec1d0>
-num_columns: 3
-num_rows: 10
-total_byte_size: 400
+>>> f0.metadata  # doctest: +ELLIPSIS
+<pyarrow._parquet.FileMetaData object at 0x7f...>
+  created_by: parquet-cpp-arrow version 11.0.0
+  num_columns: 3
+  num_rows: 61
+  num_row_groups: 7
+  format_version: 2.6
+  serialized_size: 2375
+>>> f0.metadata.row_group(1)  # doctest: +ELLIPSIS
+<pyarrow._parquet.RowGroupMetaData object at 0x7f...>
+  num_columns: 3
+  num_rows: 10
+  total_byte_size: 408
+>>> f0.metadata.row_group(0)  # doctest: +ELLIPSIS
+<pyarrow._parquet.RowGroupMetaData object at 0x7f...>
+  num_columns: 3
+  num_rows: 10
+  total_byte_size: 408
 >>> rg = f0.row_group(0)
 >>> rg
 <ParquetBatchData with 10 rows, 3 columns>
@@ -716,14 +729,14 @@ All of our row access tools are available:
 >>> rg.num_columns
 3
 >>> rg[3]
-{'make': 'ford', 'year': 1963, 'sales': 249}
+{'make': 'ford', 'year': 1963, 'sales': 237}
 >>> rg[-2]
-{'make': 'ford', 'year': 1968, 'sales': 381}
+{'make': 'ford', 'year': 1968, 'sales': 242}
 >>> Slicer(rg)[4:7].collect()
-[{'make': 'ford', 'year': 1964, 'sales': 249}, {'make': 'ford', 'year': 1965, 'sales': 167}, {'make': 'ford', 'year': 1966, 'sales': 170}]
+[{'make': 'ford', 'year': 1964, 'sales': 238}, {'make': 'ford', 'year': 1965, 'sales': 239}, {'make': 'ford', 'year': 1966, 'sales': 240}]
 >>> rg.scalar_as_py = False
 >>> rg[3]
-{'make': <pyarrow.StringScalar: 'ford'>, 'year': <pyarrow.Int64Scalar: 1963>, 'sales': <pyarrow.Int64Scalar: 249>}
+{'make': <pyarrow.StringScalar: 'ford'>, 'year': <pyarrow.Int64Scalar: 1963>, 'sales': <pyarrow.Int64Scalar: 237>}
 >>> rg.scalar_as_py = True
 
 When we request a specific row, :class:`ParquetFileReader` will load the row-group that contains the row of interest.
@@ -806,11 +819,11 @@ It's an interesting case when there's only one column:
 >>> len(sales)
 61
 >>> sales[3]
-249
->>> list(sales)
-[78, 50, 311, 249, 249, 167, 170, 410, 381, 456, 106, 140, 104, 87, 127, 385, 443, 381, 294, 403, 74, 495, 97, 341, 276, 364, 421, 93, 378, 256, 352, 464, 413, 192, 436, 500, 103, 489, 197, 386, 454, 409, 450, 325, 484, 361, 201, 88, 446, 433, 475, 116, 388, 427, 275, 216, 332, 168, 248, 354, 216]
+237
+>>> list(sales)  # doctest: +ELLIPSIS
+[234, 235, 236, 237, 238, 239, ..., 291, 292, 293, 294]
 >>> Slicer(sales)[:8].collect()
-[78, 50, 311, 249, 249, 167, 170, 410]
+[234, 235, 236, 237, 238, 239, 240, 241]
 
 Notice the type of the values (rows) returned from the element access methods: it's *not* ``dict``.
 Because there's only one column whose name is known, there is no need to carry that info with every row.
@@ -819,7 +832,7 @@ The original `pyarrow`_ values will not look as nice:
    
 >>> sales.scalar_as_py = False
 >>> Slicer(sales)[:8].collect()
-[<pyarrow.Int64Scalar: 78>, <pyarrow.Int64Scalar: 50>, <pyarrow.Int64Scalar: 311>, <pyarrow.Int64Scalar: 249>, <pyarrow.Int64Scalar: 249>, <pyarrow.Int64Scalar: 167>, <pyarrow.Int64Scalar: 170>, <pyarrow.Int64Scalar: 410>]
+[<pyarrow.Int64Scalar: 234>, <pyarrow.Int64Scalar: 235>, <pyarrow.Int64Scalar: 236>, <pyarrow.Int64Scalar: 237>, <pyarrow.Int64Scalar: 238>, <pyarrow.Int64Scalar: 239>, <pyarrow.Int64Scalar: 240>, <pyarrow.Int64Scalar: 241>]
 >>> sales.scalar_as_py = True
 
 Both :class:`ParquetFileReader` and :class:`ParquetBatchData` have another method called ``column``, which retrieves a single column
@@ -828,22 +841,22 @@ and returns a
 `pyarrow.ChunkedArray`_. For example,
 
 >>> sales2 = f0.column('sales')
->>> sales2
-<pyarrow.lib.ChunkedArray object at 0x7faa6e354270>
+>>> sales2  # doctest: +ELLIPSIS
+<pyarrow.lib.ChunkedArray object at 0x...>
 [
-[
-   78,
-   50,
-   311,
-   249,
-   249,
-   ...
-   332,
-   168,
-   248,
-   354,
-   216
-]
+  [
+    234,
+    235,
+    236,
+    237,
+    238,
+    ...
+    290,
+    291,
+    292,
+    293,
+    294
+  ]
 ]
 
 :meth:`ParquetFileReader.column` returns a 
@@ -872,10 +885,10 @@ and returns it. We may take it and go all the way down the `pyarrow`_ path:
 >>> f1._data is None
 True
 >>> file = f1.file
->>> file
-<pyarrow.parquet.core.ParquetFile object at 0x7f04e24e53a0>
+>>> file  # doctest: +ELLIPSIS
+<pyarrow.parquet.core.ParquetFile object at 0x7f...>
 >>> f1._file
-<pyarrow.parquet.core.ParquetFile object at 0x7f04e24e53a0>
+<pyarrow.parquet.core.ParquetFile object at 0x7f...>
 
 We have seen that :meth:`ParquetFileReader.row_group` and :meth:`ParquetFileReader.iter_batches` both
 return :class:`ParquetBatchData` objects. In contrast to :class:`ParquetFileReader`, which is "lazy" in terms of data loading,
@@ -898,7 +911,7 @@ sales: int64
 ----
 make: [["honda","honda","honda","honda","honda",...,"honda","honda","honda","honda","honda"]]
 year: [[1970,1971,1972,1973,1974,...,2016,2017,2018,2019,2020]]
-sales: [[125,257,186,243,206,...,136,247,187,128,209]]
+sales: [[123,124,125,126,127,...,169,170,171,172,173]]
 
 Finally, we have seen that :meth:`ParquetFileReader.column` and :meth:`ParquetBatchData.column`---the single-column selectors---return
 a `pyarrow`_ object. It is either a 
@@ -926,26 +939,26 @@ as demonstrated above, are ready for use:
 >>> ff.column_names
 ['make', 'year', 'sales']
 >>> ff[3]
-{'make': 'honda', 'year': 1973, 'sales': 243}
+{'make': 'honda', 'year': 1973, 'sales': 126}
 >>> Slicer(ff.columns(['year', 'sales']))[10:16].collect()
-[{'year': 1980, 'sales': 136}, {'year': 1981, 'sales': 292}, {'year': 1982, 'sales': 200}, {'year': 1983, 'sales': 199}, {'year': 1984, 'sales': 214}, {'year': 1985, 'sales': 125}]
+[{'year': 1980, 'sales': 133}, {'year': 1981, 'sales': 134}, {'year': 1982, 'sales': 135}, {'year': 1983, 'sales': 136}, {'year': 1984, 'sales': 137}, {'year': 1985, 'sales': 138}]
 >>> ff.num_row_groups
 6
->>> ff.row_group(3).column('sales')
-<pyarrow.lib.ChunkedArray object at 0x7faa6c166270>
+>>> ff.row_group(3).column('sales')  # doctest: +ELLIPSIS
+<pyarrow.lib.ChunkedArray object at 0x7f...>
 [
-[
-   189,
-   168,
-   147,
-   277,
-   292,
-   235,
-   203,
-   200,
-   137,
-   150
-]
+  [
+    153,
+    154,
+    155,
+    156,
+    157,
+    158,
+    159,
+    160,
+    161,
+    162
+  ]
 ]
 
 
@@ -957,7 +970,7 @@ For example,
 
 >>> from biglist import Chain
 >>> numbers = list(range(10))
->>> car_data
+>>> car_data  # doctest: +SKIP
 <ParquetBiglist at '/tmp/edd9cefb-179b-46d2-8946-7dc8ae1bdc50' with 112 records in 2 data file(s) stored at ['/tmp/a/b/c/e']>
 >>> combined = Chain(numbers, car_data)
 >>> combined[3]
@@ -965,10 +978,10 @@ For example,
 >>> combined[9]
 9
 >>> combined[10]
-{'make': 'ford', 'year': 1960, 'sales': 78}
+{'make': 'ford', 'year': 1960, 'sales': 234}
 >>>
 >>> car_data[0]
-{'make': 'ford', 'year': 1960, 'sales': 78}
+{'make': 'ford', 'year': 1960, 'sales': 234}
 
 :class:`Slicer` takes any :class:`Seq`` and provides :meth:`~Slicer.__getitem__` that accepts
 a single index, or a slice, or a list of indices. A single-index access will return

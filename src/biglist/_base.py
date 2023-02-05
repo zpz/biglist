@@ -21,7 +21,7 @@ from typing import (
 from deprecation import deprecated
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
-from ._util import Element, Seq, Slicer
+from ._util import Element, Seq, Slicer, lock_to_use
 
 logger = logging.getLogger(__name__)
 
@@ -220,8 +220,7 @@ class FileSeq(Seq[FileReaderType]):
         """
         nfiles = self.__len__()
         while True:
-            ff = self._concurrent_iter_info_file(task_id)
-            with ff.with_suffix(".json.lock").lock(timeout=120):
+            with lock_to_use(self._concurrent_iter_info_file(task_id)) as ff:
                 iter_info = ff.read_json()
                 n_files_claimed = iter_info["n_files_claimed"]
                 if n_files_claimed >= nfiles:

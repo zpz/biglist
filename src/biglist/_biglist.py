@@ -11,6 +11,7 @@ import threading
 import weakref
 from collections.abc import Iterable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import datetime
 from typing import (
     Any,
@@ -38,6 +39,8 @@ from ._base import (
     PathType,
     Upath,
 )
+from ._util import lock_to_use
+
 
 logger = logging.getLogger(__name__)
 
@@ -315,8 +318,8 @@ class Biglist(BiglistBase[Element]):
                 data_files_info = []
 
             self.info["data_files_info"] = data_files_info
-            with self._info_file.with_suffix(".lock").lock(timeout=120):
-                self._info_file.write_json(self.info, overwrite=True)
+            with lock_to_use(self._info_file) as ff:
+                ff.write_json(self.info, overwrite=True)
 
         self._flushed = True
 
@@ -496,15 +499,15 @@ class Biglist(BiglistBase[Element]):
         # to the list. This block merges the appends by the current worker with
         # appends by other workers. The last call to ``flush`` across all workers
         # will get the final meta info right.
-        with self._info_file.with_suffix(".lock").lock(timeout=120):
-            z0 = self._info_file.read_json()["data_files_info"]
+        with lock_to_use(self._info_file) as ff:
+            z0 = ff.read_json()["data_files_info"]
             z1 = self.info["data_files_info"]
             z = sorted(set((*(tuple(v[:2]) for v in z0), *(tuple(v[:2]) for v in z1))))
             # TODO: maybe a merge sort can be more efficient.
             cum = list(itertools.accumulate(v[1] for v in z))
             z = [(a, b, c) for (a, b), c in zip(z, cum)]
             self.info["data_files_info"] = z
-            self._info_file.write_json(self.info, overwrite=True)
+            ff.write_json(self.info, overwrite=True)
 
         self._flushed = True
 
@@ -521,7 +524,7 @@ class Biglist(BiglistBase[Element]):
 
         Creating a new object pointing to the same storage location would achieve the same effect.
         """
-        # with self._info_file.with_suffix(".lock").lock(timeout=120):
+        # with lock_to_use(self._info_file):
         # self.info = self._info_file.read_json()
         self.info = self._info_file.read_json()
 
@@ -589,13 +592,12 @@ class Biglist(BiglistBase[Element]):
                 threading.current_thread().name,
             )
         finfo = self._multiplex_info_file(task_id)
-        flock = finfo.with_suffix(finfo.suffix + ".lock")
         while True:
-            with flock.lock(timeout=120):
+            with lock_to_use(finfo) as ff:
                 # In concurrent use cases, I've observed
                 # `upathlib.LockAcquireError` raised here.
                 # User may want to do retry here.
-                ss = finfo.read_json()
+                ss = ff.read_json()
                 # In concurrent use cases, I've observed
                 # `FileNotFoundError` here. User may want
                 # to do retry here.
@@ -603,7 +605,7 @@ class Biglist(BiglistBase[Element]):
                 n = ss["next"]
                 if n == ss["total"]:
                     return
-                finfo.write_json(
+                ff.write_json(
                     {
                         "next": n + 1,
                         "worker_id": worker_id,

@@ -23,7 +23,7 @@ from ._base import (
     Upath,
     resolve_path,
 )
-from ._util import Slicer, locate_idx_in_chunked_seq
+from ._util import Slicer, locate_idx_in_chunked_seq, lock_to_use
 
 # If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
 # and "credential_token_expiration". These can be obtained via
@@ -235,8 +235,8 @@ class ParquetBiglist(BiglistBase):
                 )
             ]
             self.info["data_files_info"] = data_files_info
-            with self._info_file.with_suffix(".lock").lock(timeout=120):
-                self._info_file.write_json(self.info, overwrite=True)
+            with lock_to_use(self._info_file) as ff:
+                ff.write_json(self.info, overwrite=True)
 
     def __repr__(self):
         return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {len(self.files)} data file(s) stored at {self.info['datapath']}>"

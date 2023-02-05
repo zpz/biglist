@@ -522,7 +522,7 @@ class Biglist(BiglistBase[Element]):
         Creating a new object pointing to the same storage location would achieve the same effect.
         """
         # with self._info_file.with_suffix(".lock").lock(timeout=120):
-            # self.info = self._info_file.read_json()
+        # self.info = self._info_file.read_json()
         self.info = self._info_file.read_json()
 
     @property

@@ -374,7 +374,7 @@ class BiglistBase(Seq[Element]):
             raise Exception(f'directory "{path}" already exists')
         if path.is_file():
             raise FileExistsError(path)
-        (path / 'info.json').write_json({}, overwrite=False)
+        (path / "info.json").write_json({}, overwrite=False)
         obj = cls(path, **kwargs)
         obj.keep_files = keep_files
         return obj
@@ -438,7 +438,7 @@ class BiglistBase(Seq[Element]):
         self.info: dict
         """Various meta info."""
 
-        self._info_file = self.path / 'info.json'
+        self._info_file = self.path / "info.json"
         self.info = self._info_file.read_json()
         self._n_read_threads = 3
         self._n_write_threads = 3

@@ -11,7 +11,6 @@ import threading
 import weakref
 from collections.abc import Iterable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
-from contextlib import contextmanager
 from datetime import datetime
 from typing import (
     Any,
@@ -40,7 +39,6 @@ from ._base import (
     Upath,
 )
 from ._util import lock_to_use
-
 
 logger = logging.getLogger(__name__)
 

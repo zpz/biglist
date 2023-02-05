@@ -12,7 +12,7 @@ from upathlib import Upath
 
 @contextmanager
 def lock_to_use(file: Upath, timeout=120):
-    with file.with_suffix(file.suffix + '.lock').lock(timeout=timeout):
+    with file.with_suffix(file.suffix + ".lock").lock(timeout=timeout):
         yield file
 
 

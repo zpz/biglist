@@ -507,7 +507,7 @@ class Biglist(BiglistBase[Element]):
 
         :meth:`flush` has overhead. You should call it only in the two situations above.
         **Do not** call it frequently "just to be safe".
-                
+
         After a call to ``flush()``, there's no problem to add more elements again by
         :meth:`append` or :meth:`extend`. Data files created by ``flush()`` with less than
         :data:`batch_size` elements will stay as is among larger files.
@@ -532,7 +532,7 @@ class Biglist(BiglistBase[Element]):
             z = [(a, b, c) for (a, b), c in zip(z, cum)]
             self.info["data_files_info"] = z
             ff.write_json(self.info, overwrite=True)
-            self.info['data_files_info'] = z
+            self.info["data_files_info"] = z
 
         self._flushed = True
 

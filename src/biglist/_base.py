@@ -420,13 +420,6 @@ class BiglistBase(Seq[Element]):
         # `self._read_buffer` contains the content of the file
         # indicated by `self._read_buffer_file_idx`.
 
-        if thread_pool_executor is not _unspecified:
-            warnings.warn(
-                "`thread_pool_executor` is deprecated and ignored; will be removed in 0.7.6",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-
         if require_exists is not _unspecified:
             warnings.warn(
                 "`require_exists` is deprecated and ignored; will be removed in 0.7.6",

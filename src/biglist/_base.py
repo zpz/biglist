@@ -21,7 +21,7 @@ from typing import (
 from deprecation import deprecated
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
-from ._util import Element, Seq, Slicer
+from ._util import Element, Seq, Slicer, lock_to_use
 
 logger = logging.getLogger(__name__)
 
@@ -220,8 +220,7 @@ class FileSeq(Seq[FileReaderType]):
         """
         nfiles = self.__len__()
         while True:
-            ff = self._concurrent_iter_info_file(task_id)
-            with ff.with_suffix(".json.lock").lock(timeout=120):
+            with lock_to_use(self._concurrent_iter_info_file(task_id)) as ff:
                 iter_info = ff.read_json()
                 n_files_claimed = iter_info["n_files_claimed"]
                 if n_files_claimed >= nfiles:
@@ -420,13 +419,6 @@ class BiglistBase(Seq[Element]):
         self._read_buffer_item_range: Optional[tuple[int, int]] = None
         # `self._read_buffer` contains the content of the file
         # indicated by `self._read_buffer_file_idx`.
-
-        if thread_pool_executor is not _unspecified:
-            warnings.warn(
-                "`thread_pool_executor` is deprecated and ignored; will be removed in 0.7.6",
-                DeprecationWarning,
-                stacklevel=2,
-            )
 
         if require_exists is not _unspecified:
             warnings.warn(

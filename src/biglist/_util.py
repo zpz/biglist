@@ -3,9 +3,17 @@ from __future__ import annotations
 import bisect
 import itertools
 from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from typing import Generic, Optional, Protocol, TypeVar, runtime_checkable
 
 from deprecation import deprecated
+from upathlib import Upath
+
+
+@contextmanager
+def lock_to_use(file: Upath, timeout=120):
+    with file.with_suffix(file.suffix + ".lock").lock(timeout=timeout):
+        yield file
 
 
 def locate_idx_in_chunked_seq(

@@ -38,6 +38,7 @@ from ._base import (
     PathType,
     Upath,
 )
+from ._util import lock_to_use
 
 logger = logging.getLogger(__name__)
 
@@ -315,8 +316,8 @@ class Biglist(BiglistBase[Element]):
                 data_files_info = []
 
             self.info["data_files_info"] = data_files_info
-            with self._info_file.with_suffix(".lock").lock(timeout=120):
-                self._info_file.write_json(self.info, overwrite=True)
+            with lock_to_use(self._info_file) as ff:
+                ff.write_json(self.info, overwrite=True)
 
         self._flushed = True
 
@@ -392,8 +393,6 @@ class Biglist(BiglistBase[Element]):
         will be persisted as a new data file, and the buffer will re-start empty.
         In other words, whenever the buffer is non-empty,
         its content is not yet persisted.
-        However, at any time, the content of this buffer is included in
-        :meth:`~_base.BiglistBase.__len__` as well as in element accesses by :meth:`~_base.BiglistBase.__getitem__` and :meth:`__iter__`.
 
         You can append data to a common biglist from multiple processes.
         In the processes, use independent ``Biglist`` objects that point to the same "path".
@@ -473,13 +472,41 @@ class Biglist(BiglistBase[Element]):
 
     def flush(self) -> None:
         """
-        While ``_flush()`` is called automatically whenever the "append buffer"
-        is full, ``flush()`` is not called automatically.
-        When the user is done adding elements to the biglist, the "append buffer" could be
-        partially filled, hence not yet persisted.
-        This is when the *user* should call ``flush()`` to force dumping the content of the buffer.
-        (If user forgot to call ``flush()`` and :data:`keep_files` is ``True``,
-        it is auto called when this object goes away. However, user should call ``flush()`` for the explicity.)
+        :meth:`_flush` is called automatically whenever the "append buffer"
+        is full, so to persist the data and empty the buffer.
+        (The capacity of this buffer is equal to ``self.batch_size``.)
+        However, if this buffer is only partially filled when the user is done
+        adding elements to the biglist, the data in the buffer will not be persisted.
+        This is the first reason that user should call ``flush`` when they are done
+        adding data (via :meth:`append` or :meth:`extend`).
+
+        Although :meth:`_flush` creates new data files, it does not update the "meta info file"
+        (``info.json`` in the root of ``self.path``) to include the new data files;
+        it only updates the in-memory ``self.info``. This is for efficiency reasons,
+        because updating ``info.json`` involves locking.
+
+        Updating ``info.json`` to include new data files (created due to :meth:`append` and :meth:`extend`)
+        if performed by :meth:`flush`.
+        This is the second reason that user should call :meth:`flush` at the end of their
+        data writting session, regardless of whether all the new data have been persisted
+        in data files. (They would be if their count is a multiple of ``self.batch_size``.)
+
+        If there are multiple workers adding data to this biglist at the same time
+        (from multiple processes or machines), data added by other workers will be
+        invisible to this worker until :meth:`flush` or :meth:`reload` is called.
+
+        Further, user should assume that data not yet persisted are not visible to
+        data reading via :meth:`__getitem__` or :meth:`__iter__`, and not included in
+        :meth:`__len__`. In common use cases, we do not start reading data until we're done
+        adding data to the biglist (at least "for now").
+
+        In summary, call :meth:`flush` when
+
+        - You are done adding data (for this "session")
+        - or you need to start reading data
+
+        :meth:`flush` has overhead. You should call it only in the two situations above.
+        **Do not** call it frequently "just to be safe".
 
         After a call to ``flush()``, there's no problem to add more elements again by
         :meth:`append` or :meth:`extend`. Data files created by ``flush()`` with less than
@@ -496,15 +523,16 @@ class Biglist(BiglistBase[Element]):
         # to the list. This block merges the appends by the current worker with
         # appends by other workers. The last call to ``flush`` across all workers
         # will get the final meta info right.
-        with self._info_file.with_suffix(".lock").lock(timeout=120):
-            z0 = self._info_file.read_json()["data_files_info"]
+        with lock_to_use(self._info_file) as ff:
+            z0 = ff.read_json()["data_files_info"]
             z1 = self.info["data_files_info"]
             z = sorted(set((*(tuple(v[:2]) for v in z0), *(tuple(v[:2]) for v in z1))))
             # TODO: maybe a merge sort can be more efficient.
             cum = list(itertools.accumulate(v[1] for v in z))
             z = [(a, b, c) for (a, b), c in zip(z, cum)]
             self.info["data_files_info"] = z
-            self._info_file.write_json(self.info, overwrite=True)
+            ff.write_json(self.info, overwrite=True)
+            self.info["data_files_info"] = z
 
         self._flushed = True
 
@@ -521,7 +549,7 @@ class Biglist(BiglistBase[Element]):
 
         Creating a new object pointing to the same storage location would achieve the same effect.
         """
-        # with self._info_file.with_suffix(".lock").lock(timeout=120):
+        # with lock_to_use(self._info_file):
         # self.info = self._info_file.read_json()
         self.info = self._info_file.read_json()
 
@@ -589,13 +617,12 @@ class Biglist(BiglistBase[Element]):
                 threading.current_thread().name,
             )
         finfo = self._multiplex_info_file(task_id)
-        flock = finfo.with_suffix(finfo.suffix + ".lock")
         while True:
-            with flock.lock(timeout=120):
+            with lock_to_use(finfo) as ff:
                 # In concurrent use cases, I've observed
                 # `upathlib.LockAcquireError` raised here.
                 # User may want to do retry here.
-                ss = finfo.read_json()
+                ss = ff.read_json()
                 # In concurrent use cases, I've observed
                 # `FileNotFoundError` here. User may want
                 # to do retry here.
@@ -603,7 +630,7 @@ class Biglist(BiglistBase[Element]):
                 n = ss["next"]
                 if n == ss["total"]:
                     return
-                finfo.write_json(
+                ff.write_json(
                     {
                         "next": n + 1,
                         "worker_id": worker_id,

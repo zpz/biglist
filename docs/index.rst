@@ -945,7 +945,7 @@ as demonstrated above, are ready for use:
 >>> ff.num_row_groups
 6
 >>> ff.row_group(3).column('sales')  # doctest: +ELLIPSIS
-<pyarrow.lib.ChunkedArray object at 0x7f...>
+<pyarrow.lib.ChunkedArray object at 0x7...>
 [
   [
     153,

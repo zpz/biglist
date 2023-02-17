@@ -29,9 +29,7 @@ logger = logging.getLogger(__name__)
 
 _unspecified = object()
 _global_thread_pool_: dict[str, ThreadPoolExecutor] = weakref.WeakValueDictionary()
-# References:
-#  https://thorstenball.com/blog/2014/10/13/why-threads-cant-fork/
-#  https://thorstenball.com/blog/2014/10/13/why-threads-cant-fork/
+# See `upathlib._upath` for some references about the interaction between threads and fork.
 
 
 def _get_global_thread_pool():

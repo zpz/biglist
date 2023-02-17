@@ -9,7 +9,7 @@ authors = [
     {name = "Zepu Zhang", email = "zepu.zhang@gmail.com"},
 ]
 dependencies = [
-    "upathlib >= 0.7.1b3",
+    "upathlib >= 0.7.1b5",
     "deprecation",
 ]
 requires-python = ">=3.8"
@@ -34,7 +34,7 @@ doc = [
     "pydata-sphinx-theme",
 ]
 gcs = [
-    "upathlib[gcs] >= 0.7.1b3",
+    "upathlib[gcs] >= 0.7.1b5",
     "google-auth",
 ]
 parquet = [

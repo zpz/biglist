@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import bisect
 import logging
-import multiprocessing
 import os
 import queue
 import tempfile
@@ -36,12 +35,10 @@ _global_thread_pool_: dict[str, ThreadPoolExecutor] = weakref.WeakValueDictionar
 
 
 def _get_global_thread_pool():
-    executor = _global_thread_pool_.get('pool')
+    executor = _global_thread_pool_.get("pool")
     if executor is None:
-        executor = ThreadPoolExecutor(
-            max(32, (os.cpu_count() or 1) + 4)
-        )
-        _global_thread_pool_['pool'] = executor
+        executor = ThreadPoolExecutor(max(32, (os.cpu_count() or 1) + 4))
+        _global_thread_pool_["pool"] = executor
     return executor
 
 
@@ -50,11 +47,11 @@ try:
 
     def _clear_global_thread_pool():
         # print('\ncalling _clear_global_thread_pool in', multiprocessing.current_process().name, '\n')
-        pool = _global_thread_pool_.get('pool')
+        pool = _global_thread_pool_.get("pool")
         if pool is not None:
             # TODO: if `pool` has locks, things may go wrong.
             pool.shutdown(wait=False)
-            del _global_thread_pool_['pool']
+            del _global_thread_pool_["pool"]
 
     register_at_fork(after_in_child=_clear_global_thread_pool)
 

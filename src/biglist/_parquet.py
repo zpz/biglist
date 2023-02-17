@@ -21,8 +21,9 @@ from ._base import (
     PathType,
     Seq,
     Upath,
+    _get_global_thread_pool,
+    _unspecified,
     resolve_path,
-    _get_global_thread_pool, _unspecified,
 )
 from ._util import Slicer, locate_idx_in_chunked_seq, lock_to_use
 

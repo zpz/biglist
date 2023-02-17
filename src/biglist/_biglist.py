@@ -261,6 +261,7 @@ class Biglist(BiglistBase[Element]):
 
         self._append_buffer: list = []
         self._file_dumper = None
+        self._n_write_threads = 3
 
         _biglist_objs.add(self)
 
@@ -442,7 +443,7 @@ class Biglist(BiglistBase[Element]):
 
         data_file = self._data_dir / filename
         if self._file_dumper is None:
-            self._file_dumper = Dumper(self._thread_pool, self._n_write_threads)
+            self._file_dumper = Dumper(self._get_thread_pool(), self._n_write_threads)
         if wait:
             self._file_dumper.wait()
             self.dump_data_file(data_file, buffer)
@@ -532,7 +533,6 @@ class Biglist(BiglistBase[Element]):
             z = [(a, b, c) for (a, b), c in zip(z, cum)]
             self.info["data_files_info"] = z
             ff.write_json(self.info, overwrite=True)
-            self.info["data_files_info"] = z
 
         self._flushed = True
 

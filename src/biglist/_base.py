@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import bisect
 import logging
+import multiprocessing
 import os
 import queue
 import tempfile
 import uuid
 import warnings
+import weakref
 from abc import abstractmethod
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -24,6 +26,40 @@ from upathlib import LocalUpath, PathType, Upath, resolve_path
 from ._util import Element, Seq, Slicer, lock_to_use
 
 logger = logging.getLogger(__name__)
+
+
+_unspecified = object()
+_global_thread_pool_: dict[str, ThreadPoolExecutor] = weakref.WeakValueDictionary()
+# References:
+#  https://thorstenball.com/blog/2014/10/13/why-threads-cant-fork/
+#  https://thorstenball.com/blog/2014/10/13/why-threads-cant-fork/
+
+
+def _get_global_thread_pool():
+    executor = _global_thread_pool_.get('pool')
+    if executor is None:
+        executor = ThreadPoolExecutor(
+            max(32, (os.cpu_count() or 1) + 4)
+        )
+        _global_thread_pool_['pool'] = executor
+    return executor
+
+
+try:
+    register_at_fork = os.register_at_fork  # not available on Windows
+
+    def _clear_global_thread_pool():
+        # print('\ncalling _clear_global_thread_pool in', multiprocessing.current_process().name, '\n')
+        pool = _global_thread_pool_.get('pool')
+        if pool is not None:
+            # TODO: if `pool` has locks, things may go wrong.
+            pool.shutdown(wait=False)
+            del _global_thread_pool_['pool']
+
+    register_at_fork(after_in_child=_clear_global_thread_pool)
+
+except AttributeError:  # on Windows
+    pass
 
 
 class FileReader(Seq[Element]):
@@ -248,9 +284,6 @@ class FileSeq(Seq[FileReaderType]):
         return zz["n_files_claimed"] >= zz["n_files"]
 
 
-_unspecified = object()
-
-
 class BiglistBase(Seq[Element]):
     """
     This base class contains code mainly concerning *reading*.
@@ -383,7 +416,7 @@ class BiglistBase(Seq[Element]):
         path: PathType,
         *,
         require_exists: bool = _unspecified,
-        thread_pool_executor: Optional[ThreadPoolExecutor] = None,
+        thread_pool_executor: Optional[ThreadPoolExecutor] = _unspecified,
     ):
         """
         Parameters
@@ -399,6 +432,9 @@ class BiglistBase(Seq[Element]):
             when a large number of Biglist instances are active
             at the same time, because the provided thread pool
             controls the max number of threads.
+
+            .. deprecated:: 0.7.4
+                The input is ignored. Will be removed in 0.7.6.
 
         require_exists
             When initializing an object of this class,
@@ -427,30 +463,26 @@ class BiglistBase(Seq[Element]):
                 stacklevel=2,
             )
 
+        if thread_pool_executor is not _unspecified:
+            warnings.warn(
+                "`thread_pool_executor` is deprecated and ignored; will be removed in 0.7.6",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        self._thread_pool_ = None
+
         self.info: dict
         """Various meta info."""
 
         self._info_file = self.path / "info.json"
         self.info = self._info_file.read_json()
         self._n_read_threads = 3
-        self._n_write_threads = 3
-        self._thread_pool_ = thread_pool_executor
 
     def __repr__(self):
         return f"<{self.__class__.__name__} at '{self.path}' with {self.num_data_items} elements in {self.num_data_files} data file(s)>"
 
     def __str__(self):
         return self.__repr__()
-
-    @property
-    def _thread_pool(self):
-        if self._thread_pool_ is None:
-            executor = ThreadPoolExecutor(
-                max(self._n_read_threads, self._n_write_threads)
-            )
-            self._thread_pool_ = executor
-
-        return self._thread_pool_
 
     def __len__(self) -> int:
         """
@@ -467,6 +499,11 @@ class BiglistBase(Seq[Element]):
         if files:
             return files.num_data_items
         return 0
+
+    def _get_thread_pool(self):
+        if self._thread_pool_ is None:
+            self._thread_pool_ = _get_global_thread_pool()
+        return self._thread_pool_
 
     def destroy(self) -> None:
         self.keep_files = False
@@ -568,7 +605,7 @@ class BiglistBase(Seq[Element]):
 
                 max_workers = min(self._n_read_threads, ndatafiles)
                 tasks = queue.Queue(max_workers)
-                executor = self._thread_pool
+                executor = self._get_thread_pool()
 
                 def _read_file(idx):
                     z = files[idx]

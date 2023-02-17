@@ -17,6 +17,7 @@ The functions related to iterating over `FileReader`s (sequentially or concurren
 There are other deprecations and renamings, for example,
 
 - Class renamings: `ListView` -> `Slicer`; `ChainedList` -> `Chain`.
+- Deprecated the parameter `thread_pool_executor` to `__init__` and `__new__`.
 
 The new class `Seq` and the renamed classes `Chain` and `Slicer` are in the module `_util`.
 

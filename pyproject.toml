@@ -11,6 +11,7 @@ authors = [
 dependencies = [
     "upathlib >= 0.7.1b3",
     "deprecation",
+    "typing-extensions",
 ]
 requires-python = ">=3.8"
 readme = "README.rst"
@@ -41,16 +42,11 @@ parquet = [
     "pyarrow >= 10.0.0",
 ]
 test = [
-    "bandit",
     "boltons",
     "mypy",
     "ruff",
     "pytest-asyncio",
-    "pytest-parallel",
-    "py",
 ]
-# `py` is to workaround a bug in `pytest-parallel` until it is listed by `pytest-parallel`
-# as a dependency.
 
 
 [tool.ruff]
@@ -65,7 +61,7 @@ ignore = ["E501"]  # line length
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-sv --log-cli-level info -p no:cacheprovider --tb=short --workers=auto"
+addopts = "-sv --log-cli-level info -p no:cacheprovider --tb=short"
 
 
 [tool.coverage.report]

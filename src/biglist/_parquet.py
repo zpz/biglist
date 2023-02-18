@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import itertools
 import logging
-import os
+import warnings
 from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -21,6 +21,8 @@ from ._base import (
     PathType,
     Seq,
     Upath,
+    _get_global_thread_pool,
+    _unspecified,
     resolve_path,
 )
 from ._util import Slicer, locate_idx_in_chunked_seq, lock_to_use
@@ -95,7 +97,7 @@ class ParquetBiglist(BiglistBase):
         path: Optional[PathType] = None,
         *,
         suffix: str = ".parquet",
-        thread_pool_executor: Optional[ThreadPoolExecutor] = None,
+        thread_pool_executor: Optional[ThreadPoolExecutor] = _unspecified,
         **kwargs,
     ) -> ParquetBiglist:
         """
@@ -131,6 +133,11 @@ class ParquetBiglist(BiglistBase):
                 directory, the files therein (recursively) are sorted by the string
                 value of each file's full path.
 
+        thread_pool_executor
+
+            .. deprecated:: 0.7.4
+                The input is ignored. Will be removed in 0.7.6.
+
         suffix
             Only files with this suffix will be included.
             To include all files, use ``suffix='*'``.
@@ -138,6 +145,13 @@ class ParquetBiglist(BiglistBase):
         **kwargs
             additional arguments are passed on to ``__init__``.
         """
+        if thread_pool_executor is not _unspecified:
+            warnings.warn(
+                "`thread_pool_executor` is deprecated and ignored; will be removed in 0.7.6",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
         if isinstance(data_path, (str, Path, Upath)):
             #  TODO: in py 3.10, we will be able to do `isinstance(data_path, PathType)`
             data_path = [resolve_path(data_path)]
@@ -154,9 +168,7 @@ class ParquetBiglist(BiglistBase):
                 ],
             }
 
-        pool = thread_pool_executor
-        if pool is None:
-            pool = ThreadPoolExecutor(min(32, (os.cpu_count() or 1) + 4))
+        pool = _get_global_thread_pool()
         tasks = []
         read_parquet = cls.load_data_file
         for p in data_path:
@@ -181,14 +193,11 @@ class ParquetBiglist(BiglistBase):
             if (k + 1) % 1000 == 0:
                 logger.info("processed %d files", k + 1)
 
-        if pool is not thread_pool_executor:
-            pool.shutdown()
-
         datafiles_cumlength = list(
             itertools.accumulate(v["num_rows"] for v in datafiles)
         )
 
-        obj = super().new(path, thread_pool_executor=thread_pool_executor, **kwargs)  # type: ignore
+        obj = super().new(path, **kwargs)  # type: ignore
         obj.info["datapath"] = [str(p) for p in data_path]
 
         # Removed in 0.7.4

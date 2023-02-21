@@ -11,6 +11,7 @@ authors = [
 dependencies = [
     "upathlib >= 0.7.1b5",
     "deprecation",
+    "mpservice >= 0.11.9b5",
 ]
 requires-python = ">=3.8"
 readme = "README.rst"

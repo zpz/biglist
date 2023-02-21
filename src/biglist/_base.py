@@ -31,7 +31,7 @@ _unspecified = object()
 
 
 def _get_global_thread_pool():
-    return get_shared_thread_pool('biglist')
+    return get_shared_thread_pool("biglist")
 
 
 class FileReader(Seq[Element]):

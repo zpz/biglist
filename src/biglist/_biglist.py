@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import atexit
 import concurrent.futures
+import io
 import itertools
 import json
 import logging
 import multiprocessing
 import string
 import threading
+import warnings
 import weakref
 from collections.abc import Iterable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -326,6 +328,10 @@ class Biglist(BiglistBase[Element]):
         if getattr(self, "keep_files", True) is False:
             self.destroy()
         else:
+            if not self._flushed:
+                warnings.warn(
+                    f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
+                )
             self.flush()
 
     @property
@@ -336,6 +342,10 @@ class Biglist(BiglistBase[Element]):
     @property
     def _data_dir(self) -> Upath:
         return self.path / "store"
+
+    @property
+    def data_path(self) -> Upath:
+        return self._data_dir
 
     @property
     def storage_format(self) -> str:
@@ -359,6 +369,10 @@ class Biglist(BiglistBase[Element]):
         .. versionchanged:: 0.7.4
             In previous versions, this count includes items that are not yet flushed.
         """
+        if not self._flushed:
+            warnings.warn(
+                f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
+            )
         return super().__len__()
 
     def __getitem__(self, idx: int) -> Element:
@@ -383,6 +397,10 @@ class Biglist(BiglistBase[Element]):
         .. versionchanged:: 0.7.4
             In previous versions, this iteration includes those items that are not yet flushed.
         """
+        if not self._flushed:
+            warnings.warn(
+                f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
+            )
         return super().__iter__()
 
     def append(self, x: Element) -> None:
@@ -556,6 +574,10 @@ class Biglist(BiglistBase[Element]):
     @property
     def files(self):
         # This method should be cheap to call.
+        if not self._flushed:
+            warnings.warn(
+                f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
+            )
         return BiglistFileSeq(
             self.path, self.info["data_files_info"], self.load_data_file
         )
@@ -588,6 +610,10 @@ class Biglist(BiglistBase[Element]):
         between multiple workers.
         """
         assert not self._append_buffer
+        if not self._flushed:
+            warnings.warn(
+                f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
+            )
         task_id = datetime.utcnow().isoformat()
         self._multiplex_info_file(task_id).write_json(
             {
@@ -802,3 +828,45 @@ Biglist.register_storage_format("pickle-zstd", ZstdPickleSerializer)
 Biglist.register_storage_format("orjson", OrjsonSerializer)
 Biglist.register_storage_format("orjson-z", ZOrjsonSerializer)
 Biglist.register_storage_format("orjson-zstd", ZstdOrjsonSerializer)
+
+
+try:
+    import pyarrow
+except ImportError:
+    pass
+else:
+
+    class ParquetSerializer(ByteSerializer):
+        @classmethod
+        def serialize(cls, x: list[dict], schema=None, metadata=None, **kwargs):
+            """
+            `x` is a list of data items. Each item is a dict. In the output Parquet file,
+            each item is a "row".
+
+            The content of the item dict should follow a regular pattern.
+            Not every structure is supported. The data `x` must be acceptable to
+            ``pyarrow.Table.from_pylist``. If unsure, use a list with a couple data elements
+            and experiment with ``pyarrow.Table.from_pylist`` directly, leaving out
+            ``schema`` and ``metadata``.
+
+            When using ``storage_format='parquet'`` for ``Biglist``, each data element is a dict
+            with a consistent structure that is acceptable to ``pyarrow.Table.from_pylist``.
+            When reading the Biglist, the original Python data elements are returned.
+            In other words, the reading is *not* like that of ``ParquetBiglist``.
+            You can always create a separate ParquetBiglist for the data files of the Biglist
+            in order to use Parquet-style data reading. The data files are valid Parquet files.
+            """
+            table = pyarrow.Table.from_pylist(x, schema=schema, metadata=metadata)
+            sink = io.BytesIO()
+            writer = pyarrow.parquet.ParquetWriter(sink, table.schema, **kwargs)
+            writer.write_table(table)
+            writer.close()
+            # return sink.getvalue()
+            return sink.getbuffer()
+
+        @classmethod
+        def deserialize(cls, y: bytes, **kwargs):
+            table = pyarrow.parquet.ParquetFile(io.BytesIO(y), **kwargs).read()
+            return table.to_pylist()
+
+    Biglist.register_storage_format("parquet", ParquetSerializer)

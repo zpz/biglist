@@ -4,13 +4,14 @@ import os.path
 import multiprocessing
 import random
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed, wait
 from shutil import rmtree
 from time import sleep
 
 import pytest
 from boltons import iterutils
-from biglist import Biglist
+from biglist import Biglist, ParquetBiglist, Slicer
 
 
 def test_numbers():
@@ -61,6 +62,7 @@ def test_existing_numbers():
     mylist.append(30)
     mylist.append(31)
     mylist.extend([32, 33, 34, 35, 36])
+    mylist.flush()
 
     data = list(range(len(mylist)))
     assert list(mylist) == data
@@ -293,3 +295,37 @@ def test_multiplex():
     assert mux.multiplex_done(task_id)
 
 
+def test_parquet():
+    data = [
+        {
+            'name': str(uuid.uuid1()),
+            'age': random.randint(20, 100), 
+            'address': {
+                'state': str(uuid.uuid4()), 
+                'city': str(uuid.uuid4()),
+                },
+            'hobbies': [random.random(), random.random()],
+        }
+        for _ in range(56)
+    ]
+    bl = Biglist.new(batch_size=13, storage_format='parquet')
+    bl.extend(data)
+    bl.flush()
+
+    print('')
+    print(data[:3])
+    print('')
+    print('')
+    print(Slicer(bl)[:3].collect())
+    print('')
+
+    assert list(bl) == data
+
+    print('len:', len(bl))
+    assert len(bl) == len(data)
+    print('num_data_files:', bl.num_data_files)
+
+    bl2 = ParquetBiglist.new(bl.data_path)
+    assert len(bl2) == len(data)
+    assert bl2.num_data_files == bl.num_data_files
+    assert list(bl2) == data

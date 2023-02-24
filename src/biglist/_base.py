@@ -7,7 +7,6 @@ import queue
 import tempfile
 import uuid
 import warnings
-import weakref
 from abc import abstractmethod
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -20,6 +19,7 @@ from typing import (
 )
 
 from deprecation import deprecated
+from mpservice.util import get_shared_thread_pool
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
 from ._util import Element, Seq, Slicer, lock_to_use
@@ -28,33 +28,10 @@ logger = logging.getLogger(__name__)
 
 
 _unspecified = object()
-_global_thread_pool_: dict[str, ThreadPoolExecutor] = weakref.WeakValueDictionary()
-# See `upathlib._upath` for some references about the interaction between threads and fork.
 
 
 def _get_global_thread_pool():
-    executor = _global_thread_pool_.get("pool")
-    if executor is None:
-        executor = ThreadPoolExecutor(max(32, (os.cpu_count() or 1) + 4))
-        _global_thread_pool_["pool"] = executor
-    return executor
-
-
-try:
-    register_at_fork = os.register_at_fork  # not available on Windows
-except AttributeError:  # on Windows
-    pass
-else:
-
-    def _clear_global_thread_pool():
-        # print('\ncalling _clear_global_thread_pool in', multiprocessing.current_process().name, '\n')
-        pool = _global_thread_pool_.get("pool")
-        if pool is not None:
-            # TODO: if `pool` has locks, things may go wrong.
-            pool.shutdown(wait=False)
-        _global_thread_pool_.pop("pool", None)
-
-    register_at_fork(after_in_child=_clear_global_thread_pool)
+    return get_shared_thread_pool("biglist")
 
 
 class FileReader(Seq[Element]):

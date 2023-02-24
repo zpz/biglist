@@ -329,7 +329,9 @@ class Biglist(BiglistBase[Element]):
             self.destroy()
         else:
             if not self._flushed:
-                warnings.warn(f"did you forget to flush {self.__class__.__name__} at '{self.path}'?")
+                warnings.warn(
+                    f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
+                )
             self.flush()
 
     @property
@@ -368,7 +370,9 @@ class Biglist(BiglistBase[Element]):
             In previous versions, this count includes items that are not yet flushed.
         """
         if not self._flushed:
-            warnings.warn(f"did you forget to flush {self.__class__.__name__} at '{self.path}'?")
+            warnings.warn(
+                f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
+            )
         return super().__len__()
 
     def __getitem__(self, idx: int) -> Element:
@@ -394,7 +398,9 @@ class Biglist(BiglistBase[Element]):
             In previous versions, this iteration includes those items that are not yet flushed.
         """
         if not self._flushed:
-            warnings.warn(f"did you forget to flush {self.__class__.__name__} at '{self.path}'?")
+            warnings.warn(
+                f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
+            )
         return super().__iter__()
 
     def append(self, x: Element) -> None:
@@ -569,7 +575,9 @@ class Biglist(BiglistBase[Element]):
     def files(self):
         # This method should be cheap to call.
         if not self._flushed:
-            warnings.warn(f"did you forget to flush {self.__class__.__name__} at '{self.path}'?")
+            warnings.warn(
+                f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
+            )
         return BiglistFileSeq(
             self.path, self.info["data_files_info"], self.load_data_file
         )
@@ -603,7 +611,9 @@ class Biglist(BiglistBase[Element]):
         """
         assert not self._append_buffer
         if not self._flushed:
-            warnings.warn(f"did you forget to flush {self.__class__.__name__} at '{self.path}'?")
+            warnings.warn(
+                f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
+            )
         task_id = datetime.utcnow().isoformat()
         self._multiplex_info_file(task_id).write_json(
             {
@@ -825,10 +835,11 @@ try:
 except ImportError:
     pass
 else:
+
     class ParquetSerializer(ByteSerializer):
         @classmethod
         def serialize(cls, x: list[dict], schema=None, metadata=None, **kwargs):
-            '''
+            """
             `x` is a list of data items. Each item is a dict. In the output Parquet file,
             each item is a "row".
 
@@ -844,7 +855,7 @@ else:
             In other words, the reading is *not* like that of ``ParquetBiglist``.
             You can always create a separate ParquetBiglist for the data files of the Biglist
             in order to use Parquet-style data reading. The data files are valid Parquet files.
-            '''
+            """
             table = pyarrow.Table.from_pylist(x, schema=schema, metadata=metadata)
             sink = io.BytesIO()
             writer = pyarrow.parquet.ParquetWriter(sink, table.schema, **kwargs)
@@ -858,5 +869,4 @@ else:
             table = pyarrow.parquet.ParquetFile(io.BytesIO(y), **kwargs).read()
             return table.to_pylist()
 
-    Biglist.register_storage_format('parquet', ParquetSerializer)
-
+    Biglist.register_storage_format("parquet", ParquetSerializer)

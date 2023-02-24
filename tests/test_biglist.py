@@ -62,6 +62,7 @@ def test_existing_numbers():
     mylist.append(30)
     mylist.append(31)
     mylist.extend([32, 33, 34, 35, 36])
+    mylist.flush()
 
     data = list(range(len(mylist)))
     assert list(mylist) == data

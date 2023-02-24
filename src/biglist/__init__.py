@@ -35,7 +35,7 @@ from ._base import BiglistBase, FileReader, FileSeq
 from ._biglist import Biglist, BiglistFileReader, BiglistFileSeq
 from ._util import Chain, Seq, Slicer
 
-__version__ = "0.7.4b8"
+__version__ = "0.7.4b9"
 
 # Back compat; will be removed >=0.7.6
 FileView = FileReader

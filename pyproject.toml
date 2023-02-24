@@ -9,7 +9,7 @@ authors = [
     {name = "Zepu Zhang", email = "zepu.zhang@gmail.com"},
 ]
 dependencies = [
-    "upathlib >= 0.7.1b5",
+    "upathlib >= 0.7.1b6",
     "deprecation",
     "mpservice >= 0.11.9b5",
 ]
@@ -35,7 +35,7 @@ doc = [
     "pydata-sphinx-theme",
 ]
 gcs = [
-    "upathlib[gcs] >= 0.7.1b5",
+    "upathlib[gcs] >= 0.7.1b6",
     "google-auth",
 ]
 parquet = [
@@ -47,6 +47,7 @@ test = [
     "ruff",
     "pytest-asyncio",
 ]
+
 
 
 [tool.ruff]

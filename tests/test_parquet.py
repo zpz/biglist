@@ -1,9 +1,11 @@
+import io
+import pickle
 import random
 from types import SimpleNamespace
 from uuid import uuid4
 import pyarrow
 from upathlib import LocalUpath
-from biglist import ParquetBiglist, ParquetFileReader, write_parquet_file, read_parquet_file, Slicer
+from biglist import ParquetBiglist, ParquetFileReader, write_parquet_file, read_parquet_file, Slicer, ParquetBatchData
 import pytest
 
 
@@ -60,8 +62,59 @@ def test_idx_locator():
     assert me[0] == (0, 0)
 
 
-def test_big_parquet_list():
-    path = LocalUpath('/tmp/test-biglist/parquet')
+def test_parquet_table(tmp_path):
+    data = [
+        {'key': 'tom', 'value': {'age': 38, 'income': 100, 'address': "NYC"}},
+        {'key': 'jane', 'value': {'age': 39, 'income': 200, 'address': "LA"}},
+        {'key': 'frank', 'value': {'age': 40, 'income': 300.2, 'address': 'SF'}},
+        {'key': 'john', 'value': {'age': 22, 'income': 40, 'address': "DC"}},
+    ]
+    table = pyarrow.Table.from_pylist(data)
+    print(table)
+    pdata = ParquetBatchData(table)
+    assert len(pdata) == len(data)
+    for row in pdata:
+        print(row)
+
+    sink = io.BytesIO()
+    pw = pyarrow.parquet.ParquetWriter(sink, table.schema)
+    pw.write_table(table)
+    pw.close()
+
+    # with pyarrow.ipc.new_stream(sink, table.schema) as writer:
+    #     print('--- writing ---')
+    #     for batch in table.to_batches():
+    #         writer.write_batch(batch)
+
+    # sink = io.BytesIO()
+    # with pyarrow.output_stream(sink) as writer:
+    #     print('--- writing ---')
+    #     pyarrow.parquet.write_table(table, writer)
+    #     writer.flush()
+
+    # with pyarrow.output_stream(buffer) as stream:  # what about BufferOutputStream?
+    #     pyarrow.parquet.write_table(table, stream)
+
+    buf = sink.getvalue()
+    # print(buf)
+    print(len(buf))
+
+    f = LocalUpath(tmp_path / 'out.parquet')
+    f.write_bytes(buf, overwrite=True)
+
+    data3 = read_parquet_file(f)
+    for row in data3:
+        print(row)
+
+    assert data3.data().data().to_pylist() == data
+
+    print('--- reading ---')
+    data2 = pyarrow.parquet.ParquetFile(io.BytesIO(buf)).read()
+    assert data2.to_pylist() == data
+
+
+def test_parquet_biglist(tmp_path):
+    path = LocalUpath(tmp_path)
     path.rmrf(quiet=True)
     path.path.mkdir(parents=True)
 

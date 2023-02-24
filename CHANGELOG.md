@@ -33,6 +33,10 @@ and counted in the length of the Biglist. Now these elements are not included in
 - `BiglistBase.{resolve_path, lockfile}`. These methods are replaced by direct calls to functions from `upathlib`.
 - Parameter `require_exists` to `BiglistBase.__init__`.
 
+### Added
+
+- `Biglist` gets a new `storage_format`--'parquet'--for simple data structures.
+
 
 ## [0.7.3] - 2022-12-27
 

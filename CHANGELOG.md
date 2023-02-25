@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
-## [0.7.4] - [in progress]
+## [0.7.4] - 2022-02-25
 
 This release contains a large refactor, creating classes `Seq` and `FileSeq` and using them in many places
 in the code.

@@ -304,7 +304,9 @@ class Biglist(BiglistBase[Element]):
                     files = sorted(files2)  # sort by timestamp
 
                     if files:
-                        data_files = [(v[1], v[2]) for v in files]  # file name, item count
+                        data_files = [
+                            (v[1], v[2]) for v in files
+                        ]  # file name, item count
                     else:
                         data_files = []
 
@@ -329,13 +331,17 @@ class Biglist(BiglistBase[Element]):
             else:
                 # added in 0.7.5: check for a bug introduced in 0.7.4
                 # convert full path to file name
-                data_files_info = self.info['data_files_info']
+                data_files_info = self.info["data_files_info"]
                 if data_files_info:
                     new_info = None
-                    if os.name == 'nt' and '\\' in data_files_info[0][0]:
-                        new_info = [(f[f.rfind('\\'):], *_) for f, *_ in data_files_info]
-                    elif '/' in data_files_info[0][0]:
-                        new_info = [(f[f.rfind('/'):], *_) for f, *_ in data_files_info]
+                    if os.name == "nt" and "\\" in data_files_info[0][0]:
+                        new_info = [
+                            (f[f.rfind("\\") :], *_) for f, *_ in data_files_info
+                        ]
+                    elif "/" in data_files_info[0][0]:
+                        new_info = [
+                            (f[f.rfind("/") :], *_) for f, *_ in data_files_info
+                        ]
                     if new_info:
                         self.info["data_files_info"] = new_info
                         with lock_to_use(self._info_file) as ff:
@@ -494,9 +500,7 @@ class Biglist(BiglistBase[Element]):
             n = self.info["data_files_info"][-1][-1]
         else:
             n = 0
-        self.info["data_files_info"].append(
-            (filename, buffer_len, n + buffer_len)
-        )
+        self.info["data_files_info"].append((filename, buffer_len, n + buffer_len))
         # This changes the ``info`` in this object only.
         # When multiple workers are appending to the same big list concurrently,
         # each of them will maintain their own ``info``. See ``flush`` for how
@@ -594,10 +598,10 @@ class Biglist(BiglistBase[Element]):
         return BiglistFileSeq(
             self.path,
             [
-            (str(self.data_path / row[0]), *row[1:])
-            for row in self.info["data_files_info"]
+                (str(self.data_path / row[0]), *row[1:])
+                for row in self.info["data_files_info"]
             ],
-            self.load_data_file
+            self.load_data_file,
         )
 
     def _multiplex_info_file(self, task_id: str) -> Upath:

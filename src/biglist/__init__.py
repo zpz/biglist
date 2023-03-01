@@ -33,7 +33,6 @@ from __future__ import annotations
 
 from ._base import BiglistBase, FileReader, FileSeq
 from ._biglist import Biglist, BiglistFileReader, BiglistFileSeq
-from ._util import Chain, Seq, Slicer
 from ._parquet import (
     ParquetBatchData,
     ParquetBiglist,
@@ -42,6 +41,7 @@ from ._parquet import (
     read_parquet_file,
     write_parquet_file,
 )
+from ._util import Chain, Seq, Slicer
 
 __version__ = "0.7.5"
 

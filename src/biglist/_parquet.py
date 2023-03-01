@@ -163,9 +163,9 @@ class ParquetBiglist(BiglistBase):
             return {
                 "path": str(p),  # str of full path
                 "num_rows": meta.num_rows,
-                "row_groups_num_rows": [
-                    meta.row_group(k).num_rows for k in range(meta.num_row_groups)
-                ],
+                # "row_groups_num_rows": [
+                #     meta.row_group(k).num_rows for k in range(meta.num_row_groups)
+                # ],
             }
 
         pool = _get_global_thread_pool()

@@ -7,6 +7,7 @@ import itertools
 import json
 import logging
 import multiprocessing
+import os
 import string
 import threading
 import warnings
@@ -21,6 +22,7 @@ from typing import (
 )
 from uuid import uuid4
 
+import pyarrow
 from upathlib.serializer import (
     ByteSerializer,
     OrjsonSerializer,
@@ -266,63 +268,84 @@ class Biglist(BiglistBase[Element]):
         self._n_write_threads = 3
 
         _biglist_objs.add(self)
-
-        # For back compat. Added in 0.7.4.
-        if self.info and "data_files_info" not in self.info:
-            # This is not called by ``new``, instead is opening an existing dataset
-            if self.storage_version == 0:
-                # This may not be totally reliable in every scenario.
-                # The older version had a parameter `lazy`, which is gone now.
-                # After some time we may stop supporting this storage version. (7/27/2022)
-                # However, as long as older datasets are in a "read-only" status,
-                # this is fine.
-                try:
-                    data_info_file = self.path / "datafiles_info.json"
-                    data_files = data_info_file.read_json()
-                    # A list of tuples, (file_name, item_count)
-                except FileNotFoundError:
-                    data_files = []
-            else:
-                assert self.storage_version == 1
-                # Starting with storage_version 1, data file name is
-                #   <timestamp>_<uuid>_<itemcount>.<ext>
-                # <timestamp> contains a '.', no '_';
-                # <uuid> contains '-', no '_';
-                # <itemcount> contains no '-' nor '_';
-                # <ext> may contain '_'.
-                files0 = (v.name for v in self._data_dir.iterdir())
-                files1 = (v.split("_") + [v] for v in files0)
-                files2 = (
-                    (float(v[0]), v[-1], int(v[2].partition(".")[0]))
-                    # timestamp, file name, item count
-                    for v in files1
-                )
-                files = sorted(files2)  # sort by timestamp
-
-                if files:
-                    data_files = [(v[1], v[2]) for v in files]  # file name, item count
-                else:
-                    data_files = []
-
-            if data_files:
-                data_files_cumlength = list(
-                    itertools.accumulate(v[1] for v in data_files)
-                )
-                data_files_info = [
-                    (str(self._data_dir / filename), count, cumcount)
-                    for (filename, count), cumcount in zip(
-                        data_files, data_files_cumlength
-                    )
-                ]
-                # Each element of the list is a tuple containing file path, item count in file, and cumsum of item counts.
-            else:
-                data_files_info = []
-
-            self.info["data_files_info"] = data_files_info
-            with lock_to_use(self._info_file) as ff:
-                ff.write_json(self.info, overwrite=True)
-
         self._flushed = True
+
+        # For back compat.
+        if self.info:
+            # This is not called by ``new``, instead is opening an existing dataset
+            if "data_files_info" not in self.info:  # added in 0.7.4
+                if self.storage_version == 0:
+                    # This may not be totally reliable in every scenario.
+                    # The older version had a parameter `lazy`, which is gone now.
+                    # After some time we may stop supporting this storage version. (7/27/2022)
+                    # However, as long as older datasets are in a "read-only" status,
+                    # this is fine.
+                    try:
+                        data_info_file = self.path / "datafiles_info.json"
+                        data_files = data_info_file.read_json()
+                        # A list of tuples, (file_name, item_count)
+                    except FileNotFoundError:
+                        data_files = []
+                else:
+                    assert self.storage_version == 1
+                    # Starting with storage_version 1, data file name is
+                    #   <timestamp>_<uuid>_<itemcount>.<ext>
+                    # <timestamp> contains a '.', no '_';
+                    # <uuid> contains '-', no '_';
+                    # <itemcount> contains no '-' nor '_';
+                    # <ext> may contain '_'.
+                    files0 = (v.name for v in self.data_path.iterdir())
+                    files1 = (v.split("_") + [v] for v in files0)
+                    files2 = (
+                        (float(v[0]), v[-1], int(v[2].partition(".")[0]))
+                        # timestamp, file name, item count
+                        for v in files1
+                    )
+                    files = sorted(files2)  # sort by timestamp
+
+                    if files:
+                        data_files = [
+                            (v[1], v[2]) for v in files
+                        ]  # file name, item count
+                    else:
+                        data_files = []
+
+                if data_files:
+                    data_files_cumlength = list(
+                        itertools.accumulate(v[1] for v in data_files)
+                    )
+                    data_files_info = [
+                        (filename, count, cumcount)
+                        for (filename, count), cumcount in zip(
+                            data_files, data_files_cumlength
+                        )
+                    ]
+                    # Each element of the list is a tuple containing file name, item count in file, and cumsum of item counts.
+                else:
+                    data_files_info = []
+
+                self.info["data_files_info"] = data_files_info
+                with lock_to_use(self._info_file) as ff:
+                    ff.write_json(self.info, overwrite=True)
+
+            else:
+                # added in 0.7.5: check for a bug introduced in 0.7.4
+                # convert full path to file name
+                data_files_info = self.info["data_files_info"]
+                if data_files_info:
+                    new_info = None
+                    if os.name == "nt" and "\\" in data_files_info[0][0]:
+                        new_info = [
+                            (f[f.rfind("\\") :], *_) for f, *_ in data_files_info
+                        ]
+                    elif "/" in data_files_info[0][0]:
+                        new_info = [
+                            (f[f.rfind("/") :], *_) for f, *_ in data_files_info
+                        ]
+                    if new_info:
+                        self.info["data_files_info"] = new_info
+                        with lock_to_use(self._info_file) as ff:
+                            ff.write_json(self.info, overwrite=True)
 
     def __del__(self) -> None:
         if getattr(self, "keep_files", True) is False:
@@ -340,12 +363,8 @@ class Biglist(BiglistBase[Element]):
         return self.info["batch_size"]
 
     @property
-    def _data_dir(self) -> Upath:
-        return self.path / "store"
-
-    @property
     def data_path(self) -> Upath:
-        return self._data_dir
+        return self.path / "store"
 
     @property
     def storage_format(self) -> str:
@@ -424,9 +443,9 @@ class Biglist(BiglistBase[Element]):
             Also check out `mpservice.util.MP_SPAWN_CTX <https://mpservice.readthedocs.io/en/latest/util.html#mpservice.util.MP_SPAWN_CTX>`_.
         """
         self._append_buffer.append(x)
+        self._flushed = False  # This is about `flush`, not `_flush`.
         if len(self._append_buffer) >= self.batch_size:
             self._flush()
-        self._flushed = False  # This is about `flush`, not `_flush`.
 
     def extend(self, x: Iterable[Element]) -> None:
         """This simply calls :meth:`append` repeatedly."""
@@ -459,7 +478,7 @@ class Biglist(BiglistBase[Element]):
         # later we decide to use these pieces of info.
         # Changes in 0.7.4: the time part changes from epoch to datetime, with guaranteed fixed length.
 
-        data_file = self._data_dir / filename
+        data_file = self.data_path / filename
         if self._file_dumper is None:
             self._file_dumper = Dumper(self._get_thread_pool(), self._n_write_threads)
         if wait:
@@ -481,9 +500,7 @@ class Biglist(BiglistBase[Element]):
             n = self.info["data_files_info"][-1][-1]
         else:
             n = 0
-        self.info["data_files_info"].append(
-            (str(data_file), buffer_len, n + buffer_len)
-        )
+        self.info["data_files_info"].append((filename, buffer_len, n + buffer_len))
         # This changes the ``info`` in this object only.
         # When multiple workers are appending to the same big list concurrently,
         # each of them will maintain their own ``info``. See ``flush`` for how
@@ -579,7 +596,12 @@ class Biglist(BiglistBase[Element]):
                 f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
             )
         return BiglistFileSeq(
-            self.path, self.info["data_files_info"], self.load_data_file
+            self.path,
+            [
+                (str(self.data_path / row[0]), *row[1:])
+                for row in self.info["data_files_info"]
+            ],
+            self.load_data_file,
         )
 
     def _multiplex_info_file(self, task_id: str) -> Upath:
@@ -787,8 +809,8 @@ class BiglistFileSeq(FileSeq[BiglistFileReader]):
             Root directory for storage of meta info.
         data_files_info
             A list of data files that constitute the file sequence.
-            Each tuple in the list is comprised of a file path (relative to
-            ``root_dir``), number of data items in the file, and cumulative
+            Each tuple in the list is comprised of a file path,
+            number of data items in the file, and cumulative
             number of data items in the files up to the one at hand.
             Therefore, the order of the files in the list is significant.
         file_loader
@@ -821,6 +843,40 @@ class JsonByteSerializer(ByteSerializer):
         return _loads(json.loads, y.decode(), **kwargs)
 
 
+class ParquetSerializer(ByteSerializer):
+    @classmethod
+    def serialize(cls, x: list[dict], schema=None, metadata=None, **kwargs):
+        """
+        `x` is a list of data items. Each item is a dict. In the output Parquet file,
+        each item is a "row".
+
+        The content of the item dict should follow a regular pattern.
+        Not every structure is supported. The data `x` must be acceptable to
+        ``pyarrow.Table.from_pylist``. If unsure, use a list with a couple data elements
+        and experiment with ``pyarrow.Table.from_pylist`` directly, leaving out
+        ``schema`` and ``metadata``.
+
+        When using ``storage_format='parquet'`` for ``Biglist``, each data element is a dict
+        with a consistent structure that is acceptable to ``pyarrow.Table.from_pylist``.
+        When reading the Biglist, the original Python data elements are returned.
+        In other words, the reading is *not* like that of ``ParquetBiglist``.
+        You can always create a separate ParquetBiglist for the data files of the Biglist
+        in order to use Parquet-style data reading. The data files are valid Parquet files.
+        """
+        table = pyarrow.Table.from_pylist(x, schema=schema, metadata=metadata)
+        sink = io.BytesIO()
+        writer = pyarrow.parquet.ParquetWriter(sink, table.schema, **kwargs)
+        writer.write_table(table)
+        writer.close()
+        # return sink.getvalue()
+        return sink.getbuffer()
+
+    @classmethod
+    def deserialize(cls, y: bytes, **kwargs):
+        table = pyarrow.parquet.ParquetFile(io.BytesIO(y), **kwargs).read()
+        return table.to_pylist()
+
+
 Biglist.register_storage_format("json", JsonByteSerializer)
 Biglist.register_storage_format("pickle", PickleSerializer)
 Biglist.register_storage_format("pickle-z", ZPickleSerializer)
@@ -828,45 +884,4 @@ Biglist.register_storage_format("pickle-zstd", ZstdPickleSerializer)
 Biglist.register_storage_format("orjson", OrjsonSerializer)
 Biglist.register_storage_format("orjson-z", ZOrjsonSerializer)
 Biglist.register_storage_format("orjson-zstd", ZstdOrjsonSerializer)
-
-
-try:
-    import pyarrow
-except ImportError:
-    pass
-else:
-
-    class ParquetSerializer(ByteSerializer):
-        @classmethod
-        def serialize(cls, x: list[dict], schema=None, metadata=None, **kwargs):
-            """
-            `x` is a list of data items. Each item is a dict. In the output Parquet file,
-            each item is a "row".
-
-            The content of the item dict should follow a regular pattern.
-            Not every structure is supported. The data `x` must be acceptable to
-            ``pyarrow.Table.from_pylist``. If unsure, use a list with a couple data elements
-            and experiment with ``pyarrow.Table.from_pylist`` directly, leaving out
-            ``schema`` and ``metadata``.
-
-            When using ``storage_format='parquet'`` for ``Biglist``, each data element is a dict
-            with a consistent structure that is acceptable to ``pyarrow.Table.from_pylist``.
-            When reading the Biglist, the original Python data elements are returned.
-            In other words, the reading is *not* like that of ``ParquetBiglist``.
-            You can always create a separate ParquetBiglist for the data files of the Biglist
-            in order to use Parquet-style data reading. The data files are valid Parquet files.
-            """
-            table = pyarrow.Table.from_pylist(x, schema=schema, metadata=metadata)
-            sink = io.BytesIO()
-            writer = pyarrow.parquet.ParquetWriter(sink, table.schema, **kwargs)
-            writer.write_table(table)
-            writer.close()
-            # return sink.getvalue()
-            return sink.getbuffer()
-
-        @classmethod
-        def deserialize(cls, y: bytes, **kwargs):
-            table = pyarrow.parquet.ParquetFile(io.BytesIO(y), **kwargs).read()
-            return table.to_pylist()
-
-    Biglist.register_storage_format("parquet", ParquetSerializer)
+Biglist.register_storage_format("parquet", ParquetSerializer)

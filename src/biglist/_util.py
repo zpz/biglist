@@ -337,7 +337,7 @@ class Chain(Generic[SeqType]):
     @property
     def raw(self) -> tuple[SeqType, ...]:
         """
-        Return the underlying list of :class:`Seq`\s.
+        Return the underlying list of :class:`Seq`\\s.
 
         A member Seq could be a :class:`Slicer`. The current method
         does not follow a Slicer to its "raw" component, b/c

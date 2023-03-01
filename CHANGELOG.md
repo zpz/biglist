@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.7.5] - 2022-02-28
+
+- Fix a bug in 0.7.4 about `Biglist.info['data_files_info']`.
+- `arrow` became a mandatory (rather than optional) dependency, hence Parquet-related functionalities are available in regular install.
+
+
 ## [0.7.4] - 2022-02-25
 
 This release contains a large refactor, creating classes `Seq` and `FileSeq` and using them in many places

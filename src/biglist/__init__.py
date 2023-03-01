@@ -33,29 +33,21 @@ from __future__ import annotations
 
 from ._base import BiglistBase, FileReader, FileSeq
 from ._biglist import Biglist, BiglistFileReader, BiglistFileSeq
+from ._parquet import (
+    ParquetBatchData,
+    ParquetBiglist,
+    ParquetFileReader,
+    ParquetFileSeq,
+    read_parquet_file,
+    write_parquet_file,
+)
 from ._util import Chain, Seq, Slicer
 
-__version__ = "0.7.4"
+__version__ = "0.7.5"
 
 # Back compat; will be removed >=0.7.6
 FileView = FileReader
 BiglistFileView = BiglistFileReader
 ListView = Slicer
 ChainedList = Chain
-
-
-try:
-    from ._parquet import (
-        ParquetBatchData,
-        ParquetBiglist,
-        ParquetFileReader,
-        ParquetFileSeq,
-        read_parquet_file,
-        write_parquet_file,
-    )
-
-    # Back compat; will be removed after >=0.7.6
-    ParquetFileData = ParquetFileReader
-
-except ImportError:
-    pass
+ParquetFileData = ParquetFileReader

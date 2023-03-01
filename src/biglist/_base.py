@@ -462,15 +462,7 @@ class BiglistBase(Seq[Element]):
 
         This is an alias to :meth:`num_data_items`.
         """
-        # This assumes the current object is the only one
-        # that may be appending to the biglist.
-        # In other words, if the current object is one of
-        # of a number of workers that are concurrently using
-        # this biglist, then all the other workers are reading only.
-        files = self.files
-        if files:
-            return files.num_data_items
-        return 0
+        return self.num_data_items
 
     def _get_thread_pool(self):
         if self._thread_pool_ is None:
@@ -489,8 +481,7 @@ class BiglistBase(Seq[Element]):
         """
         Access a data item by its index; negative index works as expected.
         """
-        # This is not optimized for speed. For example, ``self._get_data_files``
-        # could be expensive involving directory crawl, maybe even in the cloud.
+        # This is not optimized for speed.
         # For better speed, use ``__iter__``.
 
         if not isinstance(idx, int):
@@ -609,7 +600,15 @@ class BiglistBase(Seq[Element]):
 
     @property
     def num_data_items(self) -> int:
-        return self.__len__()
+        # This assumes the current object is the only one
+        # that may be appending to the biglist.
+        # In other words, if the current object is one of
+        # of a number of workers that are concurrently using
+        # this biglist, then all the other workers are reading only.
+        files = self.files
+        if files:
+            return files.num_data_items
+        return 0
 
     @property
     @abstractmethod

@@ -12,6 +12,7 @@ dependencies = [
     "upathlib >= 0.7.1",
     "deprecation",
     "mpservice >= 0.11.9",
+    "pyarrow >= 10.0.0",
 ]
 requires-python = ">=3.8"
 readme = "README.rst"
@@ -32,15 +33,13 @@ Source = "https://github.com/zpz/biglist"
 doc = [
     "sphinx < 6.0.0",
     "numpydoc",
-    "pydata-sphinx-theme",
+    "pydata-sphinx-theme < 0.13.0",
 ]
 gcs = [
     "upathlib[gcs] >= 0.7.1b6",
     "google-auth",
 ]
-parquet = [
-    "pyarrow >= 10.0.0",
-]
+parquet = []
 test = [
     "boltons",
     "mypy",
@@ -48,6 +47,7 @@ test = [
     "pytest-asyncio",
 ]
 
+# `parquet` option become empty in 0.7.5 because `arrow` became mandatory.
 
 
 [tool.ruff]

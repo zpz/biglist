@@ -147,7 +147,7 @@ def test_multi_appenders():
 def iter_file(path, task_id):
     bl = Biglist(path)
     data = []
-    for batch in bl.concurrent_iter_files(task_id):
+    for batch in bl.files.concurrent_iter(task_id):
         data.extend(batch)
     return data
 

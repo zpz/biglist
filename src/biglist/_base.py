@@ -19,7 +19,7 @@ from typing import (
 from mpservice.util import get_shared_thread_pool
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
-from ._util import Element, Seq, Slicer, lock_to_use
+from ._util import Element, Seq, lock_to_use
 
 logger = logging.getLogger(__name__)
 

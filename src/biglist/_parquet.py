@@ -21,7 +21,7 @@ from ._base import (
     _get_global_thread_pool,
     resolve_path,
 )
-from ._util import Slicer, locate_idx_in_chunked_seq, lock_to_use
+from ._util import locate_idx_in_chunked_seq, lock_to_use
 
 # If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
 # and "credential_token_expiration". These can be obtained via

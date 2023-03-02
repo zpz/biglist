@@ -239,7 +239,7 @@ class Biglist(BiglistBase[Element]):
             storage_format = cls.DEFAULT_STORAGE_FORMAT
         if storage_format.replace("_", "-") not in cls.registered_storage_formats:
             raise ValueError(f"invalid value of `storage_format`: '{storage_format}'")
-        
+
         init_info = {
             **(init_info or {}),
             "storage_format": storage_format.replace("_", "-"),
@@ -253,7 +253,7 @@ class Biglist(BiglistBase[Element]):
             # version 2 designator introduced in version 0.7.4.
             # version 3 designator introduced in version 0.7.7.
             "batch_size": batch_size,
-            'data_files_info': [],
+            "data_files_info": [],
         }
 
         obj = super().new(path, init_info=init_info, **kwargs)  # type: ignore
@@ -274,7 +274,7 @@ class Biglist(BiglistBase[Element]):
         self._flushed = True
 
         # For back compat.
-        if self.info.get('storage_version', 0) < 3:
+        if self.info.get("storage_version", 0) < 3:
             # This is not called by ``new``, instead is opening an existing dataset.
             # Usually these legacy datasets are in a "read-only" mode, i.e., you should
             # not append more data to them. If you do, the back-compat code below

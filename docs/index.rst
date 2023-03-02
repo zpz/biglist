@@ -695,7 +695,7 @@ We can get info about the row-groups, or even retrieve a row-group as the unit o
 >>> f0.num_row_groups
 7
 >>> f0.metadata  # doctest: +ELLIPSIS
-<pyarrow._parquet.FileMetaData object at 0x7f...>
+<pyarrow._parquet.FileMetaData object at 0x7...>
   created_by: parquet-cpp-arrow version 11.0.0
   num_columns: 3
   num_rows: 61
@@ -703,12 +703,12 @@ We can get info about the row-groups, or even retrieve a row-group as the unit o
   format_version: 2.6
   serialized_size: 2375
 >>> f0.metadata.row_group(1)  # doctest: +ELLIPSIS
-<pyarrow._parquet.RowGroupMetaData object at 0x7f...>
+<pyarrow._parquet.RowGroupMetaData object at 0x7...>
   num_columns: 3
   num_rows: 10
   total_byte_size: 408
 >>> f0.metadata.row_group(0)  # doctest: +ELLIPSIS
-<pyarrow._parquet.RowGroupMetaData object at 0x7f...>
+<pyarrow._parquet.RowGroupMetaData object at 0x7...>
   num_columns: 3
   num_rows: 10
   total_byte_size: 408
@@ -886,9 +886,9 @@ and returns it. We may take it and go all the way down the `pyarrow`_ path:
 True
 >>> file = f1.file
 >>> file  # doctest: +ELLIPSIS
-<pyarrow.parquet.core.ParquetFile object at 0x7f...>
+<pyarrow.parquet.core.ParquetFile object at 0x7...>
 >>> f1._file
-<pyarrow.parquet.core.ParquetFile object at 0x7f...>
+<pyarrow.parquet.core.ParquetFile object at 0x7...>
 
 We have seen that :meth:`ParquetFileReader.row_group` and :meth:`ParquetFileReader.iter_batches` both
 return :class:`ParquetBatchData` objects. In contrast to :class:`ParquetFileReader`, which is "lazy" in terms of data loading,

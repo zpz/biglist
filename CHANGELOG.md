@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.7.6] - 2022-03-01
+
+- Fix a bug introduced in 0.7.5 in `Biglist.__init__` backcompat fix. 
+
+
 ## [0.7.5] - 2022-02-28
 
 - Fix a bug in 0.7.4 about `Biglist.info['data_files_info']`.

@@ -336,11 +336,11 @@ class Biglist(BiglistBase[Element]):
                     new_info = None
                     if os.name == "nt" and "\\" in data_files_info[0][0]:
                         new_info = [
-                            (f[f.rfind("\\") :], *_) for f, *_ in data_files_info
+                            (f[(f.rfind("\\") + 1):], *_) for f, *_ in data_files_info
                         ]
                     elif "/" in data_files_info[0][0]:
                         new_info = [
-                            (f[f.rfind("/") :], *_) for f, *_ in data_files_info
+                            (f[(f.rfind("/") + 1):], *_) for f, *_ in data_files_info
                         ]
                     if new_info:
                         self.info["data_files_info"] = new_info

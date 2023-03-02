@@ -4,6 +4,7 @@ import os.path
 import multiprocessing
 import random
 import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed, wait
 from shutil import rmtree
@@ -233,6 +234,35 @@ def test_mp2():
     yourlist.flush()
 
     assert sorted(yourlist) == sorted(v for v in data if v > 40)
+
+
+def slow_appender(path):
+    bl = Biglist(path)
+    for x in range(100):
+        time.sleep(random.random() * 0.001)
+        bl.append(x)
+    bl.flush()
+
+
+def test_mp3():
+    print('')
+    cache = Biglist.new(batch_size=1000)
+    ctx = multiprocessing.get_context('spawn')
+    workers = [
+        ctx.Process(target=slow_appender, args=(cache.path,))
+        for _ in range(6)
+    ]
+    for w in workers:
+        w.start()
+    for w in workers:
+        w.join()
+    
+    cache.reload()
+    print(str(cache))
+    print('cache len:', len(cache))
+
+    bl = Biglist(cache.path)
+    print('bl len:', len(bl))
 
 
 async def sum_square(mylist):

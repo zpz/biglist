@@ -168,6 +168,7 @@ class Biglist(BiglistBase[Element]):
         *,
         batch_size: Optional[int] = None,
         storage_format: Optional[str] = None,
+        init_info: dict = None,
         **kwargs,
     ) -> Biglist:
         """
@@ -229,32 +230,33 @@ class Biglist(BiglistBase[Element]):
         Biglist
             A new :class:`Biglist` object.
         """
-        obj = super().new(path, **kwargs)  # type: ignore
-
         if not batch_size:
             batch_size = 10000
         else:
             assert batch_size > 0
-        obj.info["batch_size"] = batch_size
 
         if storage_format is None:
             storage_format = cls.DEFAULT_STORAGE_FORMAT
         if storage_format.replace("_", "-") not in cls.registered_storage_formats:
             raise ValueError(f"invalid value of `storage_format`: '{storage_format}'")
-        obj.info["storage_format"] = storage_format.replace("_", "-")
-        obj.info["storage_version"] = 2
-        # `storage_version` is a flag for certain breaking changes in the implementation,
-        # such that certain parts of the code (mainly concerning I/O) need to
-        # branch into different treatments according to the version.
-        # This has little relation to `storage_format`.
-        # version 0 designator introduced on 2022/3/8
-        # version 1 designator introduced on 2022/7/25
-        # version 2 designator introduced in version 0.7.4.
+        
+        init_info = {
+            **(init_info or {}),
+            "storage_format": storage_format.replace("_", "-"),
+            "storage_version": 3,
+            # `storage_version` is a flag for certain breaking changes in the implementation,
+            # such that certain parts of the code (mainly concerning I/O) need to
+            # branch into different treatments according to the version.
+            # This has little relation to `storage_format`.
+            # version 0 designator introduced on 2022/3/8
+            # version 1 designator introduced on 2022/7/25
+            # version 2 designator introduced in version 0.7.4.
+            # version 3 designator introduced in version 0.7.7.
+            "batch_size": batch_size,
+            'data_files_info': [],
+        }
 
-        obj.info["data_files_info"] = []
-
-        obj._info_file.write_json(obj.info, overwrite=True)
-
+        obj = super().new(path, init_info=init_info, **kwargs)  # type: ignore
         return obj
 
     def __init__(self, *args, **kwargs):
@@ -264,6 +266,7 @@ class Biglist(BiglistBase[Element]):
         """Indicates whether the persisted files should be kept or deleted when the object is garbage-collected."""
 
         self._append_buffer: list = []
+        self._append_files_buffer: list = []
         self._file_dumper = None
         self._n_write_threads = 3
 
@@ -271,8 +274,12 @@ class Biglist(BiglistBase[Element]):
         self._flushed = True
 
         # For back compat.
-        if self.info:
-            # This is not called by ``new``, instead is opening an existing dataset
+        if self.info.get('storage_version', 0) < 3:
+            # This is not called by ``new``, instead is opening an existing dataset.
+            # Usually these legacy datasets are in a "read-only" mode, i.e., you should
+            # not append more data to them. If you do, the back-compat code below
+            # may not be totally reliable if the dataset is being used by multiple workers
+            # concurrently.
             if "data_files_info" not in self.info:  # added in 0.7.4
                 if self.storage_version == 0:
                     # This may not be totally reliable in every scenario.
@@ -286,8 +293,7 @@ class Biglist(BiglistBase[Element]):
                         # A list of tuples, (file_name, item_count)
                     except FileNotFoundError:
                         data_files = []
-                else:
-                    assert self.storage_version == 1
+                elif self.storage_version == 1:
                     # Starting with storage_version 1, data file name is
                     #   <timestamp>_<uuid>_<itemcount>.<ext>
                     # <timestamp> contains a '.', no '_';
@@ -309,6 +315,10 @@ class Biglist(BiglistBase[Element]):
                         ]  # file name, item count
                     else:
                         data_files = []
+                else:
+                    pass
+                    # `storage_version == 2 already has `data_files_info` in `self.info`,
+                    # but its format may be bad, hence it's included below.
 
                 if data_files:
                     data_files_cumlength = list(
@@ -329,8 +339,10 @@ class Biglist(BiglistBase[Element]):
                     ff.write_json(self.info, overwrite=True)
 
             else:
-                # added in 0.7.5: check for a bug introduced in 0.7.4
-                # convert full path to file name
+                # Added in 0.7.5: check for a bug introduced in 0.7.4.
+                # Convert full path to file name.
+                # Version 0.7.4 was used very briefly, hence very few datasets
+                # were created by that version.
                 data_files_info = self.info["data_files_info"]
                 if data_files_info:
                     new_info = None
@@ -496,15 +508,7 @@ class Biglist(BiglistBase[Element]):
             # what if dump fails later? The 'n_data_files' file is updated
             # already assuming everything will be fine.
 
-        if self.info["data_files_info"]:
-            n = self.info["data_files_info"][-1][-1]
-        else:
-            n = 0
-        self.info["data_files_info"].append((filename, buffer_len, n + buffer_len))
-        # This changes the ``info`` in this object only.
-        # When multiple workers are appending to the same big list concurrently,
-        # each of them will maintain their own ``info``. See ``flush`` for how
-        # they are merged and persisted.
+        self._append_files_buffer.append((filename, buffer_len))
 
     def flush(self) -> None:
         """
@@ -561,14 +565,14 @@ class Biglist(BiglistBase[Element]):
         # will get the final meta info right.
         with lock_to_use(self._info_file) as ff:
             z0 = ff.read_json()["data_files_info"]
-            z1 = self.info["data_files_info"]
-            z = sorted(set((*(tuple(v[:2]) for v in z0), *(tuple(v[:2]) for v in z1))))
+            z = sorted(set((*(tuple(v[:2]) for v in z0), *self._append_files_buffer)))
             # TODO: maybe a merge sort can be more efficient.
             cum = list(itertools.accumulate(v[1] for v in z))
             z = [(a, b, c) for (a, b), c in zip(z, cum)]
             self.info["data_files_info"] = z
             ff.write_json(self.info, overwrite=True)
 
+        self._append_files_buffer.clear()
         self._flushed = True
 
     def reload(self) -> None:

@@ -2,14 +2,11 @@ from __future__ import annotations
 
 import itertools
 import logging
-import warnings
 from collections.abc import Iterable, Iterator, Sequence
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Optional
 
 import pyarrow
-from deprecation import deprecated
 from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
 from upathlib import LocalUpath
@@ -22,10 +19,9 @@ from ._base import (
     Seq,
     Upath,
     _get_global_thread_pool,
-    _unspecified,
     resolve_path,
 )
-from ._util import Slicer, locate_idx_in_chunked_seq, lock_to_use
+from ._util import locate_idx_in_chunked_seq, lock_to_use
 
 # If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
 # and "credential_token_expiration". These can be obtained via
@@ -97,7 +93,6 @@ class ParquetBiglist(BiglistBase):
         path: Optional[PathType] = None,
         *,
         suffix: str = ".parquet",
-        thread_pool_executor: Optional[ThreadPoolExecutor] = _unspecified,
         **kwargs,
     ) -> ParquetBiglist:
         """
@@ -133,11 +128,6 @@ class ParquetBiglist(BiglistBase):
                 directory, the files therein (recursively) are sorted by the string
                 value of each file's full path.
 
-        thread_pool_executor
-
-            .. deprecated:: 0.7.4
-                The input is ignored. Will be removed in 0.7.6.
-
         suffix
             Only files with this suffix will be included.
             To include all files, use ``suffix='*'``.
@@ -145,13 +135,6 @@ class ParquetBiglist(BiglistBase):
         **kwargs
             additional arguments are passed on to ``__init__``.
         """
-        if thread_pool_executor is not _unspecified:
-            warnings.warn(
-                "`thread_pool_executor` is deprecated and ignored; will be removed in 0.7.6",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-
         if isinstance(data_path, (str, Path, Upath)):
             #  TODO: in py 3.10, we will be able to do `isinstance(data_path, PathType)`
             data_path = [resolve_path(data_path)]
@@ -733,14 +716,6 @@ class ParquetBatchData(Seq):
         If ``self._data`` is `pyarrow.RecordBatch`_, return `pyarrow.Array`_.
         """
         return self._data.column(idx_or_name)
-
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.7.6",
-        details="Use ``Slicer`` instead.",
-    )
-    def view(self):
-        return Slicer(self)
 
 
 def read_parquet_file(path: PathType) -> ParquetFileReader:

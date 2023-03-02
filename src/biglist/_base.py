@@ -6,10 +6,8 @@ import os
 import queue
 import tempfile
 import uuid
-import warnings
 from abc import abstractmethod
 from collections.abc import Iterator
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import (
     Any,
@@ -18,16 +16,12 @@ from typing import (
     TypeVar,
 )
 
-from deprecation import deprecated
 from mpservice.util import get_shared_thread_pool
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
-from ._util import Element, Seq, Slicer, lock_to_use
+from ._util import Element, Seq, lock_to_use
 
 logger = logging.getLogger(__name__)
-
-
-_unspecified = object()
 
 
 def _get_global_thread_pool():
@@ -97,14 +91,6 @@ class FileReader(Seq[Element]):
         in a "as-needed" or "streaming" fashion.
         """
         raise NotImplementedError
-
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.7.6",
-        details="Use ``Slicer`` instead.",
-    )
-    def view(self):
-        return Slicer(self)
 
 
 FileReaderType = TypeVar("FileReaderType", bound=FileReader)
@@ -296,6 +282,7 @@ class BiglistBase(Seq[Element]):
         path: Optional[PathType] = None,
         *,
         keep_files: Optional[bool] = None,
+        init_info: dict = None,
         **kwargs,
     ) -> BiglistBase:
         """
@@ -326,6 +313,21 @@ class BiglistBase(Seq[Element]):
               then this is ``True``---files saved by this :class:`BiglistBase` object will stay.
 
             User can pass in ``True`` or ``False`` explicitly to override the default behavior.
+
+        init_info
+            Initial info that should be written into the *info* file before ``__init__`` is called.
+            This is in addition to whatever this method internally decides to write.
+            User rarely needs to use this parameter.
+
+            The info file `info.json` is written before ``__init__`` is called.
+            In ``__init__``, this file is read into ``self.info``.
+
+            This parameter can be used to write some high-level info that ``__init__``
+            needs.
+
+            If the info is not needed in ``__init__``, then user can always add it
+            to ``self.info`` after the object has been instantiated, hence that is not
+            the intended use of this parameter.
 
         **kwargs
             additional arguments are passed on to :meth:`__init__`.
@@ -378,7 +380,7 @@ class BiglistBase(Seq[Element]):
             raise Exception(f'directory "{path}" already exists')
         if path.is_file():
             raise FileExistsError(path)
-        (path / "info.json").write_json({}, overwrite=False)
+        (path / "info.json").write_json(init_info or {}, overwrite=False)
         obj = cls(path, **kwargs)
         obj.keep_files = keep_files
         return obj
@@ -386,9 +388,6 @@ class BiglistBase(Seq[Element]):
     def __init__(
         self,
         path: PathType,
-        *,
-        require_exists: bool = _unspecified,
-        thread_pool_executor: Optional[ThreadPoolExecutor] = _unspecified,
     ):
         """
         Parameters
@@ -396,28 +395,6 @@ class BiglistBase(Seq[Element]):
         path
             Directory that contains files written by an instance
             of this class.
-
-        thread_pool_executor
-            Methods for reading and writing
-            use worker threads. If this parameter is specified, then
-            the provided thread pool will be used. This is useful
-            when a large number of Biglist instances are active
-            at the same time, because the provided thread pool
-            controls the max number of threads.
-
-            .. deprecated:: 0.7.4
-                The input is ignored. Will be removed in 0.7.6.
-
-        require_exists
-            When initializing an object of this class,
-            contents of the directory ``path`` should be already in place.
-            This is indicated by ``require_exists = True``. In the
-            classmethod :meth:`new` of a subclass, when creating an instance
-            before any file is written, ``require_exists=False`` is used.
-            User should usually leave this parameter at its default value.
-
-            .. deprecated:: 0.7.4
-                This input is ignored. Will be removed in 0.7.6.
         """
         self.path: Upath = resolve_path(path)
         """Root directory of the storage space for this object."""
@@ -428,19 +405,6 @@ class BiglistBase(Seq[Element]):
         # `self._read_buffer` contains the content of the file
         # indicated by `self._read_buffer_file_idx`.
 
-        if require_exists is not _unspecified:
-            warnings.warn(
-                "`require_exists` is deprecated and ignored; will be removed in 0.7.6",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-
-        if thread_pool_executor is not _unspecified:
-            warnings.warn(
-                "`thread_pool_executor` is deprecated and ignored; will be removed in 0.7.6",
-                DeprecationWarning,
-                stacklevel=2,
-            )
         self._thread_pool_ = None
 
         self.info: dict
@@ -614,141 +578,3 @@ class BiglistBase(Seq[Element]):
     @abstractmethod
     def files(self) -> FileSeq[FileReader[Element]]:
         raise NotImplementedError
-
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.7.6",
-        details="Use ``Slicer`` instead.",
-    )
-    def view(self):
-        """
-        By convention, a "slicing" method should return an object of the same class
-        as the original object. This is not possible for :class:`BiglistBase` (or its subclasses),
-        hence its :meth:`BiglistBase.__getitem__` does not support slicing. Slicing is supported
-        by the object returned from this method, e.g.,
-
-        ::
-
-            biglist = Biglist(...)
-            s = biglist.view()
-            print(s[2:8].collect())
-            print(s[3::2].collect())
-
-        During the use of this slicer, the underlying biglist should not change.
-        Multiple slicers may be used to view diff parts
-        of the biglist; they open and read files independent of other slicers.
-        """
-        return Slicer(self)
-
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.7.6",
-        details="Use ``files`` instead.",
-    )
-    def iter_files(self) -> Iterator[FileReader[Element]]:
-        """
-        Yield one data file at a time, in contrast to :meth:`__iter__`,
-        which yields one element at a time.
-        """
-        yield from self.files
-
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.7.6",
-        details="Use ``.files.new_concurrent_iter`` instead.",
-    )
-    def new_concurrent_file_iter(self) -> str:
-        return self.files.new_concurrent_iter()
-
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.7.6",
-        details="Use ``.files.concurrent_iter`` instead.",
-    )
-    def concurrent_iter_files(self, task_id: str) -> Iterator[FileReader[Element]]:
-        yield from self.files.concurrent_iter(task_id)
-
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.7.6",
-        details="Use ``.files.concurrent_iter_stat`` instead.",
-    )
-    def concurrent_file_iter_stat(self, task_id: str) -> dict:
-        return self.files.concurrent_iter_stat(task_id)
-
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.7.6",
-        details="Use ``.files.concurrent_iter_done`` instead.",
-    )
-    def concurrent_file_iter_done(self, task_id: str) -> bool:
-        return self.files.concurrent_iter_done(task_id)
-
-    @deprecated(
-        deprecated_in="0.7.1",
-        removed_in="0.7.6",
-        details="Use ``.files.__getitem__`` instead.",
-    )
-    def file_view(self, file: int):
-        return self.files[file]
-
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.7.6",
-        details="Use ``.files.__getitem__`` instead.",
-    )
-    def file_reader(self, file: int) -> FileReader[Element]:
-        return self.files[file]
-
-    @deprecated(
-        deprecated_in="0.7.1",
-        removed_in="0.7.6",
-        details="Use ``list(self.files)`` instead.",
-    )
-    def file_views(self):
-        return list(self.files)
-
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.7.6",
-        details="Use ``list(self.files)`` instead.",
-    )
-    def file_readers(self) -> list[FileReader[Element]]:
-        return list(self.files)
-
-    @property
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.7.6",
-        details="Use ``.num_data_files`` instead.",
-    )
-    def num_datafiles(self) -> int:
-        """Number of data files."""
-        return len(self.files)
-
-    @property
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.7.6",
-        details="Use ``self.files`` instead.",
-    )
-    def datafiles(self) -> list[str]:
-        """
-        Return the list of data file paths.
-        """
-        return [v[0] for v in self.files.data_files_info]
-
-    @property
-    @deprecated(
-        deprecated_in="0.7.4",
-        removed_in="0.7.6",
-        details="Use ``self.files.data_files_info`` instead.",
-    )
-    def datafiles_info(self) -> list[tuple[str, int, int]]:
-        """
-        Return a list of tuples for the data files.
-        Each tuple, representing one data file, consists of
-        "file path", "element count in the file",
-        and "cumulative element count in the data files so far".
-        """
-        return self.files.data_files_info

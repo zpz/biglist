@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.7.7] - in progress
+
+### Removed
+
+- Removed many deprecated methods.
+
+### Added
+
+- `BiglistBase.new` gets a new parameter `init_info`.
+
+
 ## [0.7.6] - 2022-03-01
 
 - Fix a bug introduced in 0.7.5 in `Biglist.__init__` backcompat fix. 

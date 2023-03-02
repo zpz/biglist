@@ -43,11 +43,4 @@ from ._parquet import (
 )
 from ._util import Chain, Seq, Slicer
 
-__version__ = "0.7.6"
-
-# Back compat; will be removed >=0.7.6
-FileView = FileReader
-BiglistFileView = BiglistFileReader
-ListView = Slicer
-ChainedList = Chain
-ParquetFileData = ParquetFileReader
+__version__ = "0.7.7b1"

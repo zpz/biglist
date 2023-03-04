@@ -982,7 +982,7 @@ class Multiplexer:
         batch_size: int = 10_000,
         storage_format: Optional[str] = None,
     ):
-        '''
+        """
         Parameters
         ----------
         data
@@ -998,7 +998,7 @@ class Multiplexer:
 
             Usually this class is used to distribute data to a cluster of machines, hence
             this path points to a location in a cloud storage that is supported by ``upathlib``.
-        '''
+        """
         path = resolve_path(path)
         bl = Biglist.new(
             path / "data", batch_size=batch_size, storage_format=storage_format
@@ -1040,17 +1040,17 @@ class Multiplexer:
 
     @property
     def data(self) -> Biglist:
-        '''
+        """
         Return the data elements stored in this Multiplexer.
-        '''
+        """
         if self._data is None:
             self._data = Biglist(self.path / "data")
         return self._data
 
     def __len__(self) -> int:
-        '''
+        """
         Return the number of data elements stored in this Multiplexer.
-        '''
+        """
         return len(self.data)
 
     def _mux_info_file(self, task_id: str) -> Upath:
@@ -1092,12 +1092,12 @@ class Multiplexer:
         return task_id
 
     def __iter__(self) -> Iterator[Element]:
-        '''
+        """
         Worker iterates over the data contained in the Multiplexer.
 
         In order to call this method, ``task_id`` must have been provided
         to :meth:`__init__`.
-        '''
+        """
         assert self._task_id
         if not self._worker_id:
             self._worker_id = "{} {}".format(
@@ -1148,8 +1148,8 @@ class Multiplexer:
         return ss["next"] == ss["total"]
 
     def destroy(self) -> None:
-        '''
+        """
         Delete all the data stored by this Multiplexer, hence reclaiming the storage space.
-        '''
+        """
         self.data.destroy()
         self.path.rmrf()

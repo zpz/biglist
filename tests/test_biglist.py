@@ -2,6 +2,7 @@ import asyncio
 import os
 import os.path
 import multiprocessing
+import queue
 import random
 import threading
 import time
@@ -12,7 +13,7 @@ from time import sleep
 
 import pytest
 from boltons import iterutils
-from biglist import Biglist, ParquetBiglist, Slicer
+from biglist import Biglist, ParquetBiglist, Slicer, Multiplexer
 
 
 def test_numbers():
@@ -144,10 +145,13 @@ def test_multi_appenders():
         raise
 
 
-def iter_file(path, task_id):
-    bl = Biglist(path)
+def iter_file(q_files):
     data = []
-    for batch in bl.files.concurrent_iter(task_id):
+    while True:
+        try:
+            batch = q_files.get_nowait()
+        except queue.Empty:
+            break
         data.extend(batch)
     return data
 
@@ -157,15 +161,16 @@ def test_file_readers():
     nn = 567
     bl.extend(range(nn))
     bl.flush()
-    task_id = bl.files.new_concurrent_iter()
-    print(bl.files.concurrent_iter_done(task_id))
+
+    q_files = multiprocessing.Manager().Queue()
+    for f in bl.files:
+        q_files.put(f)
 
     executor = ProcessPoolExecutor(6)
     tasks = [
-        executor.submit(iter_file, bl.path, task_id)
+        executor.submit(iter_file, q_files)
         for _ in range(6)
     ]
-    print(bl.files.concurrent_iter_done(task_id))
 
     data = []
     for t in as_completed(tasks):
@@ -177,7 +182,7 @@ def test_file_readers():
         bl.keep_files = True
         print('\npath:', bl.path, '\n')
         raise
-    assert bl.files.concurrent_iter_done(task_id)
+    assert q_files.empty()
 
 
 def square_sum(x):
@@ -286,10 +291,9 @@ async def test_async():
 
 
 def mult_worker(path, task_id, q):
-    mux = Biglist(path)
     worker_id = multiprocessing.current_process().name
     total = 0
-    for x in mux.multiplex_iter(task_id, worker_id):
+    for x in Multiplexer(path, task_id, worker_id):
         print(worker_id, 'got', x)
         total += x * x
         sleep(0.1)
@@ -297,12 +301,10 @@ def mult_worker(path, task_id, q):
     q.put(total)
 
     
-def test_multiplex():
+def test_multiplexer(tmp_path):
     N = 30
-    mux = Biglist.new(batch_size=4)
-    mux.extend(range(1, 1 + N))
-    mux.flush()
-    task_id = mux.new_multiplexer()
+    mux = Multiplexer.new(range(1, 1 + N), tmp_path, batch_size=4)
+    task_id = mux.start()
 
     ctx = multiprocessing.get_context('spawn')
     q = ctx.Queue()
@@ -320,9 +322,9 @@ def test_multiplex():
         total += q.get()
     assert total == sum(x*x for x in range(1, 1 + N))
 
-    s = mux.multiplex_stat(task_id)
+    s = mux.stat()
     print(s)
-    assert mux.multiplex_done(task_id)
+    assert mux.done()
 
 
 def test_parquet():

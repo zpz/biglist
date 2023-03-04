@@ -13,6 +13,7 @@ dependencies = [
     "deprecation",
     "mpservice >= 0.11.9",
     "pyarrow >= 10.0.0",
+    "typing-extensions",
 ]
 requires-python = ">=3.8"
 readme = "README.rst"
@@ -47,7 +48,7 @@ test = [
     "pytest-asyncio",
 ]
 
-# `parquet` option become empty in 0.7.5 because `arrow` became mandatory.
+# `parquet` option became empty in 0.7.5 because `arrow` became mandatory.
 
 
 [tool.ruff]

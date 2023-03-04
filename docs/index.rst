@@ -316,63 +316,15 @@ Sure enough, this verifies that the entire biglist is consumed by the processes 
 
 If the file loading is the bottleneck of the task, we can use threads in place of processes.
 
+Similarly, it is possible to read ``mylist`` from multiple machines if ``mylist`` is stored
+in the cloud. Since a FileReader object is pickle-able, it works just fine if we pickle it
+and send it to another machine, provided the file path that is contained in the FileReader object
+is in the cloud, hence accessible from the other machine.
+We need a mechanism to distribute these FileReader objects to machines.
+For that, read on.
 
-Reading from a Biglist in multiple machines
--------------------------------------------
-
-A similar need is to collectively read the data from multiple machines in a distributed settting.
-For this purpose, the data must be stored in the cloud.
-(Currently `upathlib <https://github.com/zpz/upathlib>`_ works with Google Cloud Storage, hence ``biglist`` works with GCS as well.)
-Because the ``biglist`` API is agnostic to the location of storage, we'll use the locally-stored
-dataset and multiprocessing to emulate the behavior of distributed reading.
-
-First, start a new "concurrent file iter" task on a :class:`FileSeq`:
-
->>> task_id = mylist.files.new_concurrent_iter()
->>> task_id  # doctest: +SKIP
-'2022-11-28T21:59:49.709094'
-
-This creates a directory in the data folder to save whatever "meta" or "control" info the algorithm needs.
-The returned ``task_id`` identifies this particular task.
-There could be multiple such tasks active at the same time independently, provided the dataset stays unchanged.
-Each task will have its own task ID.
-
-Next, create a worker function to run in another process:
-
->>> def worker(path, task_id):
-...     data = Biglist(path)
-...     total = 0
-...     for batch in data.files.concurrent_iter(task_id):
-...         total += sum(batch)
-...     return total
-
-Each ``batch`` above is a :class:`FileReader` object, which implements the :class:`Seq` protocol for data elements in the file.
-
-Back in the main process:
-
->>> mylist.path  # doctest: +SKIP
-LocalUpath('/tmp/19f88a17-3e78-430f-aad0-a35d39485f80')
->>>
->>> total = 0
->>> with ProcessPoolExecutor(5) as pool:  # doctest: +SKIP
-...     tasks = [pool.submit(worker, mylist.path, task_id) for _ in range(5)]  # doctest: +SKIP
-...     for t in tasks:  # doctest: +SKIP
-...         total += t.result()  # doctest: +SKIP
->>> total  # doctest: +SKIP
-50225253
-
-By ``FileSeq.concurrent_iter``, a worker
-makes a request to a "coordinator" for the next file to consume, one file at a time.
-The coordinator acts as a server to handle such requests from any worker.
-
-:meth:`~FileSeq.concurrent_iter` can be used on a local machine just fine,
-but it has some overhead incurred by "file locks" (the coordinator locks a book-keeping file when
-serving requests from workers).
-A better approach may diretly distribute the FileReader's to the worker processes or threads.
-
-
-Using Biglist as a "multiplexer"
---------------------------------
+Using Biglist to implement a "multiplexer"
+------------------------------------------
 
 The above distributes *files* to workers.
 This is efficient for processing large amounts of data.
@@ -384,28 +336,18 @@ Now, the grid is a "hyper-parameter" or "control parameter" that takes 1000 poss
 We want to distribute these 1000 values to the workers.
 How can we do that?
 
-Simple. Just put the 1000 values in a :class:`Biglist` with ``batch_size=1`` and use
-:meth:`~FileSeq.concurrent_iter`. Problem solved.
+Use :class:`~biglist.Multiplexer` provided by `biglist`.
 
-Except it's not as efficient as it can be.
-For one thing, creating the 1000 (tiny) files in the cloud takes a while.
-
-:class:`Biglist` provides :meth:`~Biglist.multiplex_iter` to do this job more efficiently.
-First, it uses a "regular" ``batch_size``, say 1000, so that it may need to create only one or a few
-data files.
-Second, compared to :meth:`~FileSeq.concurrent_iter`,
-each call to :meth:`~Biglist.multiplex_iter` makes one fewer trip to the cloud.
-
-Let's show it using local data and multiprocessing.
+Multiplexer is implemented using a Biglist.
+Let's show its usage using local data and multiprocessing.
 (For real work, we would use cloud storage and a cluster of machines.)
-First, create a :class:`Biglist` to hold the values to be distributed:
+First, create a :class:`Multiplexer` to hold the values to be distributed:
 
->>> hyper = Biglist.new(batch_size=1000)
->>> hyper.extend(range(20))
->>> hyper.flush()
->>>
->>> hyper.num_data_files
-1
+>>> from upathlib import LocalUpath
+>>> p = LocalUpath('/tmp/test/mux')
+>>> p.rmrf()
+0
+>>> hyper = Multiplexer.new(range(20), p)
 >>> len(hyper)
 20
 
@@ -414,14 +356,13 @@ Next, design an interesting worker function:
 >>> import multiprocessing, random, time
 >>>
 >>> def worker(path, task_id):
-...     hyper = Biglist(path)
-...     for x in hyper.multiplex_iter(task_id):
+...     for x in Multiplexer(path, task_id):
 ...         time.sleep(random.uniform(0.1, 0.2))  # doing a lot of things
 ...         print(x, 'done in', multiprocessing.current_process().name)
 
 Back in the main process,
 
->>> task_id = hyper.new_multiplexer()
+>>> task_id = hyper.start()
 >>> tasks = [multiprocessing.Process(target=worker, args=(hyper.path, task_id)) for _ in range(5)]
 >>> for t in tasks:
 ...     t.start()
@@ -449,6 +390,10 @@ Back in the main process,
 >>>
 >>> for t in tasks:
 ...     t.join()
+>>> hyper.done()
+True
+>>> hyper.destroy()
+>>>
 
 
 Writing to a Biglist in multiple workers
@@ -695,7 +640,7 @@ We can get info about the row-groups, or even retrieve a row-group as the unit o
 >>> f0.num_row_groups
 7
 >>> f0.metadata  # doctest: +ELLIPSIS
-<pyarrow._parquet.FileMetaData object at 0x7f...>
+<pyarrow._parquet.FileMetaData object at 0x7...>
   created_by: parquet-cpp-arrow version 11.0.0
   num_columns: 3
   num_rows: 61
@@ -703,12 +648,12 @@ We can get info about the row-groups, or even retrieve a row-group as the unit o
   format_version: 2.6
   serialized_size: 2375
 >>> f0.metadata.row_group(1)  # doctest: +ELLIPSIS
-<pyarrow._parquet.RowGroupMetaData object at 0x7f...>
+<pyarrow._parquet.RowGroupMetaData object at 0x7...>
   num_columns: 3
   num_rows: 10
   total_byte_size: 408
 >>> f0.metadata.row_group(0)  # doctest: +ELLIPSIS
-<pyarrow._parquet.RowGroupMetaData object at 0x7f...>
+<pyarrow._parquet.RowGroupMetaData object at 0x7...>
   num_columns: 3
   num_rows: 10
   total_byte_size: 408
@@ -886,9 +831,9 @@ and returns it. We may take it and go all the way down the `pyarrow`_ path:
 True
 >>> file = f1.file
 >>> file  # doctest: +ELLIPSIS
-<pyarrow.parquet.core.ParquetFile object at 0x7f...>
+<pyarrow.parquet.core.ParquetFile object at 0x7...>
 >>> f1._file
-<pyarrow.parquet.core.ParquetFile object at 0x7f...>
+<pyarrow.parquet.core.ParquetFile object at 0x7...>
 
 We have seen that :meth:`ParquetFileReader.row_group` and :meth:`ParquetFileReader.iter_batches` both
 return :class:`ParquetBatchData` objects. In contrast to :class:`ParquetFileReader`, which is "lazy" in terms of data loading,

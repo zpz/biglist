@@ -11,9 +11,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Removed many deprecated methods.
 
+### Deprecated
+
+- Deprecated "concurrent_iter" methods from `FileSeq` and "multiplexer" methods from `Biglist`.
+
 ### Added
 
 - `BiglistBase.new` gets a new parameter `init_info`.
+- New class `Multiplexer`.
 
 
 ## [0.7.6] - 2022-03-01

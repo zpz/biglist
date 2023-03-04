@@ -16,6 +16,7 @@ from typing import (
     TypeVar,
 )
 
+from deprecation import deprecated
 from mpservice.util import get_shared_thread_pool
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
@@ -178,12 +179,14 @@ class FileSeq(Seq[FileReaderType]):
         """
         raise NotImplementedError
 
+    @deprecated(deprecated_in='0.7.7', removed_in='0.7.9')
     def _concurrent_iter_info_file(self, task_id: str) -> Upath:
         """
         ``task_id``: returned by :meth:`new_concurrent_iter`.
         """
         return self.path / ".concurrent_file_iter" / task_id / "info.json"
 
+    @deprecated(deprecated_in='0.7.7', removed_in='0.7.9')
     def new_concurrent_iter(self) -> str:
         """
         Initiate a concurrent iteration of the data files by multiple workers.
@@ -201,6 +204,7 @@ class FileSeq(Seq[FileReaderType]):
         )
         return task_id
 
+    @deprecated(deprecated_in='0.7.7', removed_in='0.7.9')
     def concurrent_iter(self, task_id: str) -> Iterator[FileReaderType]:
         """
         Parameters
@@ -227,6 +231,7 @@ class FileSeq(Seq[FileReaderType]):
             logger.debug('yielding file #"%d"', n_files_claimed)
             yield self.__getitem__(n_files_claimed)
 
+    @deprecated(deprecated_in='0.7.7', removed_in='0.7.9')
     def concurrent_iter_stat(self, task_id: str) -> dict:
         """Return status info for an ongoing "concurrent file iter"
         identified by the task ID.
@@ -236,6 +241,7 @@ class FileSeq(Seq[FileReaderType]):
         info = self._concurrent_iter_info_file(task_id).read_json()
         return {**info, "n_files": self.__len__()}
 
+    @deprecated(deprecated_in='0.7.7', removed_in='0.7.9')
     def concurrent_iter_done(self, task_id: str) -> bool:
         """Return whether the "concurrent file iter" identified by ``task_id`` is finished."""
         zz = self.concurrent_iter_stat(task_id)

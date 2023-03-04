@@ -23,6 +23,8 @@ from typing import (
 from uuid import uuid4
 
 import pyarrow
+from deprecation import deprecated
+from typing_extensions import Self
 from upathlib.serializer import (
     ByteSerializer,
     OrjsonSerializer,
@@ -41,6 +43,7 @@ from ._base import (
     FileSeq,
     PathType,
     Upath,
+    resolve_path,
 )
 from ._util import lock_to_use
 
@@ -170,7 +173,7 @@ class Biglist(BiglistBase[Element]):
         storage_format: Optional[str] = None,
         init_info: dict = None,
         **kwargs,
-    ) -> Biglist:
+    ) -> Self:
         """
         Parameters
         ----------
@@ -608,12 +611,14 @@ class Biglist(BiglistBase[Element]):
             self.load_data_file,
         )
 
+    @deprecated(deprecated_in='0.7.7', removed_in='0.7.9', details='Use ``Multiplexer`` instead.')
     def _multiplex_info_file(self, task_id: str) -> Upath:
         """
         `task_id`: returned by :meth:`new_multiplexer`.
         """
         return self.path / ".multiplexer" / task_id / "info.json"
 
+    @deprecated(deprecated_in='0.7.7', removed_in='0.7.9', details='Use ``Multiplexer`` instead.')
     def new_multiplexer(self) -> str:
         """
         One worker, such as a "coordinator", calls this method once.
@@ -651,6 +656,7 @@ class Biglist(BiglistBase[Element]):
         )
         return task_id
 
+    @deprecated(deprecated_in='0.7.7', removed_in='0.7.9', details='Use ``Multiplexer`` instead.')
     def multiplex_iter(
         self, task_id: str, worker_id: Optional[str] = None
     ) -> Iterator[Element]:
@@ -693,12 +699,14 @@ class Biglist(BiglistBase[Element]):
                 )
             yield self[n]
 
+    @deprecated(deprecated_in='0.7.7', removed_in='0.7.9', details='Use ``Multiplexer`` instead.')
     def multiplex_stat(self, task_id: str) -> dict:
         """
         Return status info of an ongoing "multiplex iter".
         """
         return self._multiplex_info_file(task_id).read_json()
 
+    @deprecated(deprecated_in='0.7.7', removed_in='0.7.9', details='Use ``Multiplexer`` instead.')
     def multiplex_done(self, task_id: str) -> bool:
         """Return whether the "multiplex iter" identified by ``task_id`` is finished."""
         ss = self.multiplex_stat(task_id)
@@ -889,3 +897,143 @@ Biglist.register_storage_format("orjson", OrjsonSerializer)
 Biglist.register_storage_format("orjson-z", ZOrjsonSerializer)
 Biglist.register_storage_format("orjson-zstd", ZstdOrjsonSerializer)
 Biglist.register_storage_format("parquet", ParquetSerializer)
+
+
+
+class Multiplexer:
+    '''
+    The intended use case of Multiplexer: each data element represents considerable amounts
+    of work--it is a "hyper-parameter" or the like; the class facilitates
+    splitting the work represented by different values of this "hyper-parameter"
+    between multiple workers.
+    '''
+    @classmethod
+    def new(
+        cls,
+        data: Iterable[Any],
+        path: Optional[PathType],
+        *,
+        batch_size: int = 10_000,
+        storage_format: Optional[str] = None,
+    ) -> Self:
+        path = resolve_path(path)
+        bl = Biglist.new(path / 'data', batch_size=batch_size, storage_format=storage_format)
+        bl.extend(data)
+        bl.flush()
+        assert len(bl) > 0
+        return cls(path)
+
+    def __init__(self, path: PathType, task_id: Optional[str] = None, worker_id: Optional[str] = None):
+        '''
+        Parameters
+        ----------
+        task_id
+            A string that was returned by :meth:`start` on another instance
+            of this class with the same ``path`` parameter.
+        worker_id
+            A string representing a particular worker.
+            This is meaningful only if ``task_id`` is provided.
+            If ``task_id`` is provided but ``worker_id`` is missing,
+            a default is constructed based on thread name and process name.
+        '''
+        if task_id is None:
+            assert worker_id is None
+        self.path = path
+        self._task_id = task_id
+        self._worker_id = worker_id
+        self._data = None
+
+    @property
+    def data(self) -> Biglist:
+        if self._data is None:
+            self._data = Biglist(self.path / 'data')
+        return self._data
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def _mux_info_file(self, task_id: str) -> Upath:
+        """
+        `task_id`: returned by :meth:`start`.
+        """
+        return self.path / ".mux" / task_id / "info.json"
+
+    def start(self) -> str:
+        """
+        One worker, such as a "coordinator", calls this method once.
+        After that, one or more workers independently
+        iterate over a :class:`Multiplexer` object with the task-ID returned by
+        this method. The data that was provided to :meth:`new` is
+        split between the workers in that each data element will be obtained
+        by exactly one worker.
+        """
+        assert not self._task_id
+        assert not self._worker_id
+        task_id = datetime.utcnow().isoformat()
+        self._mux_info_file(task_id).write_json(
+            {
+                "total": len(self.data),
+                "next": 0,
+                "time": datetime.utcnow().isoformat(),
+            },
+            overwrite=False,
+        )
+        self._task_id = task_id
+        # Usually the object that called ``start`` will not be used by a worker
+        # to iterate over the data. The task-id is stored on the object
+        # mainly to enable this "controller" to call ``stat`` later.
+        return task_id
+
+    def __iter__(
+        self
+    ) -> Iterator[Element]:
+        assert self._task_id
+        if not self._worker_id:
+            self._worker_id = "{} {}".format(
+                multiprocessing.current_process().name,
+                threading.current_thread().name,
+            )
+        worker_id = self._worker_id
+        finfo = self._mux_info_file(self._task_id)
+        while True:
+            with lock_to_use(finfo) as ff:
+                # In concurrent use cases, I've observed
+                # `upathlib.LockAcquireError` raised here.
+                # User may want to do retry here.
+                ss = ff.read_json()
+                # In concurrent use cases, I've observed
+                # `FileNotFoundError` here. User may want
+                # to do retry here.
+
+                n = ss["next"]
+                if n == ss["total"]:
+                    return
+                ff.write_json(
+                    {
+                        "next": n + 1,
+                        "worker_id": worker_id,
+                        "time": datetime.utcnow().isoformat(),
+                        "total": ss["total"],
+                    },
+                    overwrite=True,
+                )
+            yield self.data[n]
+
+    def stat(self) -> dict:
+        """
+        Return status info of an ongoing iteration.
+        """
+        assert self._task_id
+        return self._mux_info_file(self._task_id).read_json()
+
+    def done(self) -> bool:
+        """
+        Return whether the iteration identified by ``task_id`` that was
+        provided during instantiation is finished.
+        """
+        ss = self.stat()
+        return ss["next"] == ss["total"]
+
+    def destroy(self) -> None:
+        self.data.destroy()
+        self.path.rmrf()

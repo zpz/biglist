@@ -139,6 +139,11 @@ class Biglist(BiglistBase[Element]):
         transformations for the user, it can customize :meth:`dump_data_file`
         and :meth:`load_data_file`.
 
+        Parameters
+        ----------
+        **kwargs
+            Additional keyword arguments to the serializer.
+
         See Also
         --------
         :meth:`load_data_file`
@@ -154,6 +159,11 @@ class Biglist(BiglistBase[Element]):
 
         This function is used as the argument ``loader`` to :meth:`BiglistFileReader.__init__`.
         The value it returns is contained in :class:`FileReader` for subsequent use.
+
+        Parameters
+        ----------
+        **kwargs
+            Additional keyword arguments to the deserializer.
 
         See Also
         --------
@@ -270,7 +280,19 @@ class Biglist(BiglistBase[Element]):
         deserialize_kwargs: Optional[dict] = None,
         **kwargs,
     ):
-        """Please see doc of the base class."""
+        """
+        Please see the base class for additional documentation.
+
+        Parameters
+        ----------
+        serialize_kwargs
+            Additional keyword arguments to the serialization function.
+        deserialize_kwargs
+            Additional keyword arguments to the deserialization function.
+
+            ``serialize_kwargs`` and ``deserialize_kwargs`` are rarely needed.
+            One use case is ``schema`` when storage format is "parquet".
+        """
         super().__init__(*args, **kwargs)
         self.keep_files: bool = True
         """Indicates whether the persisted files should be kept or deleted when the object is garbage-collected."""
@@ -936,10 +958,19 @@ Biglist.register_storage_format("parquet", ParquetSerializer)
 
 class Multiplexer:
     """
-    The intended use case: each data element represents considerable amounts
-    of work--it is a "hyper-parameter" or the like; the class facilitates
-    splitting the work represented by different values of this "hyper-parameter"
-    between multiple workers.
+    Multiplexer is used to distribute data elements to multiple "workers" so that
+    each element is obtained by exactly one worker.
+
+    Typically, the data element is small in size but requires significant time to process
+    by the worker. The data elements are "hyper parameters".
+
+    The usage consists of two main parts:
+
+    1. In "controller" code, call :meth:`start` to start a new "session".
+        Different sessions (at the same time or otherwise) are independent consumers of the data.
+    2. In "worker" code, use the session ID that was returned by :meth:`start` to instantiate
+        a Multiplexer and iterate over it. In so doing, multiple workers will obtain the data elements
+        collectively, i.e., each element is obtained by exactly one worker.
     """
 
     @classmethod
@@ -950,7 +981,24 @@ class Multiplexer:
         *,
         batch_size: int = 10_000,
         storage_format: Optional[str] = None,
-    ) -> Self:
+    ):
+        '''
+        Parameters
+        ----------
+        data
+            The data elements that need to be distributed. The elements should be pickle-able.
+        path
+            A non-existent directory where the data and any supporting info will be saved.
+
+            If ``path`` is in the cloud, then the workers can be on multiple machines, and in multiple threads
+            or processes on each machine.
+            If ``path`` is on the local disk, then the workers are in threads or processes on the same machine.
+
+            However, there are no strong reasons to use this facility on a local machine.
+
+            Usually this class is used to distribute data to a cluster of machines, hence
+            this path points to a location in a cloud storage that is supported by ``upathlib``.
+        '''
         path = resolve_path(path)
         bl = Biglist.new(
             path / "data", batch_size=batch_size, storage_format=storage_format
@@ -967,8 +1015,13 @@ class Multiplexer:
         worker_id: Optional[str] = None,
     ):
         """
+        Create a Multiplexer object and use it to distribute the data elements that have been
+        stored by :meth:`new`.
+
         Parameters
         ----------
+        path
+            The directory where data is stored. This is the ``path`` that was passed to :meth:`new`.
         task_id
             A string that was returned by :meth:`start` on another instance
             of this class with the same ``path`` parameter.
@@ -987,11 +1040,17 @@ class Multiplexer:
 
     @property
     def data(self) -> Biglist:
+        '''
+        Return the data elements stored in this Multiplexer.
+        '''
         if self._data is None:
             self._data = Biglist(self.path / "data")
         return self._data
 
     def __len__(self) -> int:
+        '''
+        Return the number of data elements stored in this Multiplexer.
+        '''
         return len(self.data)
 
     def _mux_info_file(self, task_id: str) -> Upath:
@@ -1008,6 +1067,12 @@ class Multiplexer:
         this method. The data that was provided to :meth:`new` is
         split between the workers in that each data element will be obtained
         by exactly one worker.
+
+        In order to call this method, the object should have been initiated without
+        ``task_id`` or ``worker_id``.
+
+        The returned value is the argument ``task_id`` to be provided to :meth:`__init__`
+        in worker code.
         """
         assert not self._task_id
         assert not self._worker_id
@@ -1027,6 +1092,12 @@ class Multiplexer:
         return task_id
 
     def __iter__(self) -> Iterator[Element]:
+        '''
+        Worker iterates over the data contained in the Multiplexer.
+
+        In order to call this method, ``task_id`` must have been provided
+        to :meth:`__init__`.
+        '''
         assert self._task_id
         if not self._worker_id:
             self._worker_id = "{} {}".format(
@@ -1068,12 +1139,17 @@ class Multiplexer:
 
     def done(self) -> bool:
         """
-        Return whether the iteration identified by ``task_id`` that was
-        provided during instantiation is finished.
+        Return whether the data iteration is finished.
+
+        This is often called in the "controller" code on the object
+        that has had its :meth:`start` called.
         """
         ss = self.stat()
         return ss["next"] == ss["total"]
 
     def destroy(self) -> None:
+        '''
+        Delete all the data stored by this Multiplexer, hence reclaiming the storage space.
+        '''
         self.data.destroy()
         self.path.rmrf()

@@ -967,7 +967,6 @@ API reference
 
 
 .. autoclass:: BiglistBase
-   :private-members: _get_thread_pool
 
 
 .. autoclass:: biglist.Biglist
@@ -977,6 +976,9 @@ API reference
 
 
 .. autoclass:: biglist.BiglistFileSeq
+
+
+.. autoclass:: biglist.Multiplexer
 
 
 .. autoclass:: biglist.ParquetBiglist

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import atexit
 import concurrent.futures
+import functools
 import io
 import itertools
 import json
@@ -123,7 +124,7 @@ class Biglist(BiglistBase[Element]):
         cls.registered_storage_formats[name] = serializer
 
     @classmethod
-    def dump_data_file(cls, path: Upath, data: list[Element]) -> None:
+    def dump_data_file(cls, path: Upath, data: list[Element], **kwargs) -> None:
         """
         This method persists a batch of data elements, always a list,
         to disk or cloud storage.
@@ -145,10 +146,10 @@ class Biglist(BiglistBase[Element]):
         serializer = cls.registered_storage_formats[
             path.suffix.lstrip(".").replace("_", "-")
         ]
-        path.write_bytes(serializer.serialize(data))
+        path.write_bytes(serializer.serialize(data, **kwargs))
 
     @classmethod
-    def load_data_file(cls, path: Upath) -> list[Element]:
+    def load_data_file(cls, path: Upath, **kwargs) -> list[Element]:
         """Load the data file given by ``path``.
 
         This function is used as the argument ``loader`` to :meth:`BiglistFileReader.__init__`.
@@ -162,7 +163,7 @@ class Biglist(BiglistBase[Element]):
             path.suffix.lstrip(".").replace("_", "-")
         ]
         data = path.read_bytes()
-        return deserializer.deserialize(data)
+        return deserializer.deserialize(data, **kwargs)
 
     @classmethod
     def new(
@@ -262,7 +263,7 @@ class Biglist(BiglistBase[Element]):
         obj = super().new(path, init_info=init_info, **kwargs)  # type: ignore
         return obj
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, serialize_kwargs: Optional[dict] = None, deserialize_kwargs: Optional[dict] = None, **kwargs):
         """Please see doc of the base class."""
         super().__init__(*args, **kwargs)
         self.keep_files: bool = True
@@ -272,6 +273,8 @@ class Biglist(BiglistBase[Element]):
         self._append_files_buffer: list = []
         self._file_dumper = None
         self._n_write_threads = 3
+        self._serialize_kwargs = serialize_kwargs or {}
+        self._deserialize_kwargs = deserialize_kwargs or {}
 
         _biglist_objs.add(self)
         self._flushed = True
@@ -498,9 +501,9 @@ class Biglist(BiglistBase[Element]):
             self._file_dumper = Dumper(self._get_thread_pool(), self._n_write_threads)
         if wait:
             self._file_dumper.wait()
-            self.dump_data_file(data_file, buffer)
+            self.dump_data_file(data_file, buffer, **self._serialize_kwargs)
         else:
-            self._file_dumper.dump_file(self.dump_data_file, data_file, buffer)
+            self._file_dumper.dump_file(self.dump_data_file, data_file, buffer, **self._serialize_kwargs)
             # This call will return quickly if the dumper has queue
             # capacity for the file. The file meta data below
             # will be updated as if the saving has completed, although
@@ -608,7 +611,7 @@ class Biglist(BiglistBase[Element]):
                 (str(self.data_path / row[0]), *row[1:])
                 for row in self.info["data_files_info"]
             ],
-            self.load_data_file,
+            functools.partial(self.load_data_file, **self._deserialize_kwargs)
         )
 
     @deprecated(
@@ -758,7 +761,7 @@ class Dumper:
             raise t.exception()
 
     def dump_file(
-        self, file_dumper: Callable[[Upath, list], None], data_file: Upath, data: list
+        self, file_dumper: Callable[[Upath, list], None], data_file: Upath, data: list, **kwargs
     ):
         """
         Parameters
@@ -781,7 +784,7 @@ class Dumper:
         # further actions of the `Biglist` and waiting for one file-dumping
         # to finish.
 
-        task = self._executor.submit(file_dumper, data_file, data)
+        task = self._executor.submit(file_dumper, data_file, data, **kwargs)
         self._tasks.add(task)
         task.add_done_callback(self._callback)
         # If task is already finished when this callback is being added,

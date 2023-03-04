@@ -263,7 +263,13 @@ class Biglist(BiglistBase[Element]):
         obj = super().new(path, init_info=init_info, **kwargs)  # type: ignore
         return obj
 
-    def __init__(self, *args, serialize_kwargs: Optional[dict] = None, deserialize_kwargs: Optional[dict] = None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        serialize_kwargs: Optional[dict] = None,
+        deserialize_kwargs: Optional[dict] = None,
+        **kwargs,
+    ):
         """Please see doc of the base class."""
         super().__init__(*args, **kwargs)
         self.keep_files: bool = True
@@ -503,7 +509,9 @@ class Biglist(BiglistBase[Element]):
             self._file_dumper.wait()
             self.dump_data_file(data_file, buffer, **self._serialize_kwargs)
         else:
-            self._file_dumper.dump_file(self.dump_data_file, data_file, buffer, **self._serialize_kwargs)
+            self._file_dumper.dump_file(
+                self.dump_data_file, data_file, buffer, **self._serialize_kwargs
+            )
             # This call will return quickly if the dumper has queue
             # capacity for the file. The file meta data below
             # will be updated as if the saving has completed, although
@@ -611,7 +619,7 @@ class Biglist(BiglistBase[Element]):
                 (str(self.data_path / row[0]), *row[1:])
                 for row in self.info["data_files_info"]
             ],
-            functools.partial(self.load_data_file, **self._deserialize_kwargs)
+            functools.partial(self.load_data_file, **self._deserialize_kwargs),
         )
 
     @deprecated(
@@ -761,7 +769,11 @@ class Dumper:
             raise t.exception()
 
     def dump_file(
-        self, file_dumper: Callable[[Upath, list], None], data_file: Upath, data: list, **kwargs
+        self,
+        file_dumper: Callable[[Upath, list], None],
+        data_file: Upath,
+        data: list,
+        **kwargs,
     ):
         """
         Parameters

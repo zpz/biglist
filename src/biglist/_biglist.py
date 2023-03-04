@@ -611,14 +611,22 @@ class Biglist(BiglistBase[Element]):
             self.load_data_file,
         )
 
-    @deprecated(deprecated_in='0.7.7', removed_in='0.7.9', details='Use ``Multiplexer`` instead.')
+    @deprecated(
+        deprecated_in="0.7.7",
+        removed_in="0.7.9",
+        details="Use ``Multiplexer`` instead.",
+    )
     def _multiplex_info_file(self, task_id: str) -> Upath:
         """
         `task_id`: returned by :meth:`new_multiplexer`.
         """
         return self.path / ".multiplexer" / task_id / "info.json"
 
-    @deprecated(deprecated_in='0.7.7', removed_in='0.7.9', details='Use ``Multiplexer`` instead.')
+    @deprecated(
+        deprecated_in="0.7.7",
+        removed_in="0.7.9",
+        details="Use ``Multiplexer`` instead.",
+    )
     def new_multiplexer(self) -> str:
         """
         One worker, such as a "coordinator", calls this method once.
@@ -656,7 +664,11 @@ class Biglist(BiglistBase[Element]):
         )
         return task_id
 
-    @deprecated(deprecated_in='0.7.7', removed_in='0.7.9', details='Use ``Multiplexer`` instead.')
+    @deprecated(
+        deprecated_in="0.7.7",
+        removed_in="0.7.9",
+        details="Use ``Multiplexer`` instead.",
+    )
     def multiplex_iter(
         self, task_id: str, worker_id: Optional[str] = None
     ) -> Iterator[Element]:
@@ -699,14 +711,22 @@ class Biglist(BiglistBase[Element]):
                 )
             yield self[n]
 
-    @deprecated(deprecated_in='0.7.7', removed_in='0.7.9', details='Use ``Multiplexer`` instead.')
+    @deprecated(
+        deprecated_in="0.7.7",
+        removed_in="0.7.9",
+        details="Use ``Multiplexer`` instead.",
+    )
     def multiplex_stat(self, task_id: str) -> dict:
         """
         Return status info of an ongoing "multiplex iter".
         """
         return self._multiplex_info_file(task_id).read_json()
 
-    @deprecated(deprecated_in='0.7.7', removed_in='0.7.9', details='Use ``Multiplexer`` instead.')
+    @deprecated(
+        deprecated_in="0.7.7",
+        removed_in="0.7.9",
+        details="Use ``Multiplexer`` instead.",
+    )
     def multiplex_done(self, task_id: str) -> bool:
         """Return whether the "multiplex iter" identified by ``task_id`` is finished."""
         ss = self.multiplex_stat(task_id)
@@ -899,14 +919,14 @@ Biglist.register_storage_format("orjson-zstd", ZstdOrjsonSerializer)
 Biglist.register_storage_format("parquet", ParquetSerializer)
 
 
-
 class Multiplexer:
-    '''
+    """
     The intended use case of Multiplexer: each data element represents considerable amounts
     of work--it is a "hyper-parameter" or the like; the class facilitates
     splitting the work represented by different values of this "hyper-parameter"
     between multiple workers.
-    '''
+    """
+
     @classmethod
     def new(
         cls,
@@ -917,14 +937,21 @@ class Multiplexer:
         storage_format: Optional[str] = None,
     ) -> Self:
         path = resolve_path(path)
-        bl = Biglist.new(path / 'data', batch_size=batch_size, storage_format=storage_format)
+        bl = Biglist.new(
+            path / "data", batch_size=batch_size, storage_format=storage_format
+        )
         bl.extend(data)
         bl.flush()
         assert len(bl) > 0
         return cls(path)
 
-    def __init__(self, path: PathType, task_id: Optional[str] = None, worker_id: Optional[str] = None):
-        '''
+    def __init__(
+        self,
+        path: PathType,
+        task_id: Optional[str] = None,
+        worker_id: Optional[str] = None,
+    ):
+        """
         Parameters
         ----------
         task_id
@@ -935,7 +962,7 @@ class Multiplexer:
             This is meaningful only if ``task_id`` is provided.
             If ``task_id`` is provided but ``worker_id`` is missing,
             a default is constructed based on thread name and process name.
-        '''
+        """
         if task_id is None:
             assert worker_id is None
         self.path = path
@@ -946,7 +973,7 @@ class Multiplexer:
     @property
     def data(self) -> Biglist:
         if self._data is None:
-            self._data = Biglist(self.path / 'data')
+            self._data = Biglist(self.path / "data")
         return self._data
 
     def __len__(self) -> int:
@@ -984,9 +1011,7 @@ class Multiplexer:
         # mainly to enable this "controller" to call ``stat`` later.
         return task_id
 
-    def __iter__(
-        self
-    ) -> Iterator[Element]:
+    def __iter__(self) -> Iterator[Element]:
         assert self._task_id
         if not self._worker_id:
             self._worker_id = "{} {}".format(

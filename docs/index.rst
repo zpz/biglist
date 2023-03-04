@@ -336,7 +336,7 @@ Now, the grid is a "hyper-parameter" or "control parameter" that takes 1000 poss
 We want to distribute these 1000 values to the workers.
 How can we do that?
 
-Use :class:`~biglist.Multiplexer` provided by `biglist`.
+Use :class:`Multiplexer` provided by `biglist`.
 
 Multiplexer is implemented using a Biglist.
 Let's show its usage using local data and multiprocessing.

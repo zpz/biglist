@@ -936,7 +936,7 @@ Biglist.register_storage_format("parquet", ParquetSerializer)
 
 class Multiplexer:
     """
-    The intended use case of Multiplexer: each data element represents considerable amounts
+    The intended use case: each data element represents considerable amounts
     of work--it is a "hyper-parameter" or the like; the class facilitates
     splitting the work represented by different values of this "hyper-parameter"
     between multiple workers.

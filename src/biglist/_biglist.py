@@ -90,7 +90,6 @@ class Biglist(BiglistBase[Element]):
         cls,
         name: str,
         serializer: type[ByteSerializer],
-        overwrite: bool = False,
     ) -> None:
         """
         Register a new serializer to handle data file dumping and loading.
@@ -111,15 +110,11 @@ class Biglist(BiglistBase[Element]):
 
         serializer
             A subclass of `upathlib.serializer.ByteSerializer <https://github.com/zpz/upathlib/blob/main/src/upathlib/serializer.py>`_.
-
-        overwrite
-            Whether to overwrite an existent registrant by the same name.
         """
         good = string.ascii_letters + string.digits + "-_"
         assert all(n in good for n in name)
         if name.replace("_", "-") in cls.registered_storage_formats:
-            if not overwrite:
-                raise ValueError(f"serializer '{name}' is already registered")
+            raise ValueError(f"serializer '{name}' is already registered")
         name = name.replace("_", "-")
         cls.registered_storage_formats[name] = serializer
 
@@ -182,6 +177,8 @@ class Biglist(BiglistBase[Element]):
         *,
         batch_size: Optional[int] = None,
         storage_format: Optional[str] = None,
+        serialize_kwargs: Optional[dict] = None,
+        deserialize_kwargs: Optional[dict] = None,
         init_info: dict = None,
         **kwargs,
     ) -> Self:
@@ -231,11 +228,30 @@ class Biglist(BiglistBase[Element]):
 
             A rule of thumb: it is recommended to keep the persisted files between 32-128MB
             in size. (Note: no benchmark was performed to back this recommendation.)
-
         storage_format
             This should be a key in :data:`registered_storage_formats`.
             If not specified, :data:`DEFAULT_STORAGE_FORMAT` is used.
+        serialize_kwargs
+            Additional keyword arguments to the serialization function.
+        deserialize_kwargs
+            Additional keyword arguments to the deserialization function.
 
+            ``serialize_kwargs`` and ``deserialize_kwargs`` are rarely needed.
+            One use case is ``schema`` when storage format is "parquet".
+
+            ``serialize_kwargs`` and ``deserialize_kwargs``, if not ``None``,
+            will be saved in the "info.json" file, hence they must be JSON
+            serializable, meaning they need to be the few simple native Python
+            types that are supported by the standard ``json`` library. If this is
+            not possible, there are two solutions:
+
+            1. Define a subclass of ``Biglist``. The subclass can customize the ``classmethod``\\s
+               :meth:`dump_data_file` and :meth:`load_data_file` to handle extra serialization options
+               internally.
+            2. Define a custom serialization class and register it with :meth:`register_storage_format`.
+            
+            can handle these parameters
+               in its own way, for example, it can fix the objects   
         **kwargs
             additional arguments are passed on to :meth:`BiglistBase.new`.
 
@@ -269,6 +285,10 @@ class Biglist(BiglistBase[Element]):
             "batch_size": batch_size,
             "data_files_info": [],
         }
+        if serialize_kwargs:
+            init_info['serialize_kwargs'] = serialize_kwargs
+        if deserialize_kwargs:
+            init_info['deserialize_kwargs'] = deserialize_kwargs
 
         obj = super().new(path, init_info=init_info, **kwargs)  # type: ignore
         return obj
@@ -276,22 +296,10 @@ class Biglist(BiglistBase[Element]):
     def __init__(
         self,
         *args,
-        serialize_kwargs: Optional[dict] = None,
-        deserialize_kwargs: Optional[dict] = None,
         **kwargs,
     ):
         """
         Please see the base class for additional documentation.
-
-        Parameters
-        ----------
-        serialize_kwargs
-            Additional keyword arguments to the serialization function.
-        deserialize_kwargs
-            Additional keyword arguments to the deserialization function.
-
-            ``serialize_kwargs`` and ``deserialize_kwargs`` are rarely needed.
-            One use case is ``schema`` when storage format is "parquet".
         """
         super().__init__(*args, **kwargs)
         self.keep_files: bool = True
@@ -301,8 +309,8 @@ class Biglist(BiglistBase[Element]):
         self._append_files_buffer: list = []
         self._file_dumper = None
         self._n_write_threads = 3
-        self._serialize_kwargs = serialize_kwargs or {}
-        self._deserialize_kwargs = deserialize_kwargs or {}
+        self._serialize_kwargs = self.info.get('serialize_kwargs', {})
+        self._deserialize_kwargs = self.info.get('deserialize_kwargs', {})
 
         _biglist_objs.add(self)
         self._flushed = True
@@ -635,13 +643,17 @@ class Biglist(BiglistBase[Element]):
             warnings.warn(
                 f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
             )
+        if self._deserialize_kwargs:
+            fun = functools.partial(self.load_data_file, **self._deserialize_kwargs)
+        else:
+            fun = self.load_data_file
         return BiglistFileSeq(
             self.path,
             [
                 (str(self.data_path / row[0]), *row[1:])
                 for row in self.info["data_files_info"]
             ],
-            functools.partial(self.load_data_file, **self._deserialize_kwargs),
+            fun,
         )
 
     @deprecated(

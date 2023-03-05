@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Removed
 
 - Removed many deprecated methods.
+- `Biglist.register_storage_format` lost parameter `overwrite`, that is, it no longer allows changing
+  the definition of a "built-in" format.
 
 ### Deprecated
 
@@ -18,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - `BiglistBase.new` gets a new parameter `init_info`.
-- `Biglist.__init__` accepts extra parameters for (de)serialization.
+- `Biglist.new` accepts extra parameters for (de)serialization.
 - New class `Multiplexer`.
 
 

@@ -323,7 +323,6 @@ class BiglistBase(Seq[Element]):
         init_info
             Initial info that should be written into the *info* file before ``__init__`` is called.
             This is in addition to whatever this method internally decides to write.
-            User rarely needs to use this parameter.
 
             The info file `info.json` is written before ``__init__`` is called.
             In ``__init__``, this file is read into ``self.info``.
@@ -332,9 +331,11 @@ class BiglistBase(Seq[Element]):
             needs.
 
             If the info is not needed in ``__init__``, then user can always add it
-            to ``self.info`` after the object has been instantiated, hence that is not
-            the intended use of this parameter.
+            to ``self.info`` after the object has been instantiated, hence saving general info
+            `info.json` is not the intended use of this parameter.
 
+            User rarely needs to use this parameter. It is mainly used by the internals
+            of the method ``new`` of subclasses.
         **kwargs
             additional arguments are passed on to :meth:`__init__`.
 

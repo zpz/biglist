@@ -49,30 +49,11 @@ To install ``biglist`` and use local disk for persistence, simply do
 
    pip install biglist
 
-``biglist`` has a few optional components:
-
-   ``gcs``
-      for using Google Cloud Storage for persistence
-   ``parquet``
-      for reading data files saved in the Apache Parquet format
-
-So, as appropriate for your need, you may do 
+If you need to use Google Cloud Storage for persistence, do
 
 ::
 
    pip install "biglist[gcs]"
-
-or
-
-::
-
-   pip install "biglist[parquet]"
-
-or even
-
-::
-
-   pip install "biglist[gcs,parquet]"
 
 
 Creating a Biglist
@@ -905,6 +886,40 @@ as demonstrated above, are ready for use:
     162
   ]
 ]
+
+Writing a standalone Parquet file
+=================================
+
+The function :func:`write_parquet_file` is provided to write data to a single Parquet file.
+
+>>> from biglist import write_parquet_file, read_parquet_file
+>>> import random
+>>> from upathlib import LocalUpath
+>>> N = 10000
+>>> path = LocalUpath('/tmp/a/b/c/d')
+>>> path.rmrf()
+1
+>>> write_parquet_file(path / 'data.parquet', [[random.randint(0, 10000) for _ in range(N)], [str(uuid4()) for _ in range(N)]], names=['key', 'value'])
+>>> f = read_parquet_file(path / 'data.parquet')
+>>> f
+<ParquetFileReader for '/tmp/a/b/c/d/data.parquet'>
+>>> len(f)
+10000
+>>> f.metadata
+<pyarrow._parquet.FileMetaData object at 0x7f92877f5900>
+  created_by: parquet-cpp-arrow version 11.0.0
+  num_columns: 2
+  num_rows: 10000
+  num_row_groups: 1
+  format_version: 2.6
+  serialized_size: 609
+>>> f.metadata.schema
+<pyarrow._parquet.ParquetSchema object at 0x7f9287389b80>
+required group field_id=-1 schema {
+  optional int64 field_id=-1 key;
+  optional binary field_id=-1 value (String);
+}
+>>>
 
 
 Other utilities

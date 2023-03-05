@@ -249,9 +249,9 @@ class Biglist(BiglistBase[Element]):
                :meth:`dump_data_file` and :meth:`load_data_file` to handle extra serialization options
                internally.
             2. Define a custom serialization class and register it with :meth:`register_storage_format`.
-            
+
             can handle these parameters
-               in its own way, for example, it can fix the objects   
+               in its own way, for example, it can fix the objects
         **kwargs
             additional arguments are passed on to :meth:`BiglistBase.new`.
 
@@ -286,9 +286,9 @@ class Biglist(BiglistBase[Element]):
             "data_files_info": [],
         }
         if serialize_kwargs:
-            init_info['serialize_kwargs'] = serialize_kwargs
+            init_info["serialize_kwargs"] = serialize_kwargs
         if deserialize_kwargs:
-            init_info['deserialize_kwargs'] = deserialize_kwargs
+            init_info["deserialize_kwargs"] = deserialize_kwargs
 
         obj = super().new(path, init_info=init_info, **kwargs)  # type: ignore
         return obj
@@ -309,8 +309,8 @@ class Biglist(BiglistBase[Element]):
         self._append_files_buffer: list = []
         self._file_dumper = None
         self._n_write_threads = 3
-        self._serialize_kwargs = self.info.get('serialize_kwargs', {})
-        self._deserialize_kwargs = self.info.get('deserialize_kwargs', {})
+        self._serialize_kwargs = self.info.get("serialize_kwargs", {})
+        self._deserialize_kwargs = self.info.get("deserialize_kwargs", {})
 
         _biglist_objs.add(self)
         self._flushed = True

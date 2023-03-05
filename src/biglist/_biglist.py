@@ -104,7 +104,7 @@ class Biglist(BiglistBase[Element]):
 
             After registering the new serializer with name "xyz", one can use
             ``storage_format='xyz'`` in calls to ``new``.
-            When reading the object back from persistence.
+            When reading the object back from persistence,
             make sure this registry is also in place so that the correct
             deserializer can be found.
 
@@ -249,9 +249,6 @@ class Biglist(BiglistBase[Element]):
                :meth:`dump_data_file` and :meth:`load_data_file` to handle extra serialization options
                internally.
             2. Define a custom serialization class and register it with :meth:`register_storage_format`.
-
-            can handle these parameters
-               in its own way, for example, it can fix the objects
         **kwargs
             additional arguments are passed on to :meth:`BiglistBase.new`.
 

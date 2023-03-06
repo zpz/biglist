@@ -243,7 +243,7 @@ class Biglist(BiglistBase[Element]):
             ``serialize_kwargs`` and ``deserialize_kwargs``, if not ``None``,
             will be saved in the "info.json" file, hence they must be JSON
             serializable, meaning they need to be the few simple native Python
-            types that are supported by the standard ``json`` library. 
+            types that are supported by the standard ``json`` library.
             (However, the few formats "natively" supported by Biglist may get special treatment
             to relax this requirement.)
             If this is not possible, there are two solutions:
@@ -286,9 +286,6 @@ class Biglist(BiglistBase[Element]):
             "data_files_info": [],
         }
         if serialize_kwargs:
-            # if init_info['storage_format'] == 'parquet' and 'schema_spec' in serialize_kwargs:
-            #     # Verify correctness
-            #     _ = make_parquet_schema(serialize_kwargs['schema_spec'])
             init_info["serialize_kwargs"] = serialize_kwargs
         if deserialize_kwargs:
             init_info["deserialize_kwargs"] = deserialize_kwargs
@@ -314,11 +311,13 @@ class Biglist(BiglistBase[Element]):
         self._n_write_threads = 3
         self._serialize_kwargs = self.info.get("serialize_kwargs", {})
         self._deserialize_kwargs = self.info.get("deserialize_kwargs", {})
-        if self.storage_format == 'parquet' and 'schema_spec' in self._serialize_kwargs:
-            assert 'schema' not in self._serialize_kwargs
+        if self.storage_format == "parquet" and "schema_spec" in self._serialize_kwargs:
+            # Build the schema so that it does not need to be done each time the function
+            # ``ParquetSerializer.serialize`` is called. Maybe this does not matter.
+            assert "schema" not in self._serialize_kwargs
             kk = copy.deepcopy(self._serialize_kwargs)
-            kk['schema'] = make_parquet_schema(kk['schema_spec'])
-            del kk['schema_spec']
+            kk["schema"] = make_parquet_schema(kk["schema_spec"])
+            del kk["schema_spec"]
             self._serialize_kwargs = kk
 
         _biglist_objs.add(self)

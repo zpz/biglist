@@ -929,6 +929,7 @@ Writing a standalone Parquet file
 
 The function :func:`write_parquet_file` is provided to write data to a single Parquet file.
 
+>>> from uuid import uuid4
 >>> from biglist import write_parquet_file, read_parquet_file
 >>> import random
 >>> from upathlib import LocalUpath
@@ -942,20 +943,21 @@ The function :func:`write_parquet_file` is provided to write data to a single Pa
 <ParquetFileReader for '/tmp/a/b/c/d/data.parquet'>
 >>> len(f)
 10000
->>> f.metadata
-<pyarrow._parquet.FileMetaData object at 0x7f92877f5900>
+>>> f.metadata   # doctest: +ELLIPSIS
+<pyarrow._parquet.FileMetaData object at 0x7...>
   created_by: parquet-cpp-arrow version 11.0.0
   num_columns: 2
   num_rows: 10000
   num_row_groups: 1
   format_version: 2.6
   serialized_size: 609
->>> f.metadata.schema
-<pyarrow._parquet.ParquetSchema object at 0x7f9287389b80>
+>>> f.metadata.schema  # doctest: +ELLIPSIS
+<pyarrow._parquet.ParquetSchema object at 0x7...>
 required group field_id=-1 schema {
   optional int64 field_id=-1 key;
   optional binary field_id=-1 value (String);
 }
+<BLANKLINE>
 >>>
 
 
@@ -1029,7 +1031,7 @@ API reference
 
 .. autofunction:: biglist._util.make_parquet_type
 
-  
+
 Indices and tables
 ==================
 

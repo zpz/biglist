@@ -404,16 +404,25 @@ def test_parquet():
         {'name': 'john', 'age': 20, 'income': {}, 'hobbies': ['soccer', 'swim']},
         {'name': 'paul', 'age': 38, 'income': {'amount': 200}, 'hobbies': ['run']},
     ]
+    schema_spec = [
+                    ['name', 'string', False],
+                    ['age', 'uint64'],
+                    ['income', ['struct', [['currency', 'string'], ['amount', 'float64', True]]]],
+                    ['hobbies', ['list_', 'string']],
+                ]
     b2 = Biglist.new(storage_format='parquet',
-                     serialize_kwargs={'schema_spec': [
-                        ('name', 'string', False),
-                        ('age', 'uint64'),
-                        ('income', ('struct', [('currency', 'string'), ('amount', 'float64', True)])),
-                        ('hobbies', ('list_', 'string')),
-                     ]},
+                     serialize_kwargs={'schema_spec': schema_spec},
                      )
     b2.extend(data)
     b2.flush()
-    print(b2[2])
-    print(b2[3])
-    print(b2[4])
+    for row in b2:
+        print(row)
+
+    print('')
+    b3 = Biglist(b2.path)
+    s = b3.info.get('serialize_kwargs')
+    print(s)
+    assert s['schema_spec'] == schema_spec
+    for irow, row in enumerate(b3):
+        print(row)
+        assert row == b2[irow]

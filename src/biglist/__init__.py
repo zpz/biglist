@@ -39,8 +39,14 @@ from ._parquet import (
     ParquetFileReader,
     ParquetFileSeq,
     read_parquet_file,
-    write_parquet_file,
 )
-from ._util import Chain, Seq, Slicer
+from ._util import (
+    Chain,
+    Seq,
+    Slicer,
+    write_parquet_file,
+    write_parquet_file_from_arrays,
+    write_parquet_file_from_list,
+)
 
-__version__ = "0.7.7b4"
+__version__ = "0.7.7b5"

@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import itertools
 import logging
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any, Callable, Optional
 
 import pyarrow
 from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
-from upathlib import LocalUpath
 
 from ._base import (
     BiglistBase,
@@ -726,46 +725,3 @@ def read_parquet_file(path: PathType) -> ParquetFileReader:
         Path of the file.
     """
     return ParquetFileReader(path, ParquetBiglist.load_data_file)
-
-
-def write_parquet_file(
-    path: PathType,
-    data: pyarrow.Table | Sequence[pyarrow.Array | pyarrow.ChunkedArray | Iterable],
-    *,
-    names: Optional[Sequence[str]] = None,
-    **kwargs,
-) -> None:
-    """
-    If the file already exists, it will be overwritten.
-
-    Parameters
-    ----------
-    path
-        Path of the file to create and write to.
-    data
-        Usually a list of data arrays.
-    names
-        List of names for the arrays in ``data``.
-    **kwargs
-        Passed on to `pyarrow.parquet.write_table() <https://arrow.apache.org/docs/python/generated/pyarrow.parquet.write_table.html>`_.
-    """
-    if not isinstance(data, pyarrow.Table):
-        assert names
-        assert len(names) == len(data)
-        arrays = [
-            a
-            if isinstance(a, (pyarrow.Array, pyarrow.ChunkedArray))
-            else pyarrow.array(a)
-            for a in data
-        ]
-        data = pyarrow.Table.from_arrays(arrays, names=names)
-    else:
-        assert names is None
-    path = resolve_path(path)
-    if isinstance(path, LocalUpath):
-        path.parent.path.mkdir(exist_ok=True, parents=True)
-
-    ff, pp = FileSystem.from_uri(str(path))
-    if isinstance(ff, GcsFileSystem):
-        ff = ParquetBiglist.get_gcsfs()
-    pyarrow.parquet.write_table(data, ff.open_output_stream(pp), **kwargs)

@@ -7,7 +7,9 @@ from contextlib import contextmanager
 from typing import Generic, Optional, Protocol, TypeVar, runtime_checkable
 
 import pyarrow
-from upathlib import Upath
+from deprecation import deprecated
+from pyarrow.fs import FileSystem, GcsFileSystem
+from upathlib import LocalUpath, PathType, Upath, resolve_path
 
 
 @contextmanager
@@ -482,3 +484,86 @@ def make_parquet_schema(fields_spec: Iterable[Sequence]):
     this argument can be saved in "info.json", and it is handled by this function.
     """
     return pyarrow.schema((make_parquet_field(v) for v in fields_spec))
+
+
+def write_parquet_table(
+    table: pyarrow.Table,
+    path: PathType,
+    **kwargs,
+) -> None:
+    """
+    If the file already exists, it will be overwritten.
+
+    Parameters
+    ----------
+    path
+        Path of the file to create and write to.
+    table
+        pyarrow Table object.
+    **kwargs
+        Passed on to `pyarrow.parquet.write_table() <https://arrow.apache.org/docs/python/generated/pyarrow.parquet.write_table.html>`_.
+    """
+    path = resolve_path(path)
+    if isinstance(path, LocalUpath):
+        path.parent.path.mkdir(exist_ok=True, parents=True)
+    ff, pp = FileSystem.from_uri(str(path))
+    if isinstance(ff, GcsFileSystem):
+        from ._parquet import ParquetBiglist
+
+        ff = ParquetBiglist.get_gcsfs()
+    pyarrow.parquet.write_table(table, ff.open_output_stream(pp), **kwargs)
+
+
+def write_parquet_file_from_arrays(
+    data: Sequence[pyarrow.Array | pyarrow.ChunkedArray | Iterable],
+    path: PathType,
+    *,
+    names: Optional[Sequence[str]],
+    **kwargs,
+) -> None:
+    """
+    Parameters
+    ----------
+    path
+        Path of the file to create and write to.
+    data
+        A list of data arrays.
+    names
+        List of names for the arrays in ``data``.
+    **kwargs
+        Passed on to `pyarrow.parquet.write_table() <https://arrow.apache.org/docs/python/generated/pyarrow.parquet.write_table.html>`_.
+    """
+    assert len(names) == len(data)
+    arrays = [
+        a if isinstance(a, (pyarrow.Array, pyarrow.ChunkedArray)) else pyarrow.array(a)
+        for a in data
+    ]
+    table = pyarrow.Table.from_arrays(arrays, names=names)
+    return write_parquet_table(table, path, **kwargs)
+
+
+def write_parquet_file_from_list(
+    data: Sequence,
+    path: PathType,
+    *,
+    schema=None,
+    schema_spec=None,
+    metadata=None,
+    **kwargs,
+):
+    if schema is not None:
+        assert schema_spec is None
+    elif schema_spec is not None:
+        assert schema is None
+        schema = make_parquet_schema(schema_spec)
+    table = pyarrow.Table.from_pylist(data, schema=schema, metadata=metadata)
+    return write_parquet_table(table, path, **kwargs)
+
+
+@deprecated(
+    deprecated_in="0.7.7",
+    removed_in="0.8.0",
+    details="Use ``write_parquet_file_from_arrays`` instead.",
+)
+def write_parquet_file(path, data, names, **kwargs):
+    return write_parquet_file_from_arrays(data, path, names=names, **kwargs)

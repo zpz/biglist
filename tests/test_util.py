@@ -1,9 +1,9 @@
 from __future__ import annotations
 from collections.abc import Sequence, Iterable, Sized
 import pytest
-from biglist._util import Slicer, Chain, Seq, locate_idx_in_chunked_seq, make_parquet_field, make_parquet_schema, make_parquet_type
+from biglist._util import Slicer, Chain, Seq, locate_idx_in_chunked_seq, make_parquet_schema, make_parquet_type, write_parquet_file_from_list
 from biglist._base import BiglistBase, FileReader, FileSeq
-from biglist._parquet import ParquetBatchData
+from biglist._parquet import ParquetBatchData, read_parquet_file
 import pyarrow
 
 
@@ -205,3 +205,24 @@ def test_parquet_schema():
     assert type(schema) is pyarrow.Schema
     print('')
     print(schema)
+
+
+def test_write_parquet_file(tmp_path):
+    data = [
+        {'name': 'tom', 'age': 38, 'income': {'concurrency': 'YEN', 'amount': 10000}},
+        {'name': 'jane', 'age': 38, 'income': {'amount': 250}, 'hobbies': ['soccer', 'swim']},
+        {'age': 38, 'hobbies': ['tennis', 'baseball']},
+        {'name': 'john', 'age': 20, 'income': {}, 'hobbies': ['soccer', 'swim']},
+        {'name': 'paul', 'age': 38, 'income': {'amount': 200}, 'hobbies': ['run']},
+    ]
+    schema_spec = [
+                    ['name', 'string', False],
+                    ['age', 'uint64'],
+                    ['income', ['struct', [['currency', 'string'], ['amount', 'float64', True]]]],
+                    ['hobbies', ['list_', 'string']],
+                ]
+    pp = tmp_path / 'data.parquet'
+    write_parquet_file_from_list(data, pp, schema_spec=schema_spec)
+    f = read_parquet_file(pp)
+    for row in f:
+        print(row)

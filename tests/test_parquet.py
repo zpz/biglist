@@ -1,11 +1,10 @@
 import io
-import pickle
 import random
 from types import SimpleNamespace
 from uuid import uuid4
 import pyarrow
 from upathlib import LocalUpath
-from biglist import ParquetBiglist, ParquetFileReader, write_parquet_file, read_parquet_file, Slicer, ParquetBatchData
+from biglist import ParquetBiglist, ParquetFileReader, write_parquet_file_from_arrays, read_parquet_file, Slicer, ParquetBatchData
 import pytest
 
 
@@ -125,12 +124,12 @@ def test_parquet_biglist(tmp_path):
     # tab = pyarrow.Table.from_arrays([key, val], names=['key', 'value'])
     # parquet.write_table(tab, str(path / 'data_1.parquet'))
 
-    write_parquet_file(
-        path / 'data_1.parquet',
+    write_parquet_file_from_arrays(
         [
             [random.randint(0, 10000) for _ in range(N)],
             [str(uuid4()) for _ in range(N)],
         ],
+        path / 'data_1.parquet',
         names=['key', 'value']
     )
 
@@ -141,12 +140,12 @@ def test_parquet_biglist(tmp_path):
 
     # parquet.write_table(tab, str(path / 'd2' / 'data_2.parquet'))
 
-    write_parquet_file(
-        path / 'd2' / 'data_2.parquet',
+    write_parquet_file_from_arrays(
         [ 
          [random.randint(0, 10000) for _ in range(N)],
          [str(uuid4()) for _ in range(N)],
          ],
+        path / 'd2' / 'data_2.parquet',
         names=['key', 'value']
     )
 

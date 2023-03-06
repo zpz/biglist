@@ -43,4 +43,4 @@ from ._parquet import (
 )
 from ._util import Chain, Seq, Slicer
 
-__version__ = "0.7.7b3"
+__version__ = "0.7.7b4"

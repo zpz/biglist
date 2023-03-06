@@ -13,7 +13,7 @@ import string
 import threading
 import warnings
 import weakref
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
 from typing import (
@@ -46,7 +46,7 @@ from ._base import (
     Upath,
     resolve_path,
 )
-from ._util import lock_to_use
+from ._util import lock_to_use, make_parquet_schema
 
 logger = logging.getLogger(__name__)
 
@@ -923,7 +923,14 @@ class JsonByteSerializer(ByteSerializer):
 
 class ParquetSerializer(ByteSerializer):
     @classmethod
-    def serialize(cls, x: list[dict], schema=None, metadata=None, **kwargs):
+    def serialize(
+        cls,
+        x: list[dict],
+        schema: pyarrow.Schema = None,
+        schema_spec: Sequence = None,
+        metadata=None,
+        **kwargs,
+    ):
         """
         `x` is a list of data items. Each item is a dict. In the output Parquet file,
         each item is a "row".
@@ -931,16 +938,30 @@ class ParquetSerializer(ByteSerializer):
         The content of the item dict should follow a regular pattern.
         Not every structure is supported. The data `x` must be acceptable to
         ``pyarrow.Table.from_pylist``. If unsure, use a list with a couple data elements
-        and experiment with ``pyarrow.Table.from_pylist`` directly, leaving out
-        ``schema`` and ``metadata``.
+        and experiment with ``pyarrow.Table.from_pylist`` directly.
 
         When using ``storage_format='parquet'`` for ``Biglist``, each data element is a dict
         with a consistent structure that is acceptable to ``pyarrow.Table.from_pylist``.
         When reading the Biglist, the original Python data elements are returned.
+        (A record read out may not be exactly equal to the original that was written, in that
+        elements that were missing in a record when written may have been filled in with ``None``
+        when read back out.)
         In other words, the reading is *not* like that of ``ParquetBiglist``.
         You can always create a separate ParquetBiglist for the data files of the Biglist
         in order to use Parquet-style data reading. The data files are valid Parquet files.
+
+        If neither ``schema`` nor ``schema_spec`` is specified, then the data schema is auto-inferred
+        based on the first element of ``x``. If this does not work, you can specify either ``schema`` or ``schema_spec``.
+        The advantage of ``schema_spec`` is that it is json-serializable Python types, hence can be passed into
+        :meth:`Biglist.new` view ``serialize_kwargs`` and saved in "info.json" of the biglist.
+
+        If ``schema_spec`` is not flexible or powerful enough for your usecase, then you may have to use ``schema``.
         """
+        if schema is not None:
+            assert schema_spec is None
+        elif schema_spec is not None:
+            assert schema is None
+            schema = make_parquet_schema(schema_spec)
         table = pyarrow.Table.from_pylist(x, schema=schema, metadata=metadata)
         sink = io.BytesIO()
         writer = pyarrow.parquet.ParquetWriter(sink, table.schema, **kwargs)

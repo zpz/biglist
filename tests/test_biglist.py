@@ -12,6 +12,7 @@ from shutil import rmtree
 from time import sleep
 
 import pytest
+import pyarrow
 from boltons import iterutils
 from biglist import Biglist, ParquetBiglist, Slicer, Multiplexer
 
@@ -361,3 +362,67 @@ def test_parquet():
     assert len(bl2) == len(data)
     assert bl2.num_data_files == bl.num_data_files
     assert list(bl2) == data
+
+    data = [
+        {'name': 'tom', 'age': 38, 'income': {'concurrency': 'YEN', 'amount': 10000}},
+        {'name': 'jane', 'age': 38, 'income': {'amount': 'a lot'}, 'hobbies': ['soccer', 'swim']},
+        {'age': 38, 'hobbies': ['tennis', 'baseball', 0]},
+        {'name': 'john', 'age': 38, 'income': {}, 'hobbies': ['soccer', 'swim']},
+        {'name': 'paul', 'age': 38, 'income': {'amount': 200}, 'hobbies': ['run']},
+    ]
+    b2 = Biglist.new(storage_format='parquet')
+    b2.extend(data)
+    with pytest.raises(pyarrow.lib.ArrowInvalid):
+        b2.flush()
+
+
+    data = [
+        {'name': 'tom', 'age': 38, 'income': {'concurrency': 'YEN', 'amount': 10000}},
+        {'name': 'jane', 'age': 38, 'income': {'amount': 250}, 'hobbies': ['soccer', 'swim']},
+        {'age': 38, 'hobbies': ['tennis', 'baseball', 0]},
+        {'name': 'john', 'age': 20, 'income': {}, 'hobbies': ['soccer', 'swim']},
+        {'name': 'paul', 'age': 38, 'income': {'amount': 200}, 'hobbies': ['run']},
+    ]
+    b2 = Biglist.new(storage_format='parquet',
+                     serialize_kwargs={'schema_spec': [
+                        ('name', 'string', False),
+                        ('age', 'uint64'),
+                        ('income', ('struct', [('currency', 'string'), ('amount', 'float64', True)])),
+                        ('hobbies', ('list_', 'string')),
+                     ]},
+                     )
+    b2.extend(data)
+    with pytest.raises(pyarrow.lib.ArrowTypeError):
+        b2.flush()
+        # If schema is not specified, this would not raise, because 'hobbies' is not in the first entry,
+        # hence not in the inferred schema, and will be simply ignored.
+
+    data = [
+        {'name': 'tom', 'age': 38, 'income': {'concurrency': 'YEN', 'amount': 10000}},
+        {'name': 'jane', 'age': 38, 'income': {'amount': 250}, 'hobbies': ['soccer', 'swim']},
+        {'age': 38, 'hobbies': ['tennis', 'baseball']},
+        {'name': 'john', 'age': 20, 'income': {}, 'hobbies': ['soccer', 'swim']},
+        {'name': 'paul', 'age': 38, 'income': {'amount': 200}, 'hobbies': ['run']},
+    ]
+    schema_spec = [
+                    ['name', 'string', False],
+                    ['age', 'uint64'],
+                    ['income', ['struct', [['currency', 'string'], ['amount', 'float64', True]]]],
+                    ['hobbies', ['list_', 'string']],
+                ]
+    b2 = Biglist.new(storage_format='parquet',
+                     serialize_kwargs={'schema_spec': schema_spec},
+                     )
+    b2.extend(data)
+    b2.flush()
+    for row in b2:
+        print(row)
+
+    print('')
+    b3 = Biglist(b2.path)
+    s = b3.info.get('serialize_kwargs')
+    print(s)
+    assert s['schema_spec'] == schema_spec
+    for irow, row in enumerate(b3):
+        print(row)
+        assert row == b2[irow]

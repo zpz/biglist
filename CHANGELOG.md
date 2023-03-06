@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `BiglistBase.new` gets a new parameter `init_info`.
 - `Biglist.new` accepts extra parameters for (de)serialization.
 - New class `Multiplexer`.
+- Allow schema spec when 'storage_format' is 'parquet' for `Biglist`.
 
 
 ## [0.7.6] - 2022-03-01

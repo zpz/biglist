@@ -41,10 +41,12 @@ from ._parquet import (
     read_parquet_file,
 )
 from ._util import (
+    Chain,
+    Seq,
+    Slicer,
     write_parquet_file,
     write_parquet_file_from_arrays,
     write_parquet_file_from_list,
-    Chain, Seq, Slicer,
 )
 
 __version__ = "0.7.7b4"

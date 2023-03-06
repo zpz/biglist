@@ -10,7 +10,6 @@ import pyarrow
 from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
 
-
 from ._base import (
     BiglistBase,
     FileReader,
@@ -726,4 +725,3 @@ def read_parquet_file(path: PathType) -> ParquetFileReader:
         Path of the file.
     """
     return ParquetFileReader(path, ParquetBiglist.load_data_file)
-

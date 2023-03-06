@@ -8,8 +8,8 @@ from typing import Generic, Optional, Protocol, TypeVar, runtime_checkable
 
 import pyarrow
 from deprecation import deprecated
-from upathlib import LocalUpath, PathType, Upath, resolve_path
 from pyarrow.fs import FileSystem, GcsFileSystem
+from upathlib import LocalUpath, PathType, Upath, resolve_path
 
 
 @contextmanager
@@ -509,6 +509,7 @@ def write_parquet_table(
     ff, pp = FileSystem.from_uri(str(path))
     if isinstance(ff, GcsFileSystem):
         from ._parquet import ParquetBiglist
+
         ff = ParquetBiglist.get_gcsfs()
     pyarrow.parquet.write_table(table, ff.open_output_stream(pp), **kwargs)
 
@@ -534,9 +535,7 @@ def write_parquet_file_from_arrays(
     """
     assert len(names) == len(data)
     arrays = [
-        a
-        if isinstance(a, (pyarrow.Array, pyarrow.ChunkedArray))
-        else pyarrow.array(a)
+        a if isinstance(a, (pyarrow.Array, pyarrow.ChunkedArray)) else pyarrow.array(a)
         for a in data
     ]
     table = pyarrow.Table.from_arrays(arrays, names=names)
@@ -544,13 +543,13 @@ def write_parquet_file_from_arrays(
 
 
 def write_parquet_file_from_list(
-        data: Sequence,
-        path: PathType,
-        *,
-        schema=None,
-        schema_spec=None,
-        metadata=None,
-        **kwargs,
+    data: Sequence,
+    path: PathType,
+    *,
+    schema=None,
+    schema_spec=None,
+    metadata=None,
+    **kwargs,
 ):
     if schema is not None:
         assert schema_spec is None
@@ -561,6 +560,10 @@ def write_parquet_file_from_list(
     return write_parquet_table(table, path, **kwargs)
 
 
-@deprecated(deprecated_in='0.7.7', removed_in='0.8.0', details='Use ``write_parquet_file_from_arrays`` instead.')
+@deprecated(
+    deprecated_in="0.7.7",
+    removed_in="0.8.0",
+    details="Use ``write_parquet_file_from_arrays`` instead.",
+)
 def write_parquet_file(path, data, names, **kwargs):
     return write_parquet_file_from_arrays(data, path, names=names, **kwargs)

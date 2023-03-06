@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import bisect
 import itertools
-from collections.abc import Iterator, Sequence, Iterable
+from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import Generic, Optional, Protocol, TypeVar, runtime_checkable
 
-from upathlib import Upath
 import pyarrow
+from upathlib import Upath
+
 
 @contextmanager
 def lock_to_use(file: Upath, timeout=120):
@@ -347,8 +348,8 @@ class Chain(Generic[SeqType]):
 
 
 def make_parquet_type(type_spec: str | Sequence):
-    '''
-    ``type_spec`` is a spec of arguments to one of pyarrow's data type 
+    """
+    ``type_spec`` is a spec of arguments to one of pyarrow's data type
     `factory functions <https://arrow.apache.org/docs/python/api/datatypes.html#factory-functions>`_.
 
     For simple types, this may be just the type name (or function name), e.g. ``'bool_'``, ``'string'``, ``'float64'``.
@@ -383,7 +384,7 @@ def make_parquet_type(type_spec: str | Sequence):
 
     Here, the second element is the list of fields in the struct.
     Each field is expressed by a spec that is taken by :meth:`make_parquet_field`.
-    '''
+    """
     if isinstance(type_spec, str):
         type_name = type_spec
         args = ()
@@ -395,16 +396,16 @@ def make_parquet_type(type_spec: str | Sequence):
     # print('type_name', type_name)
     # print('type_args', args)
 
-    if type_name in ('string', 'float64', 'bool_', 'int8',  'int64', 'uint8',  'uint64'):
+    if type_name in ("string", "float64", "bool_", "int8", "int64", "uint8", "uint64"):
         assert not args
         return getattr(pyarrow, type_name)()
 
-    if type_name == 'list_':
+    if type_name == "list_":
         if len(args) > 2:
             raise ValueError(f"'pyarrow.list_' expects 1 or 2 args, got `{args}`")
         return pyarrow.list_(make_parquet_type(args[0]), *args[1:])
 
-    if type_name in ('map_', 'dictionary'):
+    if type_name in ("map_", "dictionary"):
         if len(args) > 3:
             raise ValueError(f"'pyarrow.{type_name}' expects 2 or 3 args, got `{args}`")
         return getattr(pyarrow, type_name)(
@@ -412,29 +413,37 @@ def make_parquet_type(type_spec: str | Sequence):
             make_parquet_type(args[1]),
             *args[2:],
         )
-    
-    if type_name == 'struct':
-        assert len(args) == 1
-        return pyarrow.struct((
-            make_parquet_field(v) for v in args[0]
-        ))
 
-    if type_name == 'large_list':
+    if type_name == "struct":
+        assert len(args) == 1
+        return pyarrow.struct((make_parquet_field(v) for v in args[0]))
+
+    if type_name == "large_list":
         assert len(args) == 1
         return pyarrow.large_list(make_parquet_type(args[0]))
 
-    if type_name in ('int16', 'int32', 'uint16', 'uint32', 'float32',
-                    'date32', 'date64', 'month_day_nano_interval',
-                    'utf8', 'large_binary', 'large_string', 'large_utf8'
-                    'null'):
+    if type_name in (
+        "int16",
+        "int32",
+        "uint16",
+        "uint32",
+        "float32",
+        "date32",
+        "date64",
+        "month_day_nano_interval",
+        "utf8",
+        "large_binary",
+        "large_string",
+        "large_utf8" "null",
+    ):
         assert not args
         return getattr(pyarrow, type_name)()
 
-    if type_name in ('time32', 'time64', 'duration'):
+    if type_name in ("time32", "time64", "duration"):
         assert len(args) == 1
-    elif type_name in ('timestamp', 'decimal128'):
+    elif type_name in ("timestamp", "decimal128"):
         assert len(args) in (1, 2)
-    elif type_name in ('binary', ):
+    elif type_name in ("binary",):
         assert len(args) <= 1
     else:
         raise ValueError(f"unknown pyarrow type '{type_name}'")
@@ -442,13 +451,13 @@ def make_parquet_type(type_spec: str | Sequence):
 
 
 def make_parquet_field(field_spec: Sequence):
-    '''
+    """
     ``filed_spec`` is a list or tuple with 2, 3, or 4 elements.
     The first element is the name of the field.
     The second element is the spec of the type, to be passed to function :func:`make_parquet_type`.
     Additional elements are the optional ``nullable`` and ``metadata`` to the function
     `pyarrow.field() <https://arrow.apache.org/docs/python/generated/pyarrow.field.html#pyarrow.field>`_.
-    '''
+    """
     # print('\nfield_spec:', field_spec)
     field_name = field_spec[0]
     type_spec = field_spec[1]
@@ -457,7 +466,7 @@ def make_parquet_field(field_spec: Sequence):
 
 
 def make_parquet_schema(fields_spec: Iterable[Sequence]):
-    '''
+    """
     This function constructs a pyarrow schema that is expressed by simple Python types
     that can be json-serialized.
 
@@ -471,5 +480,5 @@ def make_parquet_schema(fields_spec: Iterable[Sequence]):
     can not be used by this mechanism.
     As an alternative, user can use the argument ``schema_spec``;
     this argument can be saved in "info.json", and it is handled by this function.
-    '''
+    """
     return pyarrow.schema((make_parquet_field(v) for v in fields_spec))

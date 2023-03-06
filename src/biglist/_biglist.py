@@ -923,7 +923,14 @@ class JsonByteSerializer(ByteSerializer):
 
 class ParquetSerializer(ByteSerializer):
     @classmethod
-    def serialize(cls, x: list[dict], schema: pyarrow.Schema = None, schema_spec: Sequence = None, metadata=None, **kwargs):
+    def serialize(
+        cls,
+        x: list[dict],
+        schema: pyarrow.Schema = None,
+        schema_spec: Sequence = None,
+        metadata=None,
+        **kwargs,
+    ):
         """
         `x` is a list of data items. Each item is a dict. In the output Parquet file,
         each item is a "row".

@@ -49,4 +49,4 @@ from ._util import (
     write_parquet_file_from_list,
 )
 
-__version__ = "0.7.7b4"
+__version__ = "0.7.7b5"

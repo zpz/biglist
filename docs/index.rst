@@ -846,8 +846,45 @@ a `pyarrow`_ object. It is either a
 
 
 
+Other utilities
+===============
+
+Chain
+-----
+
+:class:`Chain` takes a series of :class:`Seq`\s and returns a combined Seq without data copy.
+For example,
+
+>>> from biglist import Chain
+>>> numbers = list(range(10))
+>>> car_data  # doctest: +SKIP
+<ParquetBiglist at '/tmp/edd9cefb-179b-46d2-8946-7dc8ae1bdc50' with 112 records in 2 data file(s) stored at ['/tmp/a/b/c/e']>
+>>> combined = Chain(numbers, car_data)
+>>> combined[3]
+3
+>>> combined[9]
+9
+>>> combined[10]
+{'make': 'ford', 'year': 1960, 'sales': 234}
+>>>
+>>> car_data[0]
+{'make': 'ford', 'year': 1960, 'sales': 234}
+
+
+Slicer
+------
+
+:class:`Slicer` takes any :class:`Seq`` and provides :meth:`~Slicer.__getitem__` that accepts
+a single index, or a slice, or a list of indices. A single-index access will return
+the requested element; the other two scenarios return a new Slicer via a zero-copy operation.
+To get all the elements out of a Slicer, either iterate it or call its method :meth:`~Slicer.collect`.
+
+We should emphasize that :class:`Chain` and :class:`Slicer` work with any :class:`Seq`,
+hence they are useful independent of the other ``biglist`` classes.
+
+
 Reading a standalone Parquet file
-=================================
+---------------------------------
 
 The function :func:`read_parquet_file` is provided to read a single Parquet file independent of
 :class:`ParquetBiglist`. It returns a :class:`ParquetFileReader`. All the facilities of this class,
@@ -888,7 +925,7 @@ as demonstrated above, are ready for use:
 ]
 
 Writing a standalone Parquet file
-=================================
+---------------------------------
 
 The function :func:`write_parquet_file` is provided to write data to a single Parquet file.
 
@@ -921,35 +958,6 @@ required group field_id=-1 schema {
 }
 >>>
 
-
-Other utilities
-===============
-
-:class:`Chain` takes a series of :class:`Seq`\s and returns a combined Seq without data copy.
-For example,
-
->>> from biglist import Chain
->>> numbers = list(range(10))
->>> car_data  # doctest: +SKIP
-<ParquetBiglist at '/tmp/edd9cefb-179b-46d2-8946-7dc8ae1bdc50' with 112 records in 2 data file(s) stored at ['/tmp/a/b/c/e']>
->>> combined = Chain(numbers, car_data)
->>> combined[3]
-3
->>> combined[9]
-9
->>> combined[10]
-{'make': 'ford', 'year': 1960, 'sales': 234}
->>>
->>> car_data[0]
-{'make': 'ford', 'year': 1960, 'sales': 234}
-
-:class:`Slicer` takes any :class:`Seq`` and provides :meth:`~Slicer.__getitem__` that accepts
-a single index, or a slice, or a list of indices. A single-index access will return
-the requested element; the other two scenarios return a new Slicer via a zero-copy operation.
-To get all the elements out of a Slicer, either iterate it or call its method :meth:`~Slicer.collect`.
-
-We should emphasize that :class:`Chain` and :class:`Slicer` work with any :class:`Seq`,
-hence they are useful independent of the other ``biglist`` classes.
 
 
 API reference
@@ -1013,7 +1021,15 @@ API reference
 
 .. autofunction:: biglist.write_parquet_file
 
+.. autoclass:: biglist._biglist.ParquetSerializer
 
+.. autofunction:: biglist._util.make_parquet_schema
+
+.. autofunction:: biglist._util.make_parquet_field
+
+.. autofunction:: biglist._util.make_parquet_type
+
+  
 Indices and tables
 ==================
 

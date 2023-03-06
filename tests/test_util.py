@@ -1,9 +1,10 @@
 from __future__ import annotations
 from collections.abc import Sequence, Iterable, Sized
 import pytest
-from biglist._util import Slicer, Chain, Seq, locate_idx_in_chunked_seq
+from biglist._util import Slicer, Chain, Seq, locate_idx_in_chunked_seq, make_parquet_field, make_parquet_schema, make_parquet_type
 from biglist._base import BiglistBase, FileReader, FileSeq
 from biglist._parquet import ParquetBatchData
+import pyarrow
 
 
 def test_locate_idx_in_chunked_seq():
@@ -166,3 +167,41 @@ def test_chain():
 
     with pytest.raises(IndexError):
         _ = ch[2]
+
+
+def test_parquet_schema():
+    type_spec = ('struct', 
+                 [('name', 'string', False),
+                  ('age', 'uint8', True), 
+                  ('income', ('struct', (('currency', 'string'), ('amount', 'uint64'))), False),
+                 ]
+                )
+    s = make_parquet_type(type_spec)
+    assert type(s) is pyarrow.StructType
+    print(s)
+                 
+    type_spec = ('map_', 'string', ('list_', 'int64'), True)
+    s = make_parquet_type(type_spec)
+    assert type(s) is pyarrow.MapType
+    print(s)
+
+    type_spec = ('list_', 'int64')
+    s = make_parquet_type(type_spec)
+    assert type(s) is pyarrow.ListType
+    print(s)
+
+    type_spec = ('list_', ('time32', 's'), 5)
+    s = make_parquet_type(type_spec)
+    assert type(s) is pyarrow.FixedSizeListType
+    print(s)
+
+    schema_spec = [
+        ('name', 'string', False),
+        ('age', 'uint8', False),
+        ('income', ('struct', (('concurrency', 'string', True), ('amount', 'uint64'))), True),
+        ('hobbies', ('list_', 'string'), True),
+    ]
+    schema = make_parquet_schema(schema_spec)
+    assert type(schema) is pyarrow.Schema
+    print('')
+    print(schema)

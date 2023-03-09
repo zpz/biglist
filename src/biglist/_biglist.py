@@ -964,7 +964,7 @@ class ParquetSerializer(ByteSerializer):
         If neither ``schema`` nor ``schema_spec`` is specified, then the data schema is auto-inferred
         based on the first element of ``x``. If this does not work, you can specify either ``schema`` or ``schema_spec``.
         The advantage of ``schema_spec`` is that it is json-serializable Python types, hence can be passed into
-        :meth:`Biglist.new` view ``serialize_kwargs`` and saved in "info.json" of the biglist.
+        :meth:`Biglist.new() <biglist.Biglist.new>` via ``serialize_kwargs`` and saved in "info.json" of the biglist.
 
         If ``schema_spec`` is not flexible or powerful enough for your usecase, then you may have to use ``schema``.
         """

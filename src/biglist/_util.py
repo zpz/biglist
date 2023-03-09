@@ -14,7 +14,8 @@ from upathlib import LocalUpath, PathType, Upath, resolve_path
 
 @contextmanager
 def lock_to_use(file: Upath, timeout=120):
-    with file.with_suffix(file.suffix + ".lock").lock(timeout=timeout):
+    f = file.with_suffix(file.suffix + ".lock")
+    with f.lock(timeout=timeout):
         yield file
 
 
@@ -542,7 +543,7 @@ def write_parquet_file_from_arrays(
     return write_parquet_table(table, path, **kwargs)
 
 
-def write_parquet_file_from_list(
+def write_parquet_file_from_pylist(
     data: Sequence,
     path: PathType,
     *,

@@ -960,14 +960,14 @@ required group field_id=-1 schema {
 <BLANKLINE>
 >>>
 
-Similarly, :func:`write_parquet_file_from_list` writes data rows to a Parquet file::
+Similarly, :func:`write_parquet_file_from_pylist` writes data rows to a Parquet file::
 
->>> from biglist import write_parquet_file_from_list
+>>> from biglist import write_parquet_file_from_pylist
 >>> data = [{'name': str(uuid4()), 'age': random.randint(1, 100), 'income': {'employer': str(uuid4()), 'amount': random.randint(10000, 100000)}} for _ in range(100... 0)]
 >>> f = LocalUpath('/tmp/test/data.parquet')
 >>> f.rmrf()
 0
->>> write_parquet_file_from_list(data, f)
+>>> write_parquet_file_from_pylist(data, f)
 >>> ff = read_parquet_file(f)
 >>> ff[0]  # doctest: +SKIP
 {'name': '066ced72-fd33-492a-9180-39eeca541b1a', 'age': 75, 'income': {'amount': 17840, 'employer': 'bfc176a0-5257-4913-bd1e-3c4d51885e0c'}}
@@ -1036,7 +1036,7 @@ API reference
 
 .. autofunction:: biglist.write_parquet_file_from_arrays
 
-.. autofunction:: biglist.write_parquet_file_from_list
+.. autofunction:: biglist.write_parquet_file_from_pylist
 
 .. autoclass:: biglist._biglist.ParquetSerializer
 

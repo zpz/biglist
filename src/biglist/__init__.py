@@ -46,7 +46,7 @@ from ._util import (
     Slicer,
     write_parquet_file,
     write_parquet_file_from_arrays,
-    write_parquet_file_from_list,
+    write_parquet_file_from_pylist,
 )
 
-__version__ = "0.7.7b5"
+__version__ = "0.7.7b6"

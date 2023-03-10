@@ -14,6 +14,7 @@ import string
 import threading
 import warnings
 import weakref
+import zlib
 from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
@@ -24,19 +25,12 @@ from typing import (
 )
 from uuid import uuid4
 
+import orjson
 import pyarrow
+import zstandard
 from deprecation import deprecated
 from typing_extensions import Self
-from upathlib.serializer import (
-    ByteSerializer,
-    OrjsonSerializer,
-    PickleSerializer,
-    ZOrjsonSerializer,
-    ZPickleSerializer,
-    ZstdOrjsonSerializer,
-    ZstdPickleSerializer,
-    _loads,
-)
+from upathlib import serializer
 
 from ._base import (
     BiglistBase,
@@ -90,7 +84,7 @@ class Biglist(BiglistBase[Element]):
     def register_storage_format(
         cls,
         name: str,
-        serializer: type[ByteSerializer],
+        serializer: type[serializer.ByteSerializer],
     ) -> None:
         """
         Register a new serializer to handle data file dumping and loading.
@@ -922,17 +916,51 @@ class BiglistFileSeq(FileSeq[BiglistFileReader]):
         return BiglistFileReader(file, self._file_loader)
 
 
-class JsonByteSerializer(ByteSerializer):
+class JsonByteSerializer(serializer.ByteSerializer):
     @classmethod
     def serialize(cls, x, **kwargs):
         return json.dumps(x, **kwargs).encode()
 
     @classmethod
     def deserialize(cls, y, **kwargs):
-        return _loads(json.loads, y.decode(), **kwargs)
+        return serializer._loads(json.loads, y.decode(), **kwargs)
 
 
-class ParquetSerializer(ByteSerializer):
+class OrjsonSerializer(serializer.ByteSerializer):
+    @classmethod
+    def serialize(cls, x, **kwargs):
+        return orjson.dumps(x, **kwargs)  # pylint: disable=no-member
+
+    @classmethod
+    def deserialize(cls, y):
+        return serializer._loads(orjson.loads, y)  # pylint: disable=no-member
+
+
+class ZOrjsonSerializer(OrjsonSerializer):
+    @classmethod
+    def serialize(cls, x, *, level=serializer.ZLIB_LEVEL, **kwargs):
+        y = super().serialize(x, **kwargs)
+        return zlib.compress(y, level=level)
+
+    @classmethod
+    def deserialize(cls, y):
+        y = zlib.decompress(y)
+        return super().deserialize(y)
+
+
+class ZstdOrjsonSerializer(OrjsonSerializer):
+    @classmethod
+    def serialize(cls, x, *, level=serializer.ZSTD_LEVEL, **kwargs):
+        y = super().serialize(x, **kwargs)
+        return zstandard.compress(y, level=level)
+
+    @classmethod
+    def deserialize(cls, y):
+        y = zstandard.decompress(y)
+        return super().deserialize(y)
+
+
+class ParquetSerializer(serializer.ByteSerializer):
     @classmethod
     def serialize(
         cls,
@@ -964,7 +992,7 @@ class ParquetSerializer(ByteSerializer):
         If neither ``schema`` nor ``schema_spec`` is specified, then the data schema is auto-inferred
         based on the first element of ``x``. If this does not work, you can specify either ``schema`` or ``schema_spec``.
         The advantage of ``schema_spec`` is that it is json-serializable Python types, hence can be passed into
-        :meth:`Biglist.new` view ``serialize_kwargs`` and saved in "info.json" of the biglist.
+        :meth:`Biglist.new() <biglist.Biglist.new>` via ``serialize_kwargs`` and saved in "info.json" of the biglist.
 
         If ``schema_spec`` is not flexible or powerful enough for your usecase, then you may have to use ``schema``.
         """
@@ -988,9 +1016,9 @@ class ParquetSerializer(ByteSerializer):
 
 
 Biglist.register_storage_format("json", JsonByteSerializer)
-Biglist.register_storage_format("pickle", PickleSerializer)
-Biglist.register_storage_format("pickle-z", ZPickleSerializer)
-Biglist.register_storage_format("pickle-zstd", ZstdPickleSerializer)
+Biglist.register_storage_format("pickle", serializer.PickleSerializer)
+Biglist.register_storage_format("pickle-z", serializer.ZPickleSerializer)
+Biglist.register_storage_format("pickle-zstd", serializer.ZstdPickleSerializer)
 Biglist.register_storage_format("orjson", OrjsonSerializer)
 Biglist.register_storage_format("orjson-z", ZOrjsonSerializer)
 Biglist.register_storage_format("orjson-zstd", ZstdOrjsonSerializer)

@@ -15,6 +15,7 @@ import pytest
 import pyarrow
 from boltons import iterutils
 from biglist import Biglist, ParquetBiglist, Slicer, Multiplexer
+from biglist._biglist import OrjsonSerializer, ZOrjsonSerializer, ZstdOrjsonSerializer, JsonByteSerializer, ParquetSerializer
 
 
 def test_numbers():
@@ -426,3 +427,22 @@ def test_parquet():
     for irow, row in enumerate(b3):
         print(row)
         assert row == b2[irow]
+
+
+def test_serializers():
+    data = [12, 23.8, {'a': [9, 'xyz'], 'b': {'first': 3, 'second': 2.3}}, None]
+    for serde in (JsonByteSerializer,
+                  OrjsonSerializer, ZOrjsonSerializer, ZstdOrjsonSerializer,
+                  ):
+        y = serde.serialize(data)
+        z = serde.deserialize(y)
+        assert z == data
+
+    data = [
+        {'a': [9, 10], 'b': {'first': 3, 'second': 2.3}},
+        {'a': [11, None], 'b': {'first': 8, 'second': 3.3}},
+    ]
+    serde = ParquetSerializer
+    y = serde.serialize(data)
+    z = serde.deserialize(y)
+    assert z == data

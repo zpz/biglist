@@ -14,7 +14,8 @@ from upathlib import LocalUpath, PathType, Upath, resolve_path
 
 @contextmanager
 def lock_to_use(file: Upath, timeout=120):
-    with file.with_suffix(file.suffix + ".lock").lock(timeout=timeout):
+    f = file.with_suffix(file.suffix + ".lock")
+    with f.lock(timeout=timeout):
         yield file
 
 
@@ -514,7 +515,7 @@ def write_parquet_table(
     pyarrow.parquet.write_table(table, ff.open_output_stream(pp), **kwargs)
 
 
-def write_parquet_file_from_arrays(
+def write_arrays_to_parquet(
     data: Sequence[pyarrow.Array | pyarrow.ChunkedArray | Iterable],
     path: PathType,
     *,
@@ -542,7 +543,7 @@ def write_parquet_file_from_arrays(
     return write_parquet_table(table, path, **kwargs)
 
 
-def write_parquet_file_from_list(
+def write_pylist_to_parquet(
     data: Sequence,
     path: PathType,
     *,
@@ -563,7 +564,7 @@ def write_parquet_file_from_list(
 @deprecated(
     deprecated_in="0.7.7",
     removed_in="0.8.0",
-    details="Use ``write_parquet_file_from_arrays`` instead.",
+    details="Use ``write_arrays_to_parquet`` instead.",
 )
 def write_parquet_file(path, data, names, **kwargs):
-    return write_parquet_file_from_arrays(data, path, names=names, **kwargs)
+    return write_arrays_to_parquet(data, path, names=names, **kwargs)

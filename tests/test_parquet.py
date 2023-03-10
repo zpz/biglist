@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 import pyarrow
 from upathlib import LocalUpath
-from biglist import ParquetBiglist, ParquetFileReader, write_arrayes_to_parquet, read_parquet_file, Slicer, ParquetBatchData
+from biglist import ParquetBiglist, ParquetFileReader, write_arrays_to_parquet, read_parquet_file, Slicer, ParquetBatchData
 import pytest
 
 

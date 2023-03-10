@@ -44,8 +44,8 @@ from ._util import (
     Chain,
     Seq,
     Slicer,
-    write_parquet_file,
     write_arrays_to_parquet,
+    write_parquet_file,
     write_pylist_to_parquet,
 )
 

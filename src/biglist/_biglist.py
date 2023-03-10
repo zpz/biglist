@@ -926,7 +926,6 @@ class JsonByteSerializer(serializer.ByteSerializer):
         return serializer._loads(json.loads, y.decode(), **kwargs)
 
 
-
 class OrjsonSerializer(serializer.ByteSerializer):
     @classmethod
     def serialize(cls, x, **kwargs):

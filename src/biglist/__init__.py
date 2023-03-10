@@ -45,8 +45,8 @@ from ._util import (
     Seq,
     Slicer,
     write_parquet_file,
-    write_parquet_file_from_arrays,
-    write_parquet_file_from_pylist,
+    write_arrays_to_parquet,
+    write_pylist_to_parquet,
 )
 
 __version__ = "0.7.7b6"

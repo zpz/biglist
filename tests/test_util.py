@@ -1,7 +1,7 @@
 from __future__ import annotations
 from collections.abc import Sequence, Iterable, Sized
 import pytest
-from biglist._util import Slicer, Chain, Seq, locate_idx_in_chunked_seq, make_parquet_schema, make_parquet_type, write_parquet_file_from_pylist
+from biglist._util import Slicer, Chain, Seq, locate_idx_in_chunked_seq, make_parquet_schema, make_parquet_type, write_pylist_to_parquet
 from biglist._base import BiglistBase, FileReader, FileSeq
 from biglist._parquet import ParquetBatchData, read_parquet_file
 import pyarrow
@@ -222,7 +222,7 @@ def test_write_parquet_file(tmp_path):
                     ['hobbies', ['list_', 'string']],
                 ]
     pp = tmp_path / 'data.parquet'
-    write_parquet_file_from_pylist(data, pp, schema_spec=schema_spec)
+    write_pylist_to_parquet(data, pp, schema_spec=schema_spec)
     f = read_parquet_file(pp)
     for row in f:
         print(row)

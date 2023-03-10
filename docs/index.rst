@@ -500,7 +500,7 @@ Let's create a couple small Parquet files to demonstrate this API.
 
 >>> from upathlib import LocalUpath
 >>> import random
->>> from biglist import write_parquet_file_from_arrays
+>>> from biglist import write_arrays_to_parquet
 >>>
 >>> path = LocalUpath('/tmp/a/b/c/e')
 >>> path.rmrf()
@@ -508,12 +508,12 @@ Let's create a couple small Parquet files to demonstrate this API.
 >>> year = list(range(1970, 2021))
 >>> make = ['honda'] * len(year)
 >>> sales = list(range(123, 123 + len(make)))
->>> write_parquet_file_from_arrays([make, year, sales], path / 'honda.parquet', names=['make', 'year', 'sales'], row_group_size=10)
+>>> write_arrays_to_parquet([make, year, sales], path / 'honda.parquet', names=['make', 'year', 'sales'], row_group_size=10)
 >>>
 >>> year = list(range(1960, 2021))
 >>> make = ['ford'] * len(year)
 >>> sales = list(range(234, 234 + len(make)))
->>> write_parquet_file_from_arrays([make, year, sales], path / 'ford.parquet', names=['make', 'year', 'sales'], row_group_size=10)
+>>> write_arrays_to_parquet([make, year, sales], path / 'ford.parquet', names=['make', 'year', 'sales'], row_group_size=10)
 
 Now we want to treat the contents of ``honda.parquet`` and ``ford.parquet`` combined as one dataset, and
 use ``biglist`` tools to read it.
@@ -642,7 +642,7 @@ We can get info about the row-groups, or even retrieve a row-group as the unit o
 >>> rg
 <ParquetBatchData with 10 rows, 3 columns>
 
-(We have specified ``row_group_size=10`` in the call to :func:`write_parquet_file_from_arrays` for demonstration.
+(We have specified ``row_group_size=10`` in the call to :func:`write_arrays_to_parquet` for demonstration.
 In practice, a row-group tends to be much larger.)
 
 A :class:`ParquetBatchData` object is again a :class:`Seq`.
@@ -927,17 +927,17 @@ as demonstrated above, are ready for use:
 Writing Parquet files
 ---------------------
 
-The function :func:`write_parquet_file_from_arrays` is provided to write data columns to a single Parquet file.
+The function :func:`write_arrays_to_parquet` is provided to write data columns to a single Parquet file.
 
 >>> from uuid import uuid4
->>> from biglist import write_parquet_file_from_arrays, read_parquet_file
+>>> from biglist import write_arrays_to_parquet, read_parquet_file
 >>> import random
 >>> from upathlib import LocalUpath
 >>> N = 10000
 >>> path = LocalUpath('/tmp/a/b/c/d')
 >>> path.rmrf()
 1
->>> write_parquet_file_from_arrays([[random.randint(0, 10000) for _ in range(N)], [str(uuid4()) for _ in range(N)]], path / 'data.parquet', names=['key', 'value'])
+>>> write_arrays_to_parquet([[random.randint(0, 10000) for _ in range(N)], [str(uuid4()) for _ in range(N)]], path / 'data.parquet', names=['key', 'value'])
 >>> f = read_parquet_file(path / 'data.parquet')
 >>> f
 <ParquetFileReader for '/tmp/a/b/c/d/data.parquet'>
@@ -960,14 +960,14 @@ required group field_id=-1 schema {
 <BLANKLINE>
 >>>
 
-Similarly, :func:`write_parquet_file_from_pylist` writes data rows to a Parquet file::
+Similarly, :func:`write_pylist_to_parquet` writes data rows to a Parquet file::
 
->>> from biglist import write_parquet_file_from_pylist
+>>> from biglist import write_pylist_to_parquet
 >>> data = [{'name': str(uuid4()), 'age': random.randint(1, 100), 'income': {'employer': str(uuid4()), 'amount': random.randint(10000, 100000)}} for _ in range(100... 0)]
 >>> f = LocalUpath('/tmp/test/data.parquet')
 >>> f.rmrf()
 0
->>> write_parquet_file_from_pylist(data, f)
+>>> write_pylist_to_parquet(data, f)
 >>> ff = read_parquet_file(f)
 >>> ff[0]  # doctest: +SKIP
 {'name': '066ced72-fd33-492a-9180-39eeca541b1a', 'age': 75, 'income': {'amount': 17840, 'employer': 'bfc176a0-5257-4913-bd1e-3c4d51885e0c'}}
@@ -1034,9 +1034,9 @@ API reference
 
 .. autofunction:: biglist.read_parquet_file
 
-.. autofunction:: biglist.write_parquet_file_from_arrays
+.. autofunction:: biglist.write_arrays_to_parquet
 
-.. autofunction:: biglist.write_parquet_file_from_pylist
+.. autofunction:: biglist.write_pylist_to_parquet
 
 .. autoclass:: biglist._biglist.ParquetSerializer
 

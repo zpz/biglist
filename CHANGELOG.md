@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Deprecated
 
 - Deprecated "concurrent_iter" methods from `FileSeq` and "multiplexer" methods from `Biglist`.
-- Deprecated function `write_parquet_file` (use `write_parquet_file_from_arrays` instead).
+- Deprecated function `write_parquet_file` (use `write_arrays_to_parquet` instead).
 
 ### Added
 
@@ -24,7 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `Biglist.new` accepts extra parameters for (de)serialization.
 - New class `Multiplexer`.
 - Allow schema spec when 'storage_format' is 'parquet' for `Biglist`.
-- Function `write_parquet_file` was renamed `write_parquet_file_from_arrays`; added new function `write_parquet_file_from_pylist`.
+- Function `write_parquet_file` was renamed `write_arrays_to_parquet`; added new function `write_pylist_to_parquet`.
+- Added orjson serializers, preparing for their removal from `upathlib`.
 
 
 ## [0.7.6] - 2022-03-01

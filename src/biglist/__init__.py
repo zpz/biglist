@@ -47,6 +47,9 @@ from ._util import (
     write_arrays_to_parquet,
     write_parquet_file,
     write_pylist_to_parquet,
+    make_parquet_schema,
+    make_parquet_field,
+    make_parquet_type,
 )
 
-__version__ = "0.7.7"
+__version__ = "0.7.8b1"

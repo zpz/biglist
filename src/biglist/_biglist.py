@@ -1006,8 +1006,11 @@ class ParquetSerializer(serializer.ByteSerializer):
         writer = pyarrow.parquet.ParquetWriter(sink, table.schema, **kwargs)
         writer.write_table(table)
         writer.close()
-        # return sink.getvalue()
-        return sink.getbuffer()
+        sink.seek(0)
+        # return sink.getvalue()  # bytes
+        # return sink.getbuffer()  # memoryview
+        return sink
+        # this is a file-like object; `upathlib.LocalUpath.write_bytes` and `upathlib.GcsBlobUpath.write_bytes` accept this.
 
     @classmethod
     def deserialize(cls, y: bytes, **kwargs):

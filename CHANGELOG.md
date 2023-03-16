@@ -11,6 +11,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Expose `make_parquet_schema`, `make_parquet_field`, `make_parquet_type` as public API on the `biglist` package level.
 
+### Changed
+
+- `ParquetSerializer.serialize` returns a file-like object.
+
 
 ## [0.7.7] - 2023-03-10
 

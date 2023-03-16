@@ -44,9 +44,12 @@ from ._util import (
     Chain,
     Seq,
     Slicer,
+    make_parquet_field,
+    make_parquet_schema,
+    make_parquet_type,
     write_arrays_to_parquet,
     write_parquet_file,
     write_pylist_to_parquet,
 )
 
-__version__ = "0.7.7"
+__version__ = "0.7.8b1"

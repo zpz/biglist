@@ -1006,12 +1006,22 @@ class ParquetSerializer(serializer.ByteSerializer):
         writer = pyarrow.parquet.ParquetWriter(sink, table.schema, **kwargs)
         writer.write_table(table)
         writer.close()
-        # return sink.getvalue()
-        return sink.getbuffer()
+        sink.seek(0)
+        # return sink.getvalue()  # bytes
+        # return sink.getbuffer()  # memoryview
+        return sink
+        # this is a file-like object; `upathlib.LocalUpath.write_bytes` and `upathlib.GcsBlobUpath.write_bytes` accept this.
 
     @classmethod
     def deserialize(cls, y: bytes, **kwargs):
-        table = pyarrow.parquet.ParquetFile(io.BytesIO(y), **kwargs).read()
+        try:
+            memoryview(y)
+        except TypeError:
+            pass  # `y` is a file-like object
+        else:
+            # `y` is a bytes-like object
+            y = io.BytesIO(y)
+        table = pyarrow.parquet.ParquetFile(y, **kwargs).read()
         return table.to_pylist()
 
 

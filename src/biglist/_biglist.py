@@ -1014,7 +1014,14 @@ class ParquetSerializer(serializer.ByteSerializer):
 
     @classmethod
     def deserialize(cls, y: bytes, **kwargs):
-        table = pyarrow.parquet.ParquetFile(io.BytesIO(y), **kwargs).read()
+        try:
+            memoryview(y)
+        except TypeError:
+            pass  # `y` is a file-like object
+        else:
+            # `y` is a bytes-like object
+            y = io.BytesIO(y)
+        table = pyarrow.parquet.ParquetFile(y, **kwargs).read()
         return table.to_pylist()
 
 

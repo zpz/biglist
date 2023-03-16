@@ -960,12 +960,12 @@ required group field_id=-1 schema {
 <BLANKLINE>
 >>>
 
-Similarly, :func:`write_pylist_to_parquet` writes data rows to a Parquet file::
+Similarly, :func:`write_pylist_to_parquet` writes data rows to a Parquet file:
 
 >>> from biglist import write_pylist_to_parquet
->>> data = [{'name': str(uuid4()), 'age': random.randint(1, 100), 'income': {'employer': str(uuid4()), 'amount': random.randint(10000, 100000)}} for _ in range(100... 0)]
+>>> data = [{'name': str(uuid4()), 'age': random.randint(1, 100), 'income': {'employer': str(uuid4()), 'amount': random.randint(10000, 100000)}} for _ in range(100)]
 >>> f = LocalUpath('/tmp/test/data.parquet')
->>> f.rmrf()
+>>> f.rmrf()  # doctest: +SKIP
 0
 >>> write_pylist_to_parquet(data, f)
 >>> ff = read_parquet_file(f)

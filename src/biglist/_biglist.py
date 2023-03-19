@@ -1011,6 +1011,7 @@ class ParquetSerializer(serializer.ByteSerializer):
         # return sink.getbuffer()  # memoryview
         return sink
         # this is a file-like object; `upathlib.LocalUpath.write_bytes` and `upathlib.GcsBlobUpath.write_bytes` accept this.
+        # We do not returnn the bytes because `upathlib.GcsBlobUpath.write_bytes` can take file-like objects directly.
 
     @classmethod
     def deserialize(cls, y: bytes, **kwargs):

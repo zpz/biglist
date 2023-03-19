@@ -52,4 +52,4 @@ from ._util import (
     write_pylist_to_parquet,
 )
 
-__version__ = "0.7.8b1"
+__version__ = "0.7.8"

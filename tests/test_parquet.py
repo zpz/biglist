@@ -2,10 +2,18 @@ import io
 import random
 from types import SimpleNamespace
 from uuid import uuid4
+
 import pyarrow
-from upathlib import LocalUpath
-from biglist import ParquetBiglist, ParquetFileReader, write_arrays_to_parquet, read_parquet_file, Slicer, ParquetBatchData
 import pytest
+from biglist import (
+    ParquetBatchData,
+    ParquetBiglist,
+    ParquetFileReader,
+    Slicer,
+    read_parquet_file,
+    write_arrays_to_parquet,
+)
+from upathlib import LocalUpath
 
 
 def test_idx_locator():
@@ -25,16 +33,14 @@ def test_idx_locator():
     class My:
         def __init__(self):
             self.num_row_groups = 5
-            self.metadata = SimpleNamespace(
-                row_group=row_group_sizes
-            )
+            self.metadata = SimpleNamespace(row_group=row_group_sizes)
             self._row_groups_num_rows = None
             self._row_groups_num_rows_cumsum = None
             self._getitem_last_row_group = None
 
         def __getitem__(self, idx):
             return ParquetFileReader._locate_row_group_for_item(self, idx)
-        
+
     me = My()
     assert me[0] == (0, 0)
     assert me[1] == (0, 1)
@@ -51,7 +57,7 @@ def test_idx_locator():
     assert me[12] == (3, 0)
     assert me[13] == (4, 0)
     assert me[14] == (4, 1)
-    
+
     # jump around
     assert me[2] == (0, 2)
     assert me[11] == (2, 4)
@@ -130,7 +136,7 @@ def test_parquet_biglist(tmp_path):
             [str(uuid4()) for _ in range(N)],
         ],
         path / 'data_1.parquet',
-        names=['key', 'value']
+        names=['key', 'value'],
     )
 
     # key = pyarrow.array([random.randint(0, 10000) for _ in range(N)])
@@ -141,18 +147,18 @@ def test_parquet_biglist(tmp_path):
     # parquet.write_table(tab, str(path / 'd2' / 'data_2.parquet'))
 
     write_arrays_to_parquet(
-        [ 
-         [random.randint(0, 10000) for _ in range(N)],
-         [str(uuid4()) for _ in range(N)],
-         ],
+        [
+            [random.randint(0, 10000) for _ in range(N)],
+            [str(uuid4()) for _ in range(N)],
+        ],
         path / 'd2' / 'data_2.parquet',
-        names=['key', 'value']
+        names=['key', 'value'],
     )
 
     biglist = ParquetBiglist.new(path)
     assert len(biglist) == N + N
     assert len(biglist.files) == 2
-    
+
     print('')
     print('datafiles')
     z = biglist.files.data_files_info
@@ -198,7 +204,7 @@ def test_parquet_biglist(tmp_path):
     assert isinstance(d2[2], str)
     print(d2[2])
     with pytest.raises(ValueError):
-        d3 = d2.columns(['key'])
+        d2.columns(['key'])
     print(Slicer(d.columns(['key']))[7:17].collect())
     print(list(Slicer(d)[:7]))
 
@@ -212,7 +218,7 @@ def test_parquet_biglist(tmp_path):
     print(z)
     assert isinstance(z['key'], pyarrow.Int64Scalar)
     assert isinstance(z['value'], pyarrow.StringScalar)
-    
+
     # The `pyarrow.Scalar` types compare unequal to Python native types
     assert z['key'] != z['key'].as_py()
     assert z['value'] != z['value'].as_py()

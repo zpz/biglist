@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import itertools
 import logging
-from collections.abc import Iterator, Sequence, Iterable
+from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
 from typing import Any, Callable, Optional
 
 import pyarrow
+from deprecation import deprecated
 from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
-from deprecation import deprecated
 from upathlib import LocalUpath, PathType, Upath, resolve_path
-
 
 from ._base import (
     BiglistBase,
@@ -728,7 +727,6 @@ def read_parquet_file(path: PathType) -> ParquetFileReader:
         Path of the file.
     """
     return ParquetFileReader(path, ParquetBiglist.load_data_file)
-
 
 
 def make_parquet_type(type_spec: str | Sequence):

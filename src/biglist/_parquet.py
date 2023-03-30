@@ -16,11 +16,8 @@ from ._base import (
     BiglistBase,
     FileReader,
     FileSeq,
-    PathType,
     Seq,
-    Upath,
     _get_global_thread_pool,
-    resolve_path,
 )
 from ._util import locate_idx_in_chunked_seq, lock_to_use
 

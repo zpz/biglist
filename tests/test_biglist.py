@@ -1,21 +1,32 @@
 import asyncio
+import multiprocessing
 import os
 import os.path
-import multiprocessing
 import queue
 import random
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed, wait
+from concurrent.futures import (
+    ProcessPoolExecutor,
+    ThreadPoolExecutor,
+    as_completed,
+    wait,
+)
 from shutil import rmtree
 from time import sleep
 
-import pytest
 import pyarrow
+import pytest
+from biglist import Biglist, Multiplexer, ParquetBiglist, Slicer
+from biglist._biglist import (
+    JsonByteSerializer,
+    OrjsonSerializer,
+    ParquetSerializer,
+    ZOrjsonSerializer,
+    ZstdOrjsonSerializer,
+)
 from boltons import iterutils
-from biglist import Biglist, ParquetBiglist, Slicer, Multiplexer
-from biglist._biglist import OrjsonSerializer, ZOrjsonSerializer, ZstdOrjsonSerializer, JsonByteSerializer, ParquetSerializer
 
 
 def test_numbers():
@@ -54,7 +65,9 @@ def test_numbers():
 
 
 def test_existing_numbers():
-    PATH = os.path.join(os.environ.get('TMPDIR', '/tmp'), 'test', 'biglist-existing-numbers')
+    PATH = os.path.join(
+        os.environ.get('TMPDIR', '/tmp'), 'test', 'biglist-existing-numbers'
+    )
     if os.path.isdir(PATH):
         rmtree(PATH)
     yourlist = Biglist.new(PATH)
@@ -111,6 +124,7 @@ def add_to_biglist(path, prefix, length):
     except Exception as e:
         print('error:', repr(e), str(e))
         import traceback
+
         traceback.print_exc()
         raise
 
@@ -169,10 +183,7 @@ def test_file_readers():
         q_files.put(f)
 
     executor = ProcessPoolExecutor(6)
-    tasks = [
-        executor.submit(iter_file, q_files)
-        for _ in range(6)
-    ]
+    tasks = [executor.submit(iter_file, q_files) for _ in range(6)]
 
     data = []
     for t in as_completed(tasks):
@@ -208,11 +219,10 @@ def test_mp1():
     for batch in iterutils.chunked_iter(biglist, biglist.batch_size):
         results.append(square_sum(batch))
 
-    with ProcessPoolExecutor(3, mp_context=multiprocessing.get_context('spawn')) as pool:
-        jobs = [
-            pool.submit(square_sum, v)
-            for v in biglist.files
-        ]
+    with ProcessPoolExecutor(
+        3, mp_context=multiprocessing.get_context('spawn')
+    ) as pool:
+        jobs = [pool.submit(square_sum, v) for v in biglist.files]
         for j, result in zip(jobs, results):
             assert j.result() == result
 
@@ -255,15 +265,12 @@ def test_mp3():
     print('')
     cache = Biglist.new(batch_size=1000)
     ctx = multiprocessing.get_context('spawn')
-    workers = [
-        ctx.Process(target=slow_appender, args=(cache.path,))
-        for _ in range(6)
-    ]
+    workers = [ctx.Process(target=slow_appender, args=(cache.path,)) for _ in range(6)]
     for w in workers:
         w.start()
     for w in workers:
         w.join()
-    
+
     cache.reload()
     print(str(cache))
     print('cache len:', len(cache))
@@ -289,7 +296,7 @@ async def test_async():
 
     tasks = (sum_square(x) for x in biglist.files)
     results = await asyncio.gather(*tasks)
-    assert sum(results) == sum(v*v for v in biglist)
+    assert sum(results) == sum(v * v for v in biglist)
 
 
 def mult_worker(path, task_id, q):
@@ -302,7 +309,7 @@ def mult_worker(path, task_id, q):
     print(worker_id, 'finishing with total', total)
     q.put(total)
 
-    
+
 def test_multiplexer(tmp_path):
     N = 30
     mux = Multiplexer.new(range(1, 1 + N), tmp_path, batch_size=4)
@@ -311,8 +318,7 @@ def test_multiplexer(tmp_path):
     ctx = multiprocessing.get_context('spawn')
     q = ctx.Queue()
     workers = [
-        ctx.Process(target=mult_worker, args=(mux.path, task_id, q))
-        for _ in range(5)
+        ctx.Process(target=mult_worker, args=(mux.path, task_id, q)) for _ in range(5)
     ]
     for w in workers:
         w.start()
@@ -322,7 +328,7 @@ def test_multiplexer(tmp_path):
     total = 0
     while not q.empty():
         total += q.get()
-    assert total == sum(x*x for x in range(1, 1 + N))
+    assert total == sum(x * x for x in range(1, 1 + N))
 
     s = mux.stat()
     print(s)
@@ -333,11 +339,11 @@ def test_parquet():
     data = [
         {
             'name': str(uuid.uuid1()),
-            'age': random.randint(20, 100), 
+            'age': random.randint(20, 100),
             'address': {
-                'state': str(uuid.uuid4()), 
+                'state': str(uuid.uuid4()),
                 'city': str(uuid.uuid4()),
-                },
+            },
             'hobbies': [random.random(), random.random()],
         }
         for _ in range(56)
@@ -366,7 +372,12 @@ def test_parquet():
 
     data = [
         {'name': 'tom', 'age': 38, 'income': {'concurrency': 'YEN', 'amount': 10000}},
-        {'name': 'jane', 'age': 38, 'income': {'amount': 'a lot'}, 'hobbies': ['soccer', 'swim']},
+        {
+            'name': 'jane',
+            'age': 38,
+            'income': {'amount': 'a lot'},
+            'hobbies': ['soccer', 'swim'],
+        },
         {'age': 38, 'hobbies': ['tennis', 'baseball', 0]},
         {'name': 'john', 'age': 38, 'income': {}, 'hobbies': ['soccer', 'swim']},
         {'name': 'paul', 'age': 38, 'income': {'amount': 200}, 'hobbies': ['run']},
@@ -376,22 +387,32 @@ def test_parquet():
     with pytest.raises(pyarrow.lib.ArrowInvalid):
         b2.flush()
 
-
     data = [
         {'name': 'tom', 'age': 38, 'income': {'concurrency': 'YEN', 'amount': 10000}},
-        {'name': 'jane', 'age': 38, 'income': {'amount': 250}, 'hobbies': ['soccer', 'swim']},
+        {
+            'name': 'jane',
+            'age': 38,
+            'income': {'amount': 250},
+            'hobbies': ['soccer', 'swim'],
+        },
         {'age': 38, 'hobbies': ['tennis', 'baseball', 0]},
         {'name': 'john', 'age': 20, 'income': {}, 'hobbies': ['soccer', 'swim']},
         {'name': 'paul', 'age': 38, 'income': {'amount': 200}, 'hobbies': ['run']},
     ]
-    b2 = Biglist.new(storage_format='parquet',
-                     serialize_kwargs={'schema_spec': [
-                        ('name', 'string', False),
-                        ('age', 'uint64'),
-                        ('income', ('struct', [('currency', 'string'), ('amount', 'float64', True)])),
-                        ('hobbies', ('list_', 'string')),
-                     ]},
-                     )
+    b2 = Biglist.new(
+        storage_format='parquet',
+        serialize_kwargs={
+            'schema_spec': [
+                ('name', 'string', False),
+                ('age', 'uint64'),
+                (
+                    'income',
+                    ('struct', [('currency', 'string'), ('amount', 'float64', True)]),
+                ),
+                ('hobbies', ('list_', 'string')),
+            ]
+        },
+    )
     b2.extend(data)
     with pytest.raises(pyarrow.lib.ArrowTypeError):
         b2.flush()
@@ -400,20 +421,26 @@ def test_parquet():
 
     data = [
         {'name': 'tom', 'age': 38, 'income': {'concurrency': 'YEN', 'amount': 10000}},
-        {'name': 'jane', 'age': 38, 'income': {'amount': 250}, 'hobbies': ['soccer', 'swim']},
+        {
+            'name': 'jane',
+            'age': 38,
+            'income': {'amount': 250},
+            'hobbies': ['soccer', 'swim'],
+        },
         {'age': 38, 'hobbies': ['tennis', 'baseball']},
         {'name': 'john', 'age': 20, 'income': {}, 'hobbies': ['soccer', 'swim']},
         {'name': 'paul', 'age': 38, 'income': {'amount': 200}, 'hobbies': ['run']},
     ]
     schema_spec = [
-                    ['name', 'string', False],
-                    ['age', 'uint64'],
-                    ['income', ['struct', [['currency', 'string'], ['amount', 'float64', True]]]],
-                    ['hobbies', ['list_', 'string']],
-                ]
-    b2 = Biglist.new(storage_format='parquet',
-                     serialize_kwargs={'schema_spec': schema_spec},
-                     )
+        ['name', 'string', False],
+        ['age', 'uint64'],
+        ['income', ['struct', [['currency', 'string'], ['amount', 'float64', True]]]],
+        ['hobbies', ['list_', 'string']],
+    ]
+    b2 = Biglist.new(
+        storage_format='parquet',
+        serialize_kwargs={'schema_spec': schema_spec},
+    )
     b2.extend(data)
     b2.flush()
     for row in b2:
@@ -431,9 +458,12 @@ def test_parquet():
 
 def test_serializers():
     data = [12, 23.8, {'a': [9, 'xyz'], 'b': {'first': 3, 'second': 2.3}}, None]
-    for serde in (JsonByteSerializer,
-                  OrjsonSerializer, ZOrjsonSerializer, ZstdOrjsonSerializer,
-                  ):
+    for serde in (
+        JsonByteSerializer,
+        OrjsonSerializer,
+        ZOrjsonSerializer,
+        ZstdOrjsonSerializer,
+    ):
         y = serde.serialize(data)
         z = serde.deserialize(y)
         assert z == data

@@ -8,7 +8,6 @@ import tempfile
 import uuid
 from abc import abstractmethod
 from collections.abc import Iterator
-from datetime import datetime
 from typing import (
     Any,
     Callable,
@@ -16,11 +15,10 @@ from typing import (
     TypeVar,
 )
 
-from deprecation import deprecated
 from mpservice.util import get_shared_thread_pool
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
-from ._util import Element, Seq, lock_to_use
+from ._util import Element, Seq
 
 logger = logging.getLogger(__name__)
 
@@ -178,74 +176,6 @@ class FileSeq(Seq[FileReaderType]):
         Note that this location does not need to be related to the location of the data files.
         """
         raise NotImplementedError
-
-    @deprecated(deprecated_in="0.7.7", removed_in="0.7.9")
-    def _concurrent_iter_info_file(self, task_id: str) -> Upath:
-        """
-        ``task_id``: returned by :meth:`new_concurrent_iter`.
-        """
-        return self.path / ".concurrent_file_iter" / task_id / "info.json"
-
-    @deprecated(deprecated_in="0.7.7", removed_in="0.7.9")
-    def new_concurrent_iter(self) -> str:
-        """
-        Initiate a concurrent iteration of the data files by multiple workers.
-
-        One worker, such as a "coordinator", calls this method and obtains a task-ID.
-        After that, one or more workers independently call :meth:`concurrent_iter`,
-        providing the task-ID, which they have received from the coordinator.
-        Each data file will be obtained by exactly one worker.
-
-        During this iteration, the data files should stay unchanged.
-        """
-        task_id = datetime.utcnow().isoformat()
-        self._concurrent_iter_info_file(task_id).write_json(
-            {"n_files_claimed": 0}, overwrite=False
-        )
-        return task_id
-
-    @deprecated(deprecated_in="0.7.7", removed_in="0.7.9")
-    def concurrent_iter(self, task_id: str) -> Iterator[FileReaderType]:
-        """
-        Parameters
-        ----------
-        task_id
-            The string returned by :meth:`new_concurrent_iter`.
-            All workers that call this method using the same ``task_id``
-            will consume the data files collectively.
-
-        .. seealso:: :meth:`__getitem__`, :meth:`new_concurrent_iter`
-        """
-        nfiles = self.__len__()
-        while True:
-            with lock_to_use(self._concurrent_iter_info_file(task_id)) as ff:
-                iter_info = ff.read_json()
-                n_files_claimed = iter_info["n_files_claimed"]
-                if n_files_claimed >= nfiles:
-                    # No more date files to process.
-                    break
-
-                iter_info["n_files_claimed"] = n_files_claimed + 1
-                ff.write_json(iter_info, overwrite=True)
-
-            logger.debug('yielding file #"%d"', n_files_claimed)
-            yield self.__getitem__(n_files_claimed)
-
-    @deprecated(deprecated_in="0.7.7", removed_in="0.7.9")
-    def concurrent_iter_stat(self, task_id: str) -> dict:
-        """Return status info for an ongoing "concurrent file iter"
-        identified by the task ID.
-
-        .. seealso: :meth:`new_concurrent_iter`.
-        """
-        info = self._concurrent_iter_info_file(task_id).read_json()
-        return {**info, "n_files": self.__len__()}
-
-    @deprecated(deprecated_in="0.7.7", removed_in="0.7.9")
-    def concurrent_iter_done(self, task_id: str) -> bool:
-        """Return whether the "concurrent file iter" identified by ``task_id`` is finished."""
-        zz = self.concurrent_iter_stat(task_id)
-        return zz["n_files_claimed"] >= zz["n_files"]
 
 
 class BiglistBase(Seq[Element]):
@@ -440,9 +370,9 @@ class BiglistBase(Seq[Element]):
             self._thread_pool_ = _get_global_thread_pool()
         return self._thread_pool_
 
-    def destroy(self) -> None:
+    def destroy(self, *, concurrent=True) -> None:
         self.keep_files = False
-        self.path.rmrf()
+        self.path.rmrf(concurrent=concurrent)
 
     def __del__(self):
         if getattr(self, "keep_files", True) is False:

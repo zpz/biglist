@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.7.9] - in progress
+
+### Removed
+
+- Removed previously deprecated methods related to `multiplexer` on `Biglist`.
+- Removed previously deprecated methods related to `concurrent_iter` on `FileSeq`.
+
+### Changed
+
+- Upgrade `upathlib` version to 0.7.6
+- Change dependency `zstandard` to optional
+
+### Added
+
+- Optional dependency `lz4`
+- Storage formats `pickle-lz4` and `orjson-lz4`
+
+
 ## [0.7.8] - 2023-03-19
 
 ### Added

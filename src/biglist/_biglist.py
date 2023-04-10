@@ -14,7 +14,6 @@ import string
 import threading
 import warnings
 import weakref
-import zlib
 from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
@@ -27,8 +26,6 @@ from uuid import uuid4
 
 import orjson
 import pyarrow
-import zstandard
-from deprecation import deprecated
 from typing_extensions import Self
 from upathlib import serializer
 
@@ -41,7 +38,8 @@ from ._base import (
     Upath,
     resolve_path,
 )
-from ._util import lock_to_use, make_parquet_schema
+from ._parquet import make_parquet_schema
+from ._util import lock_to_use
 
 logger = logging.getLogger(__name__)
 
@@ -405,7 +403,7 @@ class Biglist(BiglistBase[Element]):
 
     def __del__(self) -> None:
         if getattr(self, "keep_files", True) is False:
-            self.destroy()
+            self.destroy(concurrent=False)
         else:
             if not self._flushed:
                 warnings.warn(
@@ -658,127 +656,6 @@ class Biglist(BiglistBase[Element]):
             fun,
         )
 
-    @deprecated(
-        deprecated_in="0.7.7",
-        removed_in="0.7.9",
-        details="Use ``Multiplexer`` instead.",
-    )
-    def _multiplex_info_file(self, task_id: str) -> Upath:
-        """
-        `task_id`: returned by :meth:`new_multiplexer`.
-        """
-        return self.path / ".multiplexer" / task_id / "info.json"
-
-    @deprecated(
-        deprecated_in="0.7.7",
-        removed_in="0.7.9",
-        details="Use ``Multiplexer`` instead.",
-    )
-    def new_multiplexer(self) -> str:
-        """
-        One worker, such as a "coordinator", calls this method once.
-        After that, one or more workers independently call :meth:`multiplex_iter`
-        to iterate over the :class:`Biglist`. :meth:`multiplex_iter` takes the task-ID returned by
-        this method. The content of the :class:`Biglist` is
-        split between the workers in that each data element will be obtained
-        by exactly one worker.
-
-        During this iteration, the :class:`Biglist` object should stay unchanged---no
-        calls to :meth:`append` and :meth:`extend`.
-
-        Difference between :meth:`~_base.BiglistBase.concurrent_iter_files` and :meth:`multiplex_iter`: the former
-        distributes files to workers, whereas the latter distributes individual
-        data elements to workers.
-
-        The intended use case of multiplexer: each data element represents considerable amounts
-        of work--it is a "hyper-parameter" or the like; :meth:`multiplex_iter` facilitates
-        splitting the work represented by different values of this "hyper-parameter"
-        between multiple workers.
-        """
-        assert not self._append_buffer
-        if not self._flushed:
-            warnings.warn(
-                f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
-            )
-        task_id = datetime.utcnow().isoformat()
-        self._multiplex_info_file(task_id).write_json(
-            {
-                "total": len(self),
-                "next": 0,
-                "time": datetime.utcnow().isoformat(),
-            },
-            overwrite=False,
-        )
-        return task_id
-
-    @deprecated(
-        deprecated_in="0.7.7",
-        removed_in="0.7.9",
-        details="Use ``Multiplexer`` instead.",
-    )
-    def multiplex_iter(
-        self, task_id: str, worker_id: Optional[str] = None
-    ) -> Iterator[Element]:
-        """
-        Parameters
-        ----------
-        task_id
-            The string returned by :meth:`new_multiplexer`.
-        worker_id
-            A string representing a particular worker. If missing,
-            a default is constructed based on thread name and process name of the worker.
-        """
-        if not worker_id:
-            worker_id = "{} {}".format(
-                multiprocessing.current_process().name,
-                threading.current_thread().name,
-            )
-        finfo = self._multiplex_info_file(task_id)
-        while True:
-            with lock_to_use(finfo) as ff:
-                # In concurrent use cases, I've observed
-                # `upathlib.LockAcquireError` raised here.
-                # User may want to do retry here.
-                ss = ff.read_json()
-                # In concurrent use cases, I've observed
-                # `FileNotFoundError` here. User may want
-                # to do retry here.
-
-                n = ss["next"]
-                if n == ss["total"]:
-                    return
-                ff.write_json(
-                    {
-                        "next": n + 1,
-                        "worker_id": worker_id,
-                        "time": datetime.utcnow().isoformat(),
-                        "total": ss["total"],
-                    },
-                    overwrite=True,
-                )
-            yield self[n]
-
-    @deprecated(
-        deprecated_in="0.7.7",
-        removed_in="0.7.9",
-        details="Use ``Multiplexer`` instead.",
-    )
-    def multiplex_stat(self, task_id: str) -> dict:
-        """
-        Return status info of an ongoing "multiplex iter".
-        """
-        return self._multiplex_info_file(task_id).read_json()
-
-    @deprecated(
-        deprecated_in="0.7.7",
-        removed_in="0.7.9",
-        details="Use ``Multiplexer`` instead.",
-    )
-    def multiplex_done(self, task_id: str) -> bool:
-        """Return whether the "multiplex iter" identified by ``task_id`` is finished."""
-        ss = self.multiplex_stat(task_id)
-        return ss["next"] == ss["total"]
-
 
 class Dumper:
     """
@@ -940,23 +817,11 @@ class ZOrjsonSerializer(OrjsonSerializer):
     @classmethod
     def serialize(cls, x, *, level=serializer.ZLIB_LEVEL, **kwargs):
         y = super().serialize(x, **kwargs)
-        return zlib.compress(y, level=level)
+        return serializer.z_compress(y, level=level)
 
     @classmethod
     def deserialize(cls, y):
-        y = zlib.decompress(y)
-        return super().deserialize(y)
-
-
-class ZstdOrjsonSerializer(OrjsonSerializer):
-    @classmethod
-    def serialize(cls, x, *, level=serializer.ZSTD_LEVEL, **kwargs):
-        y = super().serialize(x, **kwargs)
-        return zstandard.compress(y, level=level)
-
-    @classmethod
-    def deserialize(cls, y):
-        y = zstandard.decompress(y)
+        y = serializer.z_decompress(y)
         return super().deserialize(y)
 
 
@@ -1029,11 +894,43 @@ class ParquetSerializer(serializer.ByteSerializer):
 Biglist.register_storage_format("json", JsonByteSerializer)
 Biglist.register_storage_format("pickle", serializer.PickleSerializer)
 Biglist.register_storage_format("pickle-z", serializer.ZPickleSerializer)
-Biglist.register_storage_format("pickle-zstd", serializer.ZstdPickleSerializer)
 Biglist.register_storage_format("orjson", OrjsonSerializer)
 Biglist.register_storage_format("orjson-z", ZOrjsonSerializer)
-Biglist.register_storage_format("orjson-zstd", ZstdOrjsonSerializer)
 Biglist.register_storage_format("parquet", ParquetSerializer)
+
+
+if hasattr(serializer, 'zstd_compress'):
+
+    class ZstdOrjsonSerializer(OrjsonSerializer):
+        @classmethod
+        def serialize(cls, x, *, level=serializer.ZSTD_LEVEL, **kwargs):
+            y = super().serialize(x, **kwargs)
+            return serializer.zstd_compress(y, level=level)
+
+        @classmethod
+        def deserialize(cls, y):
+            y = serializer.zstd_decompress(y)
+            return super().deserialize(y)
+
+    Biglist.register_storage_format("pickle-zstd", serializer.ZstdPickleSerializer)
+    Biglist.register_storage_format("orjson-zstd", ZstdOrjsonSerializer)
+
+
+if hasattr(serializer, 'lz4_compress'):
+
+    class Lz4OrjsonSerializer(OrjsonSerializer):
+        @classmethod
+        def serialize(cls, x, *, level=serializer.LZ4_LEVEL, **kwargs):
+            y = super().serialize(x, **kwargs)
+            return serializer.lz4_compress(y, level=level)
+
+        @classmethod
+        def deserialize(cls, y):
+            y = serializer.lz4_decompress(y)
+            return super().deserialize(y)
+
+    Biglist.register_storage_format("pickle-lz4", serializer.Lz4PickleSerializer)
+    Biglist.register_storage_format("orjson-lz4", Lz4OrjsonSerializer)
 
 
 class Multiplexer:

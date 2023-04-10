@@ -1031,6 +1031,11 @@ API reference
 
 .. autoclass:: biglist.ParquetBatchData
 
+.. autofunction:: biglist.make_parquet_schema
+
+.. autofunction:: biglist.make_parquet_field
+
+.. autofunction:: biglist.make_parquet_type
 
 .. autofunction:: biglist.read_parquet_file
 
@@ -1040,11 +1045,6 @@ API reference
 
 .. autoclass:: biglist._biglist.ParquetSerializer
 
-.. autofunction:: biglist._util.make_parquet_schema
-
-.. autofunction:: biglist._util.make_parquet_field
-
-.. autofunction:: biglist._util.make_parquet_type
 
 
 Indices and tables

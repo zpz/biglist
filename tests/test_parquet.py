@@ -12,6 +12,9 @@ from biglist import (
     Slicer,
     read_parquet_file,
     write_arrays_to_parquet,
+    make_parquet_schema,
+    make_parquet_type,
+    write_pylist_to_parquet,
 )
 from upathlib import LocalUpath
 
@@ -252,3 +255,78 @@ def test_parquet_biglist(tmp_path):
         print(row)
         if k > 3:
             break
+
+
+
+def test_parquet_schema():
+    type_spec = (
+        'struct',
+        [
+            ('name', 'string', False),
+            ('age', 'uint8', True),
+            (
+                'income',
+                ('struct', (('currency', 'string'), ('amount', 'uint64'))),
+                False,
+            ),
+        ],
+    )
+    s = make_parquet_type(type_spec)
+    assert type(s) is pyarrow.StructType
+    print(s)
+
+    type_spec = ('map_', 'string', ('list_', 'int64'), True)
+    s = make_parquet_type(type_spec)
+    assert type(s) is pyarrow.MapType
+    print(s)
+
+    type_spec = ('list_', 'int64')
+    s = make_parquet_type(type_spec)
+    assert type(s) is pyarrow.ListType
+    print(s)
+
+    type_spec = ('list_', ('time32', 's'), 5)
+    s = make_parquet_type(type_spec)
+    assert type(s) is pyarrow.FixedSizeListType
+    print(s)
+
+    schema_spec = [
+        ('name', 'string', False),
+        ('age', 'uint8', False),
+        (
+            'income',
+            ('struct', (('concurrency', 'string', True), ('amount', 'uint64'))),
+            True,
+        ),
+        ('hobbies', ('list_', 'string'), True),
+    ]
+    schema = make_parquet_schema(schema_spec)
+    assert type(schema) is pyarrow.Schema
+    print('')
+    print(schema)
+
+
+def test_write_parquet_file(tmp_path):
+    data = [
+        {'name': 'tom', 'age': 38, 'income': {'concurrency': 'YEN', 'amount': 10000}},
+        {
+            'name': 'jane',
+            'age': 38,
+            'income': {'amount': 250},
+            'hobbies': ['soccer', 'swim'],
+        },
+        {'age': 38, 'hobbies': ['tennis', 'baseball']},
+        {'name': 'john', 'age': 20, 'income': {}, 'hobbies': ['soccer', 'swim']},
+        {'name': 'paul', 'age': 38, 'income': {'amount': 200}, 'hobbies': ['run']},
+    ]
+    schema_spec = [
+        ['name', 'string', False],
+        ['age', 'uint64'],
+        ['income', ['struct', [['currency', 'string'], ['amount', 'float64', True]]]],
+        ['hobbies', ['list_', 'string']],
+    ]
+    pp = tmp_path / 'data.parquet'
+    write_pylist_to_parquet(data, pp, schema_spec=schema_spec)
+    f = read_parquet_file(pp)
+    for row in f:
+        print(row)

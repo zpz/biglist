@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence, Sized
 
-import pyarrow
 import pytest
 from biglist._base import BiglistBase, FileReader, FileSeq
-from biglist._parquet import ParquetBatchData, read_parquet_file
+from biglist._parquet import ParquetBatchData
 from biglist._util import (
     Chain,
     Seq,
@@ -174,4 +173,3 @@ def test_chain():
 
     with pytest.raises(IndexError):
         _ = ch[2]
-

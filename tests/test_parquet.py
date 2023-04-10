@@ -10,10 +10,10 @@ from biglist import (
     ParquetBiglist,
     ParquetFileReader,
     Slicer,
-    read_parquet_file,
-    write_arrays_to_parquet,
     make_parquet_schema,
     make_parquet_type,
+    read_parquet_file,
+    write_arrays_to_parquet,
     write_pylist_to_parquet,
 )
 from upathlib import LocalUpath
@@ -255,7 +255,6 @@ def test_parquet_biglist(tmp_path):
         print(row)
         if k > 3:
             break
-
 
 
 def test_parquet_schema():

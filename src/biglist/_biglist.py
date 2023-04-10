@@ -900,6 +900,7 @@ Biglist.register_storage_format("parquet", ParquetSerializer)
 
 
 if hasattr(serializer, 'zstd_compress'):
+
     class ZstdOrjsonSerializer(OrjsonSerializer):
         @classmethod
         def serialize(cls, x, *, level=serializer.ZSTD_LEVEL, **kwargs):
@@ -911,12 +912,12 @@ if hasattr(serializer, 'zstd_compress'):
             y = serializer.zstd_decompress(y)
             return super().deserialize(y)
 
-
     Biglist.register_storage_format("pickle-zstd", serializer.ZstdPickleSerializer)
     Biglist.register_storage_format("orjson-zstd", ZstdOrjsonSerializer)
 
 
 if hasattr(serializer, 'lz4_compress'):
+
     class Lz4OrjsonSerializer(OrjsonSerializer):
         @classmethod
         def serialize(cls, x, *, level=serializer.LZ4_LEVEL, **kwargs):
@@ -927,7 +928,6 @@ if hasattr(serializer, 'lz4_compress'):
         def deserialize(cls, y):
             y = serializer.lz4_decompress(y)
             return super().deserialize(y)
-
 
     Biglist.register_storage_format("pickle-lz4", serializer.Lz4PickleSerializer)
     Biglist.register_storage_format("orjson-lz4", Lz4OrjsonSerializer)

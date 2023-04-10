@@ -8,7 +8,6 @@ import tempfile
 import uuid
 from abc import abstractmethod
 from collections.abc import Iterator
-from datetime import datetime
 from typing import (
     Any,
     Callable,
@@ -16,11 +15,10 @@ from typing import (
     TypeVar,
 )
 
-from deprecation import deprecated
 from mpservice.util import get_shared_thread_pool
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
-from ._util import Element, Seq, lock_to_use
+from ._util import Element, Seq
 
 logger = logging.getLogger(__name__)
 

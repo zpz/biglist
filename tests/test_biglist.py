@@ -455,9 +455,7 @@ def test_parquet():
 
 def test_serializers():
     data = [12, 23.8, {'a': [9, 'xyz'], 'b': {'first': 3, 'second': 2.3}}, None]
-    for serde in (
-        JsonByteSerializer,
-    ):
+    for serde in (JsonByteSerializer,):
         y = serde.serialize(data)
         z = serde.deserialize(y)
         assert z == data

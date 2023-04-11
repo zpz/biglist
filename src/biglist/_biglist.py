@@ -24,7 +24,6 @@ from typing import (
 )
 from uuid import uuid4
 
-import orjson
 import pyarrow
 from typing_extensions import Self
 from upathlib import serializer
@@ -803,28 +802,6 @@ class JsonByteSerializer(serializer.ByteSerializer):
         return serializer._loads(json.loads, y.decode(), **kwargs)
 
 
-class OrjsonSerializer(serializer.ByteSerializer):
-    @classmethod
-    def serialize(cls, x, **kwargs):
-        return orjson.dumps(x, **kwargs)  # pylint: disable=no-member
-
-    @classmethod
-    def deserialize(cls, y):
-        return serializer._loads(orjson.loads, y)  # pylint: disable=no-member
-
-
-class ZOrjsonSerializer(OrjsonSerializer):
-    @classmethod
-    def serialize(cls, x, *, level=serializer.ZLIB_LEVEL, **kwargs):
-        y = super().serialize(x, **kwargs)
-        return serializer.z_compress(y, level=level)
-
-    @classmethod
-    def deserialize(cls, y):
-        y = serializer.z_decompress(y)
-        return super().deserialize(y)
-
-
 class ParquetSerializer(serializer.ByteSerializer):
     @classmethod
     def serialize(
@@ -894,43 +871,15 @@ class ParquetSerializer(serializer.ByteSerializer):
 Biglist.register_storage_format("json", JsonByteSerializer)
 Biglist.register_storage_format("pickle", serializer.PickleSerializer)
 Biglist.register_storage_format("pickle-z", serializer.ZPickleSerializer)
-Biglist.register_storage_format("orjson", OrjsonSerializer)
-Biglist.register_storage_format("orjson-z", ZOrjsonSerializer)
 Biglist.register_storage_format("parquet", ParquetSerializer)
 
 
-if hasattr(serializer, 'zstd_compress'):
-
-    class ZstdOrjsonSerializer(OrjsonSerializer):
-        @classmethod
-        def serialize(cls, x, *, level=serializer.ZSTD_LEVEL, **kwargs):
-            y = super().serialize(x, **kwargs)
-            return serializer.zstd_compress(y, level=level)
-
-        @classmethod
-        def deserialize(cls, y):
-            y = serializer.zstd_decompress(y)
-            return super().deserialize(y)
-
+if hasattr(serializer, 'ZstdPickleSerializer'):
     Biglist.register_storage_format("pickle-zstd", serializer.ZstdPickleSerializer)
-    Biglist.register_storage_format("orjson-zstd", ZstdOrjsonSerializer)
 
 
-if hasattr(serializer, 'lz4_compress'):
-
-    class Lz4OrjsonSerializer(OrjsonSerializer):
-        @classmethod
-        def serialize(cls, x, *, level=serializer.LZ4_LEVEL, **kwargs):
-            y = super().serialize(x, **kwargs)
-            return serializer.lz4_compress(y, level=level)
-
-        @classmethod
-        def deserialize(cls, y):
-            y = serializer.lz4_decompress(y)
-            return super().deserialize(y)
-
+if hasattr(serializer, 'Lz4PickleSerializer'):
     Biglist.register_storage_format("pickle-lz4", serializer.Lz4PickleSerializer)
-    Biglist.register_storage_format("orjson-lz4", Lz4OrjsonSerializer)
 
 
 class Multiplexer:

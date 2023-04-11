@@ -21,10 +21,7 @@ import pytest
 from biglist import Biglist, Multiplexer, ParquetBiglist, Slicer
 from biglist._biglist import (
     JsonByteSerializer,
-    OrjsonSerializer,
     ParquetSerializer,
-    ZOrjsonSerializer,
-    ZstdOrjsonSerializer,
 )
 from boltons import iterutils
 
@@ -460,9 +457,6 @@ def test_serializers():
     data = [12, 23.8, {'a': [9, 'xyz'], 'b': {'first': 3, 'second': 2.3}}, None]
     for serde in (
         JsonByteSerializer,
-        OrjsonSerializer,
-        ZOrjsonSerializer,
-        ZstdOrjsonSerializer,
     ):
         y = serde.serialize(data)
         z = serde.deserialize(y)

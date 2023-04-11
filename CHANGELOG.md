@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Removed previously deprecated methods related to `multiplexer` on `Biglist`.
 - Removed previously deprecated methods related to `concurrent_iter` on `FileSeq`.
+- Removed `orjson` related storage formats.
 
 ### Changed
 
@@ -20,7 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - Optional dependency `lz4`
-- Storage formats `pickle-lz4` and `orjson-lz4`
+- Storage formats `pickle-lz4`
 
 
 ## [0.7.8] - 2023-03-19

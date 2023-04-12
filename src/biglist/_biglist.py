@@ -404,7 +404,7 @@ class Biglist(BiglistBase[Element]):
         if getattr(self, "keep_files", True) is False:
             self.destroy(concurrent=False)
         else:
-            if not self._flushed:
+            if not getattr(self, '_flushed', True):
                 warnings.warn(
                     f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
                 )

@@ -75,6 +75,12 @@ class FileReader(Seq[Element]):
     def __str__(self):
         return self.__repr__()
 
+    def __getstate__(self):
+        return self.path, self.loader
+
+    def __setstate__(self, data):
+        self.path, self.loader = data
+
     @abstractmethod
     def load(self) -> None:
         """

@@ -3,6 +3,7 @@ from __future__ import annotations
 import itertools
 import logging
 from collections.abc import Iterable, Iterator, Sequence
+from multiprocessing.util import Finalize
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -11,6 +12,12 @@ from deprecation import deprecated
 from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
 from upathlib import LocalUpath, PathType, Upath, resolve_path
+
+try:
+    from google.cloud.storage import retry as gcs_retry
+    from upathlib.gcs import get_google_auth
+except ImportError:
+    pass
 
 from ._base import (
     BiglistBase,
@@ -60,18 +67,29 @@ class ParquetBiglist(BiglistBase):
         This is provided under the (un-verified) assumption that the
         default credential inference process is a high overhead.
         """
-        # Import here b/c user may not be on GCP
-        from upathlib.gcs import get_google_auth
-
-        cls._GCP_PROJECT_ID, cls._GCP_CREDENTIALS, _ = get_google_auth(
+        cls._GCP_PROJECT_ID, cls._GCP_CREDENTIALS, renewed = get_google_auth(
             project_id=getattr(cls, '_GCP_PROJECT_ID', None),
             credentials=getattr(cls, "_GCP_CREDENTIALS", None),
             valid_for_seconds=good_for_seconds,
         )
-        return GcsFileSystem(
-            access_token=cls._GCP_CREDENTIALS.token,
-            credential_token_expiration=cls._GCP_CREDENTIALS.expiry,
-        )
+        if renewed or getattr(cls, '_GCSFS', None) is None:
+            fs = GcsFileSystem(
+                access_token=cls._GCP_CREDENTIALS.token,
+                credential_token_expiration=cls._GCP_CREDENTIALS.expiry,
+            )
+            cls._GCSFS = fs
+        return cls._GCSFS
+
+    @classmethod
+    def _gcs_retry(cls):
+        def _should_retry(exc):
+            if isinstance(exc, pyarrow.lib.ArrowException) and str(exc).startswith(
+                'Unknown error'
+            ):
+                return True
+            return gcs_retry.DEFAULT_RETRY._predicate(exc)
+
+        return gcs_retry.DEFAULT_RETRY.with_predicate(_should_retry)
 
     @classmethod
     def load_data_file(cls, path: Upath) -> ParquetFile:
@@ -84,7 +102,10 @@ class ParquetBiglist(BiglistBase):
         ff, pp = FileSystem.from_uri(str(path))
         if isinstance(ff, GcsFileSystem):
             ff = cls.get_gcsfs()
-        return ParquetFile(ff.open_input_file(pp))
+            pf = cls._gcs_retry()(ParquetFile)  # a retry-wrapped func
+        else:
+            pf = ParquetFile
+        return pf(pp, filesystem=ff)
 
     @classmethod
     def new(
@@ -141,8 +162,9 @@ class ParquetBiglist(BiglistBase):
         else:
             data_path = [resolve_path(p) for p in data_path]
 
-        def get_file_meta(f, p: Upath):
-            meta = f(p).metadata
+        def get_file_meta(p: Upath):
+            with cls.load_data_file(p) as ff:
+                meta = ff.metadata
             return {
                 "path": str(p),  # str of full path
                 "num_rows": meta.num_rows,
@@ -153,18 +175,15 @@ class ParquetBiglist(BiglistBase):
 
         pool = _get_global_thread_pool()
         tasks = []
-        read_parquet = cls.load_data_file
         for p in data_path:
             if p.is_file():
                 if suffix == "*" or p.name.endswith(suffix):
-                    tasks.append(pool.submit(get_file_meta, read_parquet, p))
+                    tasks.append(pool.submit(get_file_meta, p))
             else:
                 tt = []
                 for pp in p.riterdir():
                     if suffix == "*" or pp.name.endswith(suffix):
-                        tt.append(
-                            (str(pp), pool.submit(get_file_meta, read_parquet, pp))
-                        )
+                        tt.append((str(pp), pool.submit(get_file_meta, pp)))
                 tt.sort()
                 for p, t in tt:
                     tasks.append(t)
@@ -258,6 +277,10 @@ class ParquetFileReader(FileReader):
             Usually this is :meth:`ParquetBiglist.load_data_file`.
             If you customize this, please see the doc of :meth:`FileReader.__init__`.
         """
+        super().__init__(path, loader)
+        self._reset()
+
+    def _reset(self):
         self._file: Optional[ParquetFile] = None
         self._data: Optional[ParquetBatchData] = None
 
@@ -269,10 +292,15 @@ class ParquetFileReader(FileReader):
         self._columns = {}
         self._getitem_last_row_group = None
 
-        super().__init__(path, loader)
-
         self._scalar_as_py = None
         self.scalar_as_py = True
+
+    def __getstate__(self):
+        return super().__getstate__()
+
+    def __setstate__(self, data):
+        super().__setstate__(data)
+        self._reset()
 
     @property
     def scalar_as_py(self) -> bool:
@@ -325,6 +353,7 @@ class ParquetFileReader(FileReader):
         """
         if self._file is None:
             self._file = self.loader(self.path)
+            Finalize(self, self._file.close)
         return self._file
 
     @property

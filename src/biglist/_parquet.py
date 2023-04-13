@@ -63,12 +63,14 @@ class ParquetBiglist(BiglistBase):
         # Import here b/c user may not be on GCP
         from upathlib.gcs import get_google_auth
 
-        _, cred, _ = get_google_auth(
+        cls._GCP_PROJECT_ID, cls._GCP_CREDENTIALS, _ = get_google_auth(
+            project_id=getattr(cls, '_GCP_PROJECT_ID', None),
             credentials=getattr(cls, "_GCP_CREDENTIALS", None),
             valid_for_seconds=good_for_seconds,
         )
         return GcsFileSystem(
-            access_token=cred.token, credential_token_expiration=cred.expiry
+            access_token=cls._GCP_CREDENTIALS.token,
+            credential_token_expiration=cls._GCP_CREDENTIALS.expiry,
         )
 
     @classmethod
@@ -885,8 +887,6 @@ def write_parquet_table(
         path.parent.path.mkdir(exist_ok=True, parents=True)
     ff, pp = FileSystem.from_uri(str(path))
     if isinstance(ff, GcsFileSystem):
-        from ._parquet import ParquetBiglist
-
         ff = ParquetBiglist.get_gcsfs()
     pyarrow.parquet.write_table(table, ff.open_output_stream(pp), **kwargs)
 

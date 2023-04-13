@@ -737,7 +737,7 @@ class BiglistFileReader(FileReader[Element]):
 
     def __getstate__(self):
         return super().__getstate__()
-    
+
     def __setstate__(self, data):
         super().__setstate__(data)
         self._data = None

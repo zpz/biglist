@@ -3,18 +3,19 @@ from __future__ import annotations
 import itertools
 import logging
 from collections.abc import Iterable, Iterator, Sequence
+from multiprocessing.util import Finalize
 from pathlib import Path
 from typing import Any, Callable, Optional
-from multiprocessing.util import Finalize
 
 import pyarrow
 from deprecation import deprecated
 from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
 from upathlib import LocalUpath, PathType, Upath, resolve_path
+
 try:
-    from upathlib.gcs import get_google_auth
     from google.cloud.storage import retry as gcs_retry
+    from upathlib.gcs import get_google_auth
 except ImportError:
     pass
 
@@ -82,10 +83,12 @@ class ParquetBiglist(BiglistBase):
     @classmethod
     def _gcs_retry(cls):
         def _should_retry(exc):
-            if isinstance(exc, pyarrow.lib.ArrowException) and str(exc).startswith('Unknown error'):
+            if isinstance(exc, pyarrow.lib.ArrowException) and str(exc).startswith(
+                'Unknown error'
+            ):
                 return True
             return gcs_retry.DEFAULT_RETRY._predicate(exc)
-        
+
         return gcs_retry.DEFAULT_RETRY.with_predicate(_should_retry)
 
     @classmethod
@@ -180,9 +183,7 @@ class ParquetBiglist(BiglistBase):
                 tt = []
                 for pp in p.riterdir():
                     if suffix == "*" or pp.name.endswith(suffix):
-                        tt.append(
-                            (str(pp), pool.submit(get_file_meta, pp))
-                        )
+                        tt.append((str(pp), pool.submit(get_file_meta, pp)))
                 tt.sort()
                 for p, t in tt:
                     tasks.append(t)
@@ -296,7 +297,7 @@ class ParquetFileReader(FileReader):
 
     def __getstate__(self):
         return super().__getstate__()
-    
+
     def __setstate__(self, data):
         super().__setstate__(data)
         self._reset()

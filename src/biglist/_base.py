@@ -77,7 +77,7 @@ class FileReader(Seq[Element]):
 
     def __getstate__(self):
         return self.path, self.loader
-    
+
     def __setstate__(self, data):
         self.path, self.loader = data
 

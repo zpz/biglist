@@ -70,7 +70,7 @@ class ParquetBiglist(BiglistBase):
         )
         return GcsFileSystem(
             access_token=cls._GCP_CREDENTIALS.token,
-            credential_token_expiration=cls._GCP_CREDENTIALS.expiry
+            credential_token_expiration=cls._GCP_CREDENTIALS.expiry,
         )
 
     @classmethod

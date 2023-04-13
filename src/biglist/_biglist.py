@@ -927,7 +927,9 @@ class Multiplexer:
         """
         path = resolve_path(path)
         bl = Biglist.new(
-            path / "data", batch_size=batch_size, storage_format=storage_format,
+            path / "data",
+            batch_size=batch_size,
+            storage_format=storage_format,
         )
         bl.extend(data)
         bl.flush()

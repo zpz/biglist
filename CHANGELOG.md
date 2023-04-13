@@ -13,15 +13,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Removed previously deprecated methods related to `concurrent_iter` on `FileSeq`.
 - Removed `orjson` related storage formats.
 
-### Changed
-
-- Upgrade `upathlib` version to 0.7.6
-- Change dependency `zstandard` to optional
-
 ### Added
 
 - Optional dependency `lz4`
 - Storage formats `pickle-lz4`
+
+### Changed or enhanced
+
+- Upgrade `upathlib` version to 0.7.6
+- Change dependency `zstandard` to optional
+- Persist GCP credentials in `ParquetBiglist` so that authentication is not repeated when unnecessary.
+- ``Multiplexer`` uses default storage-format 'parquet'.
 
 
 ## [0.7.8] - 2023-03-19

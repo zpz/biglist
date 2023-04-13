@@ -906,7 +906,7 @@ class Multiplexer:
         path: Optional[PathType],
         *,
         batch_size: int = 10_000,
-        storage_format: Optional[str] = None,
+        storage_format: str = 'pickle',
     ):
         """
         Parameters
@@ -927,7 +927,7 @@ class Multiplexer:
         """
         path = resolve_path(path)
         bl = Biglist.new(
-            path / "data", batch_size=batch_size, storage_format=storage_format
+            path / "data", batch_size=batch_size, storage_format=storage_format,
         )
         bl.extend(data)
         bl.flush()

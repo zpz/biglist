@@ -735,6 +735,13 @@ class BiglistFileReader(FileReader[Element]):
         self._data: Optional[list] = None
         super().__init__(path, loader)
 
+    def __getstate__(self):
+        return super().__getstate__()
+    
+    def __setstate__(self, data):
+        super().__setstate__(data)
+        self._data = None
+
     def load(self) -> None:
         if self._data is None:
             self._data = self.loader(self.path)

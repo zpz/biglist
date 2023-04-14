@@ -9,8 +9,6 @@ import uuid
 from abc import abstractmethod
 from collections.abc import Iterator
 from typing import (
-    Any,
-    Callable,
     Optional,
     TypeVar,
 )
@@ -54,32 +52,11 @@ class FileReader(Seq[Element]):
             ...
     """
 
-    def __init__(self, path: PathType, loader: Callable[[Upath], Any]):
-        """
-        Parameters
-        ----------
-        path
-            Path of the data file.
-        loader
-            A function that will be used to load the data file.
-            This must be pickle-able.
-        """
-        self.path: Upath = resolve_path(path)
-        """Path of the file."""
-        self.loader: Callable[[Upath], Any] = loader
-        """A function that will be used to read the data file."""
-
     def __repr__(self):
         return f"<{self.__class__.__name__} for '{self.path}'>"
 
     def __str__(self):
         return self.__repr__()
-
-    def __getstate__(self):
-        return self.path, self.loader
-
-    def __setstate__(self, data):
-        self.path, self.loader = data
 
     @abstractmethod
     def load(self) -> None:
@@ -93,7 +70,8 @@ class FileReader(Seq[Element]):
         the best approach. This all depends on the specifics of the subclass.
 
         A subclass may allow consuming the data and load parts of data
-        in a "as-needed" or "streaming" fashion.
+        in a "as-needed" or "streaming" fashion. In that approach,
+        this method is not called, although it is available.
         """
         raise NotImplementedError
 
@@ -382,7 +360,7 @@ class BiglistBase(Seq[Element]):
 
     def __del__(self):
         if getattr(self, "keep_files", True) is False:
-            self.destroy()
+            self.destroy(concurrent=False)
 
     def __getitem__(self, idx: int) -> Element:
         """

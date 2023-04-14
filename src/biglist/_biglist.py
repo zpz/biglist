@@ -729,17 +729,21 @@ class BiglistFileReader(FileReader[Element]):
         path
             Path of a data file.
         loader
+            A function that will be used to load the data file.
+            This must be pickle-able.
             Usually this is :meth:`Biglist.load_data_file`.
             If you customize this, please see the doc of :meth:`FileReader.__init__`.
         """
+        super().__init__()
+        self.path: Upath = resolve_path(path)
+        self.loader = loader
         self._data: Optional[list] = None
-        super().__init__(path, loader)
 
     def __getstate__(self):
-        return super().__getstate__()
+        return self.path, self.loader
 
     def __setstate__(self, data):
-        super().__setstate__(data)
+        self.path, self.loader = data
         self._data = None
 
     def load(self) -> None:
@@ -948,6 +952,7 @@ class Multiplexer:
         path: PathType,
         task_id: Optional[str] = None,
         worker_id: Optional[str] = None,
+        timeout: int | float = 120,
     ):
         """
         Create a Multiplexer object and use it to distribute the data elements that have been
@@ -972,6 +977,7 @@ class Multiplexer:
         self._task_id = task_id
         self._worker_id = worker_id
         self._data = None
+        self._timeout = timeout
 
     @property
     def data(self) -> Biglist:
@@ -1040,9 +1046,10 @@ class Multiplexer:
                 threading.current_thread().name,
             )
         worker_id = self._worker_id
+        timeout = self._timeout
         finfo = self._mux_info_file(self._task_id)
         while True:
-            with lock_to_use(finfo) as ff:
+            with lock_to_use(finfo, timeout=timeout) as ff:
                 # In concurrent use cases, I've observed
                 # `upathlib.LockAcquireError` raised here.
                 # User may want to do retry here.

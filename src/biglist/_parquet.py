@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import io
 import itertools
 import logging
 from collections.abc import Iterable, Iterator, Sequence
 from multiprocessing.util import Finalize
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Optional
 
 import pyarrow
 from deprecation import deprecated
@@ -14,7 +15,6 @@ from pyarrow.parquet import FileMetaData, ParquetFile
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
 try:
-    from google.cloud.storage import retry as gcs_retry
     from upathlib.gcs import get_google_auth
 except ImportError:
     pass
@@ -56,56 +56,6 @@ class ParquetBiglist(BiglistBase):
     the dataset (all the data files) have not changed since the object was created
     by :meth:`new`.
     """
-
-    @classmethod
-    def get_gcsfs(cls, *, good_for_seconds=600) -> GcsFileSystem:
-        """
-        Obtain a `pyarrow.fs.GcsFileSystem`_ object with credentials given so that
-        the GCP default process of inferring credentials (which involves
-        env vars and file reading etc) will not be triggered.
-
-        This is provided under the (un-verified) assumption that the
-        default credential inference process is a high overhead.
-        """
-        cls._GCP_PROJECT_ID, cls._GCP_CREDENTIALS, renewed = get_google_auth(
-            project_id=getattr(cls, '_GCP_PROJECT_ID', None),
-            credentials=getattr(cls, "_GCP_CREDENTIALS", None),
-            valid_for_seconds=good_for_seconds,
-        )
-        if renewed or getattr(cls, '_GCSFS', None) is None:
-            fs = GcsFileSystem(
-                access_token=cls._GCP_CREDENTIALS.token,
-                credential_token_expiration=cls._GCP_CREDENTIALS.expiry,
-            )
-            cls._GCSFS = fs
-        return cls._GCSFS
-
-    @classmethod
-    def _gcs_retry(cls):
-        def _should_retry(exc):
-            if isinstance(exc, pyarrow.lib.ArrowException) and str(exc).startswith(
-                'Unknown error'
-            ):
-                return True
-            return gcs_retry.DEFAULT_RETRY._predicate(exc)
-
-        return gcs_retry.DEFAULT_RETRY.with_predicate(_should_retry)
-
-    @classmethod
-    def load_data_file(cls, path: Upath) -> ParquetFile:
-        """
-        Load the data file given by ``path``.
-
-        This function is used as the argument ``loader`` to :meth:`ParquetFileReader.__init__`.
-        The value it returns is contained in :class:`FileReader` for subsequent use.
-        """
-        ff, pp = FileSystem.from_uri(str(path))
-        if isinstance(ff, GcsFileSystem):
-            ff = cls.get_gcsfs()
-            pf = cls._gcs_retry()(ParquetFile)  # a retry-wrapped func
-        else:
-            pf = ParquetFile
-        return pf(pp, filesystem=ff)
 
     @classmethod
     def new(
@@ -163,8 +113,8 @@ class ParquetBiglist(BiglistBase):
             data_path = [resolve_path(p) for p in data_path]
 
         def get_file_meta(p: Upath):
-            with cls.load_data_file(p) as ff:
-                meta = ff.metadata
+            ff = ParquetFileReader.load_file(p)
+            meta = ff.metadata
             return {
                 "path": str(p),  # str of full path
                 "num_rows": meta.num_rows,
@@ -262,22 +212,78 @@ class ParquetBiglist(BiglistBase):
         return ParquetFileSeq(
             self.path,
             self.info["data_files_info"],
-            self.load_data_file,
         )
 
 
 class ParquetFileReader(FileReader):
-    def __init__(self, path: PathType, loader: Callable[[Upath], Any]):
+    @classmethod
+    def get_gcsfs(cls, *, good_for_seconds=600) -> GcsFileSystem:
+        """
+        Obtain a `pyarrow.fs.GcsFileSystem`_ object with credentials given so that
+        the GCP default process of inferring credentials (which involves
+        env vars and file reading etc) will not be triggered.
+
+        This is provided under the (un-verified) assumption that the
+        default credential inference process is a high overhead.
+        """
+        cls._GCP_PROJECT_ID, cls._GCP_CREDENTIALS, renewed = get_google_auth(
+            project_id=getattr(cls, '_GCP_PROJECT_ID', None),
+            credentials=getattr(cls, "_GCP_CREDENTIALS", None),
+            valid_for_seconds=good_for_seconds,
+        )
+        if renewed or getattr(cls, '_GCSFS', None) is None:
+            fs = GcsFileSystem(
+                access_token=cls._GCP_CREDENTIALS.token,
+                credential_token_expiration=cls._GCP_CREDENTIALS.expiry,
+            )
+            cls._GCSFS = fs
+        return cls._GCSFS
+
+    @classmethod
+    def load_file(cls, path: Upath, *, lazy: bool = True) -> ParquetFile:
+        '''
+        Depending on the implementation, this may read *meta* info only, or
+        load in the entire file eagerly.
+
+        Parameters
+        ----------
+        path
+            Path of the file.
+        lazy
+            If ``True`` (the default), only *meta* info is loaded to construct
+            a ``ParquetFile`` object.
+            If ``False``, ``path.read_bytes()`` is called to read in the entire file into memory,
+            and the bytes are then used to construct a ``ParquetFile`` object.
+            The second route is provided to work around an issue encountered when
+            ``path`` is in Google Cloud Storage.
+        '''
+        if lazy:
+            ff, pp = FileSystem.from_uri(str(path))
+            if isinstance(ff, GcsFileSystem):
+                ff = cls.get_gcsfs()
+            file = ParquetFile(pp, filesystem=ff)
+        else:
+            data = io.BytesIO(path.read_bytes())
+            file = ParquetFile(data)
+        Finalize(file, file.close)
+        return file
+
+    def __init__(self, path: PathType):
         """
         Parameters
         ----------
         path
             Path of a Parquet file.
-        loader
-            Usually this is :meth:`ParquetBiglist.load_data_file`.
-            If you customize this, please see the doc of :meth:`FileReader.__init__`.
         """
-        super().__init__(path, loader)
+        self.path: Upath = resolve_path(path)
+        self.lazy = True
+        # ``self.lazy`` is used in ``self.file`` when it calls ``self.load_file``.
+        # If you change ``self.lazy`` after ``self.file`` has been called, then
+        # the change has no effect.
+        # This attribute is not controlled by a parameter conveniently because
+        # this may be removed later once the issue it is working around is resolved.
+        # To use this, just set its value directly on the ``ParquetFileReader`` object
+        # before the object has been used (hence its ``file`` may have been called).
         self._reset()
 
     def _reset(self):
@@ -296,10 +302,10 @@ class ParquetFileReader(FileReader):
         self.scalar_as_py = True
 
     def __getstate__(self):
-        return super().__getstate__()
+        return self.path, self.lazy
 
     def __setstate__(self, data):
-        super().__setstate__(data)
+        self.path, self.lazy = data
         self._reset()
 
     @property
@@ -348,12 +354,11 @@ class ParquetFileReader(FileReader):
 
         Upon initiation of a :class:`ParquetFileReader` object,
         the file is not read at all. When this property is requested,
-        the file is accessed to construct a `pyarrow.parquet.ParquetFile`_ object,
-        but this only reads *meta* info; it does not read the *data*.
+        the file is accessed to construct a `pyarrow.parquet.ParquetFile`_ object.
+
         """
         if self._file is None:
-            self._file = self.loader(self.path)
-            Finalize(self, self._file.close)
+            self._file = self.load_file(self.path, lazy=self.lazy)
         return self._file
 
     @property
@@ -521,7 +526,7 @@ class ParquetFileReader(FileReader):
                     f"cannot select the columns {cc} because they are not in existing set of columns"
                 )
 
-        obj = self.__class__(self.path, self.loader)
+        obj = self.__class__(self.path)
         obj.scalar_as_py = self.scalar_as_py
         obj._file = self._file
         obj._row_groups_num_rows = self._row_groups_num_rows
@@ -564,7 +569,6 @@ class ParquetFileSeq(FileSeq[ParquetFileReader]):
         self,
         root_dir: Upath,
         data_files_info: list[tuple[str, int, int]],
-        file_loader: Callable[[Upath], Any],
     ):
         """
         Parameters
@@ -577,12 +581,9 @@ class ParquetFileSeq(FileSeq[ParquetFileReader]):
             ``root_dir``), number of data items in the file, and cumulative
             number of data items in the files up to the one at hand.
             Therefore, the order of the files in the list is significant.
-        file_loader
-            A function that will be used to load a data file.
         """
         self._root_dir = root_dir
         self._data_files_info = data_files_info
-        self._file_loader = file_loader
 
     @property
     def path(self):
@@ -595,7 +596,6 @@ class ParquetFileSeq(FileSeq[ParquetFileReader]):
     def __getitem__(self, idx: int):
         return ParquetFileReader(
             self._data_files_info[idx][0],
-            self._file_loader,
         )
 
 
@@ -754,7 +754,7 @@ def read_parquet_file(path: PathType) -> ParquetFileReader:
     path
         Path of the file.
     """
-    return ParquetFileReader(path, ParquetBiglist.load_data_file)
+    return ParquetFileReader(path)
 
 
 def make_parquet_type(type_spec: str | Sequence):

@@ -360,7 +360,7 @@ class BiglistBase(Seq[Element]):
 
     def __del__(self):
         if getattr(self, "keep_files", True) is False:
-            self.destroy()
+            self.destroy(concurrent=False)
 
     def __getitem__(self, idx: int) -> Element:
         """

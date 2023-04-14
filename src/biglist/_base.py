@@ -9,8 +9,6 @@ import uuid
 from abc import abstractmethod
 from collections.abc import Iterator
 from typing import (
-    Any,
-    Callable,
     Optional,
     TypeVar,
 )
@@ -53,6 +51,7 @@ class FileReader(Seq[Element]):
         def func(file_reader: FileReader[int]):
             ...
     """
+
     def __repr__(self):
         return f"<{self.__class__.__name__} for '{self.path}'>"
 

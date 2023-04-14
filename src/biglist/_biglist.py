@@ -952,6 +952,7 @@ class Multiplexer:
         path: PathType,
         task_id: Optional[str] = None,
         worker_id: Optional[str] = None,
+        timeout: int | float = 120,
     ):
         """
         Create a Multiplexer object and use it to distribute the data elements that have been
@@ -976,6 +977,7 @@ class Multiplexer:
         self._task_id = task_id
         self._worker_id = worker_id
         self._data = None
+        self._timeout = timeout
 
     @property
     def data(self) -> Biglist:
@@ -1044,9 +1046,10 @@ class Multiplexer:
                 threading.current_thread().name,
             )
         worker_id = self._worker_id
+        timeout = self._timeout
         finfo = self._mux_info_file(self._task_id)
         while True:
-            with lock_to_use(finfo) as ff:
+            with lock_to_use(finfo, timeout=timeout) as ff:
                 # In concurrent use cases, I've observed
                 # `upathlib.LockAcquireError` raised here.
                 # User may want to do retry here.

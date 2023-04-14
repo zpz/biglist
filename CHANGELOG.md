@@ -26,6 +26,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Persist GCP credentials in `ParquetBiglist` so that authentication is not repeated when unnecessary.
 - `Multiplexer` uses default storage-format 'parquet'.
 - Fine-tune Parquet reading on Google Cloud Storage, including credentials cache and retry.
+- classmethods ``get_gcsfs`` and ``load_data_file`` are moved from ``ParquetBiglist`` to ``ParquetFileReader``;
+  The second method is renamed to ``load_file``. Some related simplifications to ``FileReader``, ``ParquetFileReader``,
+  and ``ParquetFileSeq``.
 
 
 ## [0.7.8] - 2023-03-19

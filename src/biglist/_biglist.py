@@ -729,17 +729,21 @@ class BiglistFileReader(FileReader[Element]):
         path
             Path of a data file.
         loader
+            A function that will be used to load the data file.
+            This must be pickle-able.
             Usually this is :meth:`Biglist.load_data_file`.
             If you customize this, please see the doc of :meth:`FileReader.__init__`.
         """
+        super().__init__()
+        self.path: Upath = resolve_path(path)
+        self.loader = loader
         self._data: Optional[list] = None
-        super().__init__(path, loader)
 
     def __getstate__(self):
-        return super().__getstate__()
+        return self.path, self.loader
 
     def __setstate__(self, data):
-        super().__setstate__(data)
+        self.path, self.loader = data
         self._data = None
 
     def load(self) -> None:

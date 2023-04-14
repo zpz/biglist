@@ -110,11 +110,13 @@ def test_parquet_table(tmp_path):
     f = LocalUpath(tmp_path / 'out.parquet')
     f.write_bytes(buf, overwrite=True)
 
-    data3 = read_parquet_file(f)
-    for row in data3:
-        print(row)
+    for lazy in (True, False):
+        data3 = read_parquet_file(f)
+        data3.lazy = lazy
+        for row in data3:
+            print(row)
 
-    assert data3.data().data().to_pylist() == data
+        assert data3.data().data().to_pylist() == data
 
     print('--- reading ---')
     data2 = pyarrow.parquet.ParquetFile(io.BytesIO(buf)).read()

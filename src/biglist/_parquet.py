@@ -722,7 +722,6 @@ class ParquetBiglist(BiglistBase):
         )
 
 
-
 class ParquetFileSeq(FileSeq[ParquetFileReader]):
     def __init__(
         self,

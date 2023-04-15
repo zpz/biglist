@@ -539,7 +539,9 @@ class Biglist(BiglistBase[Element]):
             self.dump_data_file(data_file, buffer, **self._serialize_kwargs)
         else:
             if self._file_dumper is None:
-                self._file_dumper = Dumper(self._get_thread_pool(), self._n_write_threads)
+                self._file_dumper = Dumper(
+                    self._get_thread_pool(), self._n_write_threads
+                )
             self._file_dumper.dump_file(
                 self.dump_data_file, data_file, buffer, **self._serialize_kwargs
             )

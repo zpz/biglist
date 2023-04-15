@@ -532,12 +532,16 @@ class Biglist(BiglistBase[Element]):
         # Changes in 0.7.4: the time part changes from epoch to datetime, with guaranteed fixed length.
 
         data_file = self.data_path / filename
-        if self._file_dumper is None:
-            self._file_dumper = Dumper(self._get_thread_pool(), self._n_write_threads)
+
         if wait:
-            self._file_dumper.wait()
+            if self._file_dumper is not None:
+                self._file_dumper.wait()
             self.dump_data_file(data_file, buffer, **self._serialize_kwargs)
         else:
+            if self._file_dumper is None:
+                self._file_dumper = Dumper(
+                    self._get_thread_pool(), self._n_write_threads
+                )
             self._file_dumper.dump_file(
                 self.dump_data_file, data_file, buffer, **self._serialize_kwargs
             )
@@ -718,7 +722,8 @@ class Dumper:
         """
         Wait to finish all the submitted dumping tasks.
         """
-        concurrent.futures.wait(self._tasks)
+        if self._tasks:
+            concurrent.futures.wait(self._tasks)
 
 
 class BiglistFileReader(FileReader[Element]):

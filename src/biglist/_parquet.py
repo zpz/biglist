@@ -916,7 +916,7 @@ def write_parquet_table(
         path.parent.path.mkdir(exist_ok=True, parents=True)
     ff, pp = FileSystem.from_uri(str(path))
     if isinstance(ff, GcsFileSystem):
-        ff = ParquetBiglist.get_gcsfs()
+        ff = ParquetFileReader.get_gcsfs()
     pyarrow.parquet.write_table(table, ff.open_output_stream(pp), **kwargs)
 
 

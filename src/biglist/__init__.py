@@ -52,4 +52,4 @@ from ._util import (
     Slicer,
 )
 
-__version__ = "0.7.9"
+__version__ = "0.8.0b1"

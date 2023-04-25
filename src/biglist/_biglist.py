@@ -163,10 +163,10 @@ class Biglist(BiglistBase[Element]):
         cls,
         path: PathType | None = None,
         *,
-        batch_size: int|None = None,
-        storage_format: str|None = None,
-        serialize_kwargs: dict|None = None,
-        deserialize_kwargs: dict|None = None,
+        batch_size: int | None = None,
+        storage_format: str | None = None,
+        serialize_kwargs: dict | None = None,
+        deserialize_kwargs: dict | None = None,
         init_info: dict = None,
         **kwargs,
     ) -> Self:
@@ -738,7 +738,7 @@ class BiglistFileReader(FileReader[Element]):
         super().__init__()
         self.path: Upath = resolve_path(path)
         self.loader = loader
-        self._data: list|None = None
+        self._data: list | None = None
 
     def __getstate__(self):
         return self.path, self.loader
@@ -915,7 +915,7 @@ class Multiplexer:
     def new(
         cls,
         data: Iterable[Any],
-        path: PathType |None,
+        path: PathType | None,
         *,
         batch_size: int = 10_000,
         storage_format: str = 'pickle',
@@ -951,8 +951,8 @@ class Multiplexer:
     def __init__(
         self,
         path: PathType,
-        task_id: str|None = None,
-        worker_id: str|None = None,
+        task_id: str | None = None,
+        worker_id: str | None = None,
         timeout: int | float = 120,
     ):
         """

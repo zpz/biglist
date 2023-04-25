@@ -119,12 +119,12 @@ class ParquetFileReader(FileReader):
         self._reset()
 
     def _reset(self):
-        self._file: ParquetFile|None = None
-        self._data: ParquetBatchData|None = None
+        self._file: ParquetFile | None = None
+        self._data: ParquetBatchData | None = None
 
         self._row_groups_num_rows = None
         self._row_groups_num_rows_cumsum = None
-        self._row_groups: None|list[ParquetBatchData] = None
+        self._row_groups: None | list[ParquetBatchData] = None
 
         self._column_names = None
         self._columns = {}

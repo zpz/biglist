@@ -19,7 +19,7 @@ def lock_to_use(file: Upath, timeout=120):
 def locate_idx_in_chunked_seq(
     idx: int,
     len_cumsum: Sequence[int],
-    last_chunk: None|tuple[int, int, int] = None,
+    last_chunk: None | tuple[int, int, int] = None,
 ):
     """
     Suppose a sequence is composed of a number of member sequences.
@@ -292,9 +292,9 @@ class Chain(Generic[SeqType]):
 
     def __init__(self, list_: SeqType, *lists: SeqType):
         self._lists = (list_, *lists)
-        self._lists_len: None|list[int] = None
-        self._lists_len_cumsum: None|list[int] = None
-        self._len: None|int = None
+        self._lists_len: None | list[int] = None
+        self._lists_len_cumsum: None | list[int] = None
+        self._len: None | int = None
 
         # Records info about the last call to `__getitem__`
         # to hopefully speed up the next call, under the assumption

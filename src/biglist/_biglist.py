@@ -17,11 +17,7 @@ import weakref
 from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
-from typing import (
-    Any,
-    Callable,
-    Optional,
-)
+from typing import Any, Callable
 from uuid import uuid4
 
 import pyarrow
@@ -165,12 +161,12 @@ class Biglist(BiglistBase[Element]):
     @classmethod
     def new(
         cls,
-        path: Optional[PathType] = None,
+        path: PathType | None = None,
         *,
-        batch_size: Optional[int] = None,
-        storage_format: Optional[str] = None,
-        serialize_kwargs: Optional[dict] = None,
-        deserialize_kwargs: Optional[dict] = None,
+        batch_size: int|None = None,
+        storage_format: str|None = None,
+        serialize_kwargs: dict|None = None,
+        deserialize_kwargs: dict|None = None,
         init_info: dict = None,
         **kwargs,
     ) -> Self:
@@ -493,7 +489,7 @@ class Biglist(BiglistBase[Element]):
         .. note:: Use the "spawn" method to start processes.
             In ``multiprocessing``, look for the method `get_context <https://docs.python.org/3/library/multiprocessing.html#multiprocessing.get_context>`_.
             In ``concurrent.futures.ProcessPoolExecutor``, look for the parameter `mp_context <https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ProcessPoolExecutor>`_.
-            Also check out `mpservice.util.MP_SPAWN_CTX <https://mpservice.readthedocs.io/en/latest/util.html#mpservice.util.MP_SPAWN_CTX>`_.
+            Also check out `mpservice.multiprocesing.MP_SPAWN_CTX <https://mpservice.readthedocs.io/en/latest/util.html#mpservice.multiprocessing.MP_SPAWN_CTX>`_.
         """
         self._append_buffer.append(x)
         self._flushed = False  # This is about `flush`, not `_flush`.
@@ -675,7 +671,7 @@ class Dumper:
     def __init__(self, executor: ThreadPoolExecutor, n_threads: int):
         self._executor: executor = executor
         self._n_threads = n_threads
-        self._sem: Optional[threading.Semaphore] = None  # type: ignore
+        self._sem: threading.Semaphore | None = None  # type: ignore
         self._tasks: set[Future] = set()
 
     def _callback(self, t):
@@ -742,7 +738,7 @@ class BiglistFileReader(FileReader[Element]):
         super().__init__()
         self.path: Upath = resolve_path(path)
         self.loader = loader
-        self._data: Optional[list] = None
+        self._data: list|None = None
 
     def __getstate__(self):
         return self.path, self.loader
@@ -919,7 +915,7 @@ class Multiplexer:
     def new(
         cls,
         data: Iterable[Any],
-        path: Optional[PathType],
+        path: PathType |None,
         *,
         batch_size: int = 10_000,
         storage_format: str = 'pickle',
@@ -955,8 +951,8 @@ class Multiplexer:
     def __init__(
         self,
         path: PathType,
-        task_id: Optional[str] = None,
-        worker_id: Optional[str] = None,
+        task_id: str|None = None,
+        worker_id: str|None = None,
         timeout: int | float = 120,
     ):
         """

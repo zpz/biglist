@@ -8,12 +8,9 @@ import tempfile
 import uuid
 from abc import abstractmethod
 from collections.abc import Iterator
-from typing import (
-    Optional,
-    TypeVar,
-)
+from typing import TypeVar
 
-from mpservice.util import get_shared_thread_pool
+from mpservice.concurrent.futures import get_shared_thread_pool
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
 from ._util import Element, Seq
@@ -199,9 +196,9 @@ class BiglistBase(Seq[Element]):
     @classmethod
     def new(
         cls,
-        path: Optional[PathType] = None,
+        path: PathType | None = None,
         *,
-        keep_files: Optional[bool] = None,
+        keep_files: bool | None = None,
         init_info: dict = None,
         **kwargs,
     ) -> BiglistBase:
@@ -320,9 +317,9 @@ class BiglistBase(Seq[Element]):
         self.path: Upath = resolve_path(path)
         """Root directory of the storage space for this object."""
 
-        self._read_buffer: Optional[Seq[Element]] = None
+        self._read_buffer: Seq[Element] | None = None
         self._read_buffer_file_idx = None
-        self._read_buffer_item_range: Optional[tuple[int, int]] = None
+        self._read_buffer_item_range: tuple[int, int] | None = None
         # `self._read_buffer` contains the content of the file
         # indicated by `self._read_buffer_file_idx`.
 

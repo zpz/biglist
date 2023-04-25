@@ -4,7 +4,7 @@ import bisect
 import itertools
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from typing import Generic, Optional, Protocol, TypeVar, runtime_checkable
+from typing import Generic, Protocol, TypeVar, runtime_checkable
 
 from upathlib import Upath
 
@@ -19,7 +19,7 @@ def lock_to_use(file: Upath, timeout=120):
 def locate_idx_in_chunked_seq(
     idx: int,
     len_cumsum: Sequence[int],
-    last_chunk: Optional[tuple[int, int, int]] = None,
+    last_chunk: None | tuple[int, int, int] = None,
 ):
     """
     Suppose a sequence is composed of a number of member sequences.
@@ -163,7 +163,7 @@ class Slicer(Generic[SeqType]):
     ``Slicer`` implements the :class:`Seq` protocol.
     """
 
-    def __init__(self, list_: SeqType, range_: Optional[range | Seq[int]] = None):
+    def __init__(self, list_: SeqType, range_: None | range | Seq[int] = None):
         """
         This provides a "slice" of, or "window" into, ``list_``.
 
@@ -243,7 +243,7 @@ class Slicer(Generic[SeqType]):
         return self._list
 
     @property
-    def range(self) -> Optional[range | Seq[int]]:
+    def range(self) -> None | range | Seq[int]:
         """Return the parameter ``range_`` that was provided to :meth:`__init__`, representing the selection of items in the underlying Seq."""
         return self._range
 
@@ -292,9 +292,9 @@ class Chain(Generic[SeqType]):
 
     def __init__(self, list_: SeqType, *lists: SeqType):
         self._lists = (list_, *lists)
-        self._lists_len: Optional[list[int]] = None
-        self._lists_len_cumsum: Optional[list[int]] = None
-        self._len: Optional[int] = None
+        self._lists_len: None | list[int] = None
+        self._lists_len_cumsum: None | list[int] = None
+        self._len: None | int = None
 
         # Records info about the last call to `__getitem__`
         # to hopefully speed up the next call, under the assumption

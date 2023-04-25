@@ -9,9 +9,9 @@ authors = [
     {name = "Zepu Zhang", email = "zepu.zhang@gmail.com"},
 ]
 dependencies = [
-    "upathlib >= 0.7.7",
+    "upathlib >= 0.7.9",
     "deprecation",
-    "mpservice >= 0.11.9",
+    "mpservice >= 0.12.5",
     "pyarrow >= 10.0.0",
     "typing-extensions",
 ]
@@ -39,10 +39,9 @@ doc = [
     "pydata-sphinx-theme",
 ]
 gcs = [
-    "upathlib[gcs] >= 0.7.7",
+    "upathlib[gcs] >= 0.7.9",
     "google-auth",
 ]
-parquet = []
 test = [
     "boltons",
     "mypy",
@@ -50,15 +49,12 @@ test = [
     "pytest-asyncio",
 ]
 
-# `parquet` option became empty in 0.7.5 because `arrow` became mandatory.
-# To be removed later.
-
 
 # See https://beta.ruff.rs/docs/rules/
 [tool.ruff]
 target-version = "py38"
 select = ["E", "F", "S", "I001"]  # isort
-ignore = ["E501", "S101", "S102", "S103", "S104", "S108", "S301", "S311", "S608"]
+ignore = ["E501", "S101", "S102", "S103", "S104", "S108", "S301", "S311", "S603", "S607", "S608"]
 
 
 [tool.ruff.per-file-ignores]

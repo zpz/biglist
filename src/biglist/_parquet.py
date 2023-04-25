@@ -6,7 +6,6 @@ import logging
 from collections.abc import Iterable, Iterator, Sequence
 from multiprocessing.util import Finalize
 from pathlib import Path
-from typing import Optional
 
 import pyarrow
 from deprecation import deprecated
@@ -120,12 +119,12 @@ class ParquetFileReader(FileReader):
         self._reset()
 
     def _reset(self):
-        self._file: Optional[ParquetFile] = None
-        self._data: Optional[ParquetBatchData] = None
+        self._file: ParquetFile | None = None
+        self._data: ParquetBatchData | None = None
 
         self._row_groups_num_rows = None
         self._row_groups_num_rows_cumsum = None
-        self._row_groups: Optional[list[ParquetBatchData]] = None
+        self._row_groups: None | list[ParquetBatchData] = None
 
         self._column_names = None
         self._columns = {}
@@ -568,7 +567,7 @@ class ParquetBiglist(BiglistBase):
     def new(
         cls,
         data_path: PathType | Sequence[PathType],
-        path: Optional[PathType] = None,
+        path: PathType | None = None,
         *,
         suffix: str = ".parquet",
         **kwargs,
@@ -924,7 +923,7 @@ def write_arrays_to_parquet(
     data: Sequence[pyarrow.Array | pyarrow.ChunkedArray | Iterable],
     path: PathType,
     *,
-    names: Optional[Sequence[str]],
+    names: Sequence[str],
     **kwargs,
 ) -> None:
     """

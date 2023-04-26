@@ -89,6 +89,9 @@ class ParquetFileReader(FileReader):
             The second route is provided to work around an issue encountered when
             ``path`` is in Google Cloud Storage.
         '''
+        # References for the issue:
+        # https://stackoverflow.com/q/76012391/6178706
+        # https://github.com/apache/arrow/issues/35318
         if lazy:
             ff, pp = FileSystem.from_uri(str(path))
             if isinstance(ff, GcsFileSystem):

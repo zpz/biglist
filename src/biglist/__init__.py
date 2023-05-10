@@ -43,7 +43,6 @@ from ._parquet import (
     make_parquet_type,
     read_parquet_file,
     write_arrays_to_parquet,
-    write_parquet_file,
     write_pylist_to_parquet,
 )
 from ._util import (

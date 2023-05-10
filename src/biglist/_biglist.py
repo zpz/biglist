@@ -292,6 +292,9 @@ class Biglist(BiglistBase[Element]):
         self.keep_files: bool = True
         """Indicates whether the persisted files should be kept or deleted when the object is garbage-collected."""
 
+        self._flushed = True
+        # Set this early in case ``__del__`` is triggered before ``__init__`` finishes.
+
         self._append_buffer: list = []
         self._append_files_buffer: list = []
         self._file_dumper = None
@@ -308,7 +311,6 @@ class Biglist(BiglistBase[Element]):
             self._serialize_kwargs = kk
 
         _biglist_objs.add(self)
-        self._flushed = True
 
         # For back compat.
         if self.info.get("storage_version", 0) < 3:

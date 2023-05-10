@@ -8,7 +8,6 @@ from multiprocessing.util import Finalize
 from pathlib import Path
 
 import pyarrow
-from deprecation import deprecated
 from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
 from upathlib import LocalUpath, PathType, Upath, resolve_path
@@ -966,12 +965,3 @@ def write_pylist_to_parquet(
         schema = make_parquet_schema(schema_spec)
     table = pyarrow.Table.from_pylist(data, schema=schema, metadata=metadata)
     return write_parquet_table(table, path, **kwargs)
-
-
-@deprecated(
-    deprecated_in="0.7.7",
-    removed_in="0.8.0",
-    details="Use ``write_arrays_to_parquet`` instead.",
-)
-def write_parquet_file(path, data, names, **kwargs):
-    return write_arrays_to_parquet(data, path, names=names, **kwargs)

@@ -292,6 +292,13 @@ class Biglist(BiglistBase[Element]):
         self.keep_files: bool = True
         """Indicates whether the persisted files should be kept or deleted when the object is garbage-collected."""
 
+        self._flushed = True
+        # Set this early in case ``__del__`` is triggered before ``__init__`` finishes.
+        # If True, some changes have been made but `.flush` has not been called.
+        # Note it's about `.flush()`, not `._flush()`.
+        # This flag exists to remind user that they need to call `.flush()` at the end
+        # of their writing session.
+
         self._append_buffer: list = []
         self._append_files_buffer: list = []
         self._file_dumper = None
@@ -308,7 +315,6 @@ class Biglist(BiglistBase[Element]):
             self._serialize_kwargs = kk
 
         _biglist_objs.add(self)
-        self._flushed = True
 
         # For back compat.
         if self.info.get("storage_version", 0) < 3:
@@ -400,10 +406,7 @@ class Biglist(BiglistBase[Element]):
         if getattr(self, "keep_files", True) is False:
             self.destroy(concurrent=False)
         else:
-            if not getattr(self, '_flushed', True):
-                warnings.warn(
-                    f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
-                )
+            self._warn_flush()
             self.flush()
 
     @property
@@ -425,6 +428,12 @@ class Biglist(BiglistBase[Element]):
         """The internal format used in persistence. This is a read-only attribute for information only."""
         return self.info.get("storage_version", 0)
 
+    def _warn_flush(self):
+        if not self._flushed:
+            warnings.warn(
+                f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
+            )
+
     def __len__(self) -> int:
         """
         Number of data items in this biglist.
@@ -437,10 +446,7 @@ class Biglist(BiglistBase[Element]):
         .. versionchanged:: 0.7.4
             In previous versions, this count includes items that are not yet flushed.
         """
-        if not self._flushed:
-            warnings.warn(
-                f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
-            )
+        self._warn_flush()
         return super().__len__()
 
     def __getitem__(self, idx: int) -> Element:
@@ -465,10 +471,7 @@ class Biglist(BiglistBase[Element]):
         .. versionchanged:: 0.7.4
             In previous versions, this iteration includes those items that are not yet flushed.
         """
-        if not self._flushed:
-            warnings.warn(
-                f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
-            )
+        self._warn_flush()
         return super().__iter__()
 
     def append(self, x: Element) -> None:
@@ -492,7 +495,7 @@ class Biglist(BiglistBase[Element]):
             Also check out `mpservice.multiprocesing.MP_SPAWN_CTX <https://mpservice.readthedocs.io/en/latest/util.html#mpservice.multiprocessing.MP_SPAWN_CTX>`_.
         """
         self._append_buffer.append(x)
-        self._flushed = False  # This is about `flush`, not `_flush`.
+        self._flushed = False
         if len(self._append_buffer) >= self.batch_size:
             self._flush()
 
@@ -597,7 +600,7 @@ class Biglist(BiglistBase[Element]):
         This is a legitimate case in parallel or distributed writing, or writing in
         multiple sessions.
         """
-        if self._flushed:
+        if getattr(self, '_flushed', True):
             return
 
         self._flush(wait=True)
@@ -638,10 +641,7 @@ class Biglist(BiglistBase[Element]):
     @property
     def files(self):
         # This method should be cheap to call.
-        if not self._flushed:
-            warnings.warn(
-                f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
-            )
+        self._warn_flush()
         if self._deserialize_kwargs:
             fun = functools.partial(self.load_data_file, **self._deserialize_kwargs)
         else:

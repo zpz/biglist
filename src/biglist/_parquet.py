@@ -8,7 +8,6 @@ from multiprocessing.util import Finalize
 from pathlib import Path
 
 import pyarrow
-from deprecation import deprecated
 from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
 from upathlib import LocalUpath, PathType, Upath, resolve_path
@@ -804,10 +803,6 @@ def make_parquet_type(type_spec: str | Sequence):
         type_name = type_spec[0]
         args = type_spec[1:]
 
-    # print('\ntype_spec', type_spec)
-    # print('type_name', type_name)
-    # print('type_args', args)
-
     if type_name in ("string", "float64", "bool_", "int8", "int64", "uint8", "uint64"):
         assert not args
         return getattr(pyarrow, type_name)()
@@ -870,7 +865,6 @@ def make_parquet_field(field_spec: Sequence):
     Additional elements are the optional ``nullable`` and ``metadata`` to the function
     `pyarrow.field() <https://arrow.apache.org/docs/python/generated/pyarrow.field.html#pyarrow.field>`_.
     """
-    # print('\nfield_spec:', field_spec)
     field_name = field_spec[0]
     type_spec = field_spec[1]
     assert len(field_spec) <= 4  # two optional elements are `nullable` and `metadata`.
@@ -966,12 +960,3 @@ def write_pylist_to_parquet(
         schema = make_parquet_schema(schema_spec)
     table = pyarrow.Table.from_pylist(data, schema=schema, metadata=metadata)
     return write_parquet_table(table, path, **kwargs)
-
-
-@deprecated(
-    deprecated_in="0.7.7",
-    removed_in="0.8.0",
-    details="Use ``write_arrays_to_parquet`` instead.",
-)
-def write_parquet_file(path, data, names, **kwargs):
-    return write_arrays_to_parquet(data, path, names=names, **kwargs)

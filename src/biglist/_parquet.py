@@ -803,10 +803,6 @@ def make_parquet_type(type_spec: str | Sequence):
         type_name = type_spec[0]
         args = type_spec[1:]
 
-    # print('\ntype_spec', type_spec)
-    # print('type_name', type_name)
-    # print('type_args', args)
-
     if type_name in ("string", "float64", "bool_", "int8", "int64", "uint8", "uint64"):
         assert not args
         return getattr(pyarrow, type_name)()
@@ -869,7 +865,6 @@ def make_parquet_field(field_spec: Sequence):
     Additional elements are the optional ``nullable`` and ``metadata`` to the function
     `pyarrow.field() <https://arrow.apache.org/docs/python/generated/pyarrow.field.html#pyarrow.field>`_.
     """
-    # print('\nfield_spec:', field_spec)
     field_name = field_spec[0]
     type_spec = field_spec[1]
     assert len(field_spec) <= 4  # two optional elements are `nullable` and `metadata`.

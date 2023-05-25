@@ -248,7 +248,9 @@ class Biglist(BiglistBase[Element]):
         """
         if not batch_size:
             batch_size = 1000
-            warnings.warn("The default batch-size, 1000, may not be optimal for your use case; consider using the parameter ``batch_size``.")
+            warnings.warn(
+                "The default batch-size, 1000, may not be optimal for your use case; consider using the parameter ``batch_size``."
+            )
         else:
             assert batch_size > 0
 

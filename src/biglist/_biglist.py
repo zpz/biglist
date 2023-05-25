@@ -179,7 +179,7 @@ class Biglist(BiglistBase[Element]):
             Max number of data elements in each persisted data file.
 
             There's no good default value for this parameter, although one is
-            provided (currently the default is 10000),
+            provided (currently the default is 1000),
             because the code of :meth:`new` doesn't know
             the typical size of the data elements. User is recommended to
             specify the value of this parameter.
@@ -187,8 +187,7 @@ class Biglist(BiglistBase[Element]):
             In choosing a value for ``batch_size``, the most important
             consideration is the size of each data file, which is determined
             by the typical size of the data elements as well as ``batch_size``,
-            which is the upper bound of the the number
-            of elements in each file.
+            which is the upper bound of the the number of elements in each file.
 
             There are several considerations about the data file sizes:
 
@@ -248,7 +247,8 @@ class Biglist(BiglistBase[Element]):
             A new :class:`Biglist` object.
         """
         if not batch_size:
-            batch_size = 10000
+            batch_size = 1000
+            warnings.warn("The default batch-size, 1000, may not be optimal for your use case; consider using the parameter ``batch_size``.")
         else:
             assert batch_size > 0
 

@@ -70,7 +70,7 @@ class ParquetFileReader(FileReader):
         return cls._GCSFS
 
     @classmethod
-    def load_file(cls, path: Upath, *, lazy: bool = True) -> ParquetFile:
+    def load_file(cls, path: Upath) -> ParquetFile:
         '''
         Depending on the implementation, this may read *meta* info only, or
         load in the entire file eagerly.
@@ -79,25 +79,11 @@ class ParquetFileReader(FileReader):
         ----------
         path
             Path of the file.
-        lazy
-            If ``True`` (the default), only *meta* info is loaded to construct
-            a ``ParquetFile`` object.
-            If ``False``, ``path.read_bytes()`` is called to read in the entire file into memory,
-            and the bytes are then used to construct a ``ParquetFile`` object.
-            The second route is provided to work around an issue encountered when
-            ``path`` is in Google Cloud Storage.
         '''
-        # References for the issue:
-        # https://stackoverflow.com/q/76012391/6178706
-        # https://github.com/apache/arrow/issues/35318
-        if lazy:
-            ff, pp = FileSystem.from_uri(str(path))
-            if isinstance(ff, GcsFileSystem):
-                ff = cls.get_gcsfs()
-            file = ParquetFile(pp, filesystem=ff)
-        else:
-            data = io.BytesIO(path.read_bytes())
-            file = ParquetFile(data)
+        ff, pp = FileSystem.from_uri(str(path))
+        if isinstance(ff, GcsFileSystem):
+            ff = cls.get_gcsfs()
+        file = ParquetFile(pp, filesystem=ff)
         Finalize(file, file.reader.close)
         # NOTE: can not use
         #
@@ -105,7 +91,6 @@ class ParquetFileReader(FileReader):
         #
         # because the instance method `file.close` can't be used as the callback---the
         # object `file` is no long available at that time.
-
         return file
 
     def __init__(self, path: PathType):
@@ -116,14 +101,6 @@ class ParquetFileReader(FileReader):
             Path of a Parquet file.
         """
         self.path: Upath = resolve_path(path)
-        self.lazy = True
-        # ``self.lazy`` is used in ``self.file`` when it calls ``self.load_file``.
-        # If you change ``self.lazy`` after ``self.file`` has been called, then
-        # the change has no effect.
-        # This attribute is not controlled by a parameter conveniently because
-        # this may be removed later once the issue it is working around is resolved.
-        # To use this, just set its value directly on the ``ParquetFileReader`` object
-        # before the object has been used (hence its ``file`` may have been called).
         self._reset()
 
     def _reset(self):
@@ -142,10 +119,10 @@ class ParquetFileReader(FileReader):
         self.scalar_as_py = True
 
     def __getstate__(self):
-        return self.path, self.lazy
+        return (self.path, )
 
     def __setstate__(self, data):
-        self.path, self.lazy = data
+        self.path = data[0]
         self._reset()
 
     @property
@@ -198,7 +175,7 @@ class ParquetFileReader(FileReader):
 
         """
         if self._file is None:
-            self._file = self.load_file(self.path, lazy=self.lazy)
+            self._file = self.load_file(self.path)
         return self._file
 
     @property

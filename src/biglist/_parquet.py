@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 import itertools
 import logging
 from collections.abc import Iterable, Iterator, Sequence
@@ -119,7 +118,7 @@ class ParquetFileReader(FileReader):
         self.scalar_as_py = True
 
     def __getstate__(self):
-        return (self.path, )
+        return (self.path,)
 
     def __setstate__(self, data):
         self.path = data[0]

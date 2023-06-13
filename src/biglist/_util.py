@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import concurrent.futures
+import threading
+import os
+import weakref
 import bisect
 import itertools
 from collections.abc import Iterator, Sequence
@@ -345,3 +349,36 @@ class Chain(Generic[SeqType]):
         object.
         """
         return self._lists
+
+
+_global_thread_pool_ = weakref.WeakValueDictionary()
+_global_thread_pool_lock_ = threading.Lock()
+
+
+def get_global_thread_pool():
+    # Refer to ``get_shared_thread_pool`` in package ``mpservice.concurrent.futures``.
+
+    with _global_thread_pool_lock_:
+        executor = _global_thread_pool_.get('default')
+        if executor is None or executor._shutdown:
+            executor = concurrent.futures.ThreadPoolExecutor()
+            _global_thread_pool_['default'] = executor
+    return executor
+
+
+if hasattr(os, 'register_at_fork'):  # not available on Windows
+
+    def _clear_global_state():
+        executor = _global_thread_pool_.get('default')
+        if executor is not None:
+            executor.shutdown(wait=False)
+            _global_thread_pool_.pop('default', None)
+
+        global _global_thread_pool_lock_
+        try:
+            _global_thread_pool_lock_.release()
+        except RuntimeError:  # 'release unlocked lock'
+            pass
+        _global_thread_pool_lock_ = threading.Lock()
+
+    os.register_at_fork(after_in_child=_clear_global_state)

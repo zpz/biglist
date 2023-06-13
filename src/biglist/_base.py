@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import concurrent.futures
+import threading
+import weakref
 import bisect
 import logging
 import os
@@ -10,16 +13,14 @@ from abc import abstractmethod
 from collections.abc import Iterator
 from typing import TypeVar
 
-from mpservice.concurrent.futures import get_shared_thread_pool
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
-from ._util import Element, Seq
+from ._util import Element, Seq, get_global_thread_pool
+
 
 logger = logging.getLogger(__name__)
 
 
-def _get_global_thread_pool():
-    return get_shared_thread_pool("biglist")
 
 
 class FileReader(Seq[Element]):
@@ -348,7 +349,7 @@ class BiglistBase(Seq[Element]):
 
     def _get_thread_pool(self):
         if self._thread_pool_ is None:
-            self._thread_pool_ = _get_global_thread_pool()
+            self._thread_pool_ = get_global_thread_pool()
         return self._thread_pool_
 
     def destroy(self, *, concurrent=True) -> None:

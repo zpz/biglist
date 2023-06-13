@@ -22,9 +22,8 @@ from ._base import (
     FileReader,
     FileSeq,
     Seq,
-    _get_global_thread_pool,
 )
-from ._util import locate_idx_in_chunked_seq, lock_to_use
+from ._util import get_global_thread_pool, locate_idx_in_chunked_seq, lock_to_use
 
 # If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
 # and "credential_token_expiration". These can be obtained via
@@ -99,7 +98,14 @@ class ParquetFileReader(FileReader):
         else:
             data = io.BytesIO(path.read_bytes())
             file = ParquetFile(data)
-        Finalize(file, file.close)
+        Finalize(file, file.reader.close)
+        # NOTE: can not use
+        #
+        #   Finalize(file, file.close, kwargs={'force': True})
+        #
+        # because the instance method `file.close` can't be used as the callback---the
+        # object `file` is no long available at that time.
+
         return file
 
     def __init__(self, path: PathType):
@@ -631,7 +637,7 @@ class ParquetBiglist(BiglistBase):
                 # ],
             }
 
-        pool = _get_global_thread_pool()
+        pool = get_global_thread_pool()
         tasks = []
         for p in data_path:
             if p.is_file():

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import concurrent.futures
-import threading
-import os
-import weakref
 import bisect
+import concurrent.futures
 import itertools
+import os
+import threading
+import weakref
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from typing import Generic, Protocol, TypeVar, runtime_checkable

@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import concurrent.futures
-import threading
-import weakref
 import bisect
 import logging
 import os
@@ -17,10 +14,7 @@ from upathlib import LocalUpath, PathType, Upath, resolve_path
 
 from ._util import Element, Seq, get_global_thread_pool
 
-
 logger = logging.getLogger(__name__)
-
-
 
 
 class FileReader(Seq[Element]):

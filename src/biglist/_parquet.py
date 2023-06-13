@@ -26,7 +26,6 @@ from ._base import (
 )
 from ._util import locate_idx_in_chunked_seq, lock_to_use
 
-
 # If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
 # and "credential_token_expiration". These can be obtained via
 # a "google.oauth2.service_account.Credentials" object, e.g.

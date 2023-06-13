@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Removed ``write_parquet_file``.
 - Default ``batch_size`` for ``Biglist`` reduced from 10_000 to 1_000. Warning is issued if user does not specify ``batch_size``.
 - Bugfix related to closing a ``ParquetFile`` in ``_parquet.ParquetFileReader.load_file``.
+  Removed a "lazy" workaround related to this bug.
 - Removed dependency on ``mpservice``.
 
 

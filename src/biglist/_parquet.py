@@ -26,6 +26,7 @@ from ._base import (
 )
 from ._util import locate_idx_in_chunked_seq, lock_to_use
 
+
 # If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
 # and "credential_token_expiration". These can be obtained via
 # a "google.oauth2.service_account.Credentials" object, e.g.
@@ -99,7 +100,14 @@ class ParquetFileReader(FileReader):
         else:
             data = io.BytesIO(path.read_bytes())
             file = ParquetFile(data)
-        Finalize(file, file.close)
+        Finalize(file, file.reader.close)
+        # NOTE: can not use
+        #
+        #   Finalize(file, file.close, kwargs={'force': True})
+        #
+        # because the instance method `file.close` can't be used as the callback---the
+        # object `file` is no long available at that time.
+
         return file
 
     def __init__(self, path: PathType):

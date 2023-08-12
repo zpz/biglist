@@ -823,7 +823,8 @@ def make_parquet_type(type_spec: str | Sequence):
         "utf8",
         "large_binary",
         "large_string",
-        "large_utf8" "null",
+        "large_utf8",
+        "null",
     ):
         assert not args
         return getattr(pyarrow, type_name)()

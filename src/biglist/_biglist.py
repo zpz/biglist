@@ -558,7 +558,7 @@ class Biglist(BiglistBase[Element]):
 
         self._append_files_buffer.append((filename, buffer_len))
 
-    def flush(self) -> None:
+    def flush(self, *, lock_timeout=120) -> None:
         """
         :meth:`_flush` is called automatically whenever the "append buffer"
         is full, so to persist the data and empty the buffer.
@@ -577,16 +577,18 @@ class Biglist(BiglistBase[Element]):
         if performed by :meth:`flush`.
         This is the second reason that user should call :meth:`flush` at the end of their
         data writting session, regardless of whether all the new data have been persisted
-        in data files. (They would be if their count is a multiple of ``self.batch_size``.)
+        in data files. (They would be if their count happens to be a multiple of ``self.batch_size``.)
 
         If there are multiple workers adding data to this biglist at the same time
-        (from multiple processes or machines), data added by other workers will be
-        invisible to this worker until :meth:`flush` or :meth:`reload` is called.
+        (from multiple processes or machines), data added by one worker will not be visible
+        to another worker until the writing worker calls :meth:`flush` and the reading worker
+        calls :meth:`reload` (or :meth:`flush`).
 
-        Further, user should assume that data not yet persisted are not visible to
-        data reading via :meth:`__getitem__` or :meth:`__iter__`, and not included in
-        :meth:`__len__`. In common use cases, we do not start reading data until we're done
-        adding data to the biglist (at least "for now").
+        Further, user should assume that data not yet persisted (i.e. still in "append buffer")
+        are not visible to data reading via :meth:`__getitem__` or :meth:`__iter__` and not included in
+        :meth:`__len__`, even to the same worker. In common use cases, we do not start reading data
+        until we're done adding data to the biglist (at least "for now"), hence this is not
+        a big issue.
 
         In summary, call :meth:`flush` when
 
@@ -611,7 +613,7 @@ class Biglist(BiglistBase[Element]):
         # to the list. This block merges the appends by the current worker with
         # appends by other workers. The last call to ``flush`` across all workers
         # will get the final meta info right.
-        with lock_to_use(self._info_file) as ff:
+        with lock_to_use(self._info_file, timeout=lock_timeout) as ff:
             z0 = ff.read_json()["data_files_info"]
             z = sorted(set((*(tuple(v[:2]) for v in z0), *self._append_files_buffer)))
             # TODO: maybe a merge sort can be more efficient.

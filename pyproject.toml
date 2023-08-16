@@ -9,7 +9,7 @@ authors = [
     {name = "Zepu Zhang", email = "zepu.zhang@gmail.com"},
 ]
 dependencies = [
-    "upathlib >= 0.8.2",
+    "upathlib >= 0.8.3",
     "deprecation",
     "pyarrow >= 12.0.1",
     "typing-extensions",
@@ -38,7 +38,7 @@ doc = [
     "pydata-sphinx-theme",
 ]
 gcs = [
-    "upathlib[gcs] >= 0.8.2",
+    "upathlib[gcs] >= 0.8.3",
     "google-auth",
 ]
 test = [

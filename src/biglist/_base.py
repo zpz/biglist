@@ -435,41 +435,43 @@ class BiglistBase(Seq[Element]):
                 ... use item ...
         """
         files = self.files
-        if files:
-            if len(files) == 1:
-                z = files[0]
+        if not files:
+            return
+
+        if len(files) == 1:
+            z = files[0]
+            z.load()
+            yield from z
+        else:
+            ndatafiles = len(files)
+
+            max_workers = min(self._n_read_threads, ndatafiles)
+            tasks = queue.Queue(max_workers)
+            executor = self._get_thread_pool()
+
+            def _read_file(idx):
+                z = files[idx]
                 z.load()
-                yield from z
-            else:
-                ndatafiles = len(files)
+                return z
 
-                max_workers = min(self._n_read_threads, ndatafiles)
-                tasks = queue.Queue(max_workers)
-                executor = self._get_thread_pool()
+            for i in range(max_workers):
+                t = executor.submit(_read_file, i)
+                tasks.put(t)
+            nfiles_queued = max_workers
 
-                def _read_file(idx):
-                    z = files[idx]
-                    z.load()
-                    return z
+            for _ in range(ndatafiles):
+                t = tasks.get()
+                file_reader = t.result()
 
-                for i in range(max_workers):
-                    t = executor.submit(_read_file, i)
+                # Before starting to yield data, take care of the
+                # downloading queue to keep it busy.
+                if nfiles_queued < ndatafiles:
+                    # `nfiles_queued` is the index of the next file to download.
+                    t = executor.submit(_read_file, nfiles_queued)
                     tasks.put(t)
-                nfiles_queued = max_workers
+                    nfiles_queued += 1
 
-                for _ in range(ndatafiles):
-                    t = tasks.get()
-                    file_reader = t.result()
-
-                    # Before starting to yield data, take care of the
-                    # downloading queue to keep it busy.
-                    if nfiles_queued < ndatafiles:
-                        # `nfiles_queued` is the index of the next file to download.
-                        t = executor.submit(_read_file, nfiles_queued)
-                        tasks.put(t)
-                        nfiles_queued += 1
-
-                    yield from file_reader
+                yield from file_reader
 
     @property
     def num_data_files(self) -> int:

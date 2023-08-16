@@ -565,7 +565,7 @@ class Biglist(BiglistBase[Element]):
         If there are multiple workers adding data to this biglist at the same time
         (from multiple processes or machines), data added by one worker will not be visible
         to another worker until the writing worker calls :meth:`flush` and the reading worker
-        calls :meth:`reload` or :meth:`flush`.
+        calls :meth:`reload`.
 
         Further, user should assume that data not yet persisted (i.e. still in "append buffer")
         are not visible to data reading via :meth:`__getitem__` or :meth:`__iter__` and not included in
@@ -607,8 +607,6 @@ class Biglist(BiglistBase[Element]):
                 self.info["data_files_info"] = z
                 ff.write_json(self.info, overwrite=True)
             self._append_files_buffer.clear()
-        else:
-            self.reload()
 
     def reload(self) -> None:
         """
@@ -664,9 +662,10 @@ class Dumper:
 
     def _callback(self, t):
         self._sem.release()
-        self._tasks.remove(t)
-        if t.exception():
-            raise t.exception()
+        if not t.exception():
+            self._tasks.remove(t)
+        # If `t` raised exception, keep it in `self._tasks`
+        # so that the exception can be re-raised in `self.wait`.
 
     def dump_file(
         self,
@@ -708,6 +707,8 @@ class Dumper:
         """
         if self._tasks:
             concurrent.futures.wait(self._tasks)
+            for t in self._tasks:
+                _ = t.result()
 
 
 class BiglistFileReader(FileReader[Element]):

@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Bug fix in Parquet schema.
 - Increased default value of ``Biglist._n_write_threads`` from 3 to 8.
 - Increased default timeout to ``_util.lock_to_use`` from 120 to 300.
+- Bugfix: previously, exceptions in file writing (happening in background threads)
+  in ``_biglist.Dumper`` are not propagated; now they are re-raised in
+  ``Dumper.wait``, which is called by ``Biglist.flush``.
 
 
 ## [0.8.2] - 2023-06-14

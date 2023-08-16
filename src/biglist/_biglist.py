@@ -294,17 +294,10 @@ class Biglist(BiglistBase[Element]):
         self.keep_files: bool = True
         """Indicates whether the persisted files should be kept or deleted when the object is garbage-collected."""
 
-        self._flushed = True
-        # Set this early in case ``__del__`` is triggered before ``__init__`` finishes.
-        # If True, some changes have been made but `.flush` has not been called.
-        # Note it's about `.flush()`, not `._flush()`.
-        # This flag exists to remind user that they need to call `.flush()` at the end
-        # of their writing session.
-
         self._append_buffer: list = []
         self._append_files_buffer: list = []
         self._file_dumper = None
-        self._n_write_threads = 3
+        self._n_write_threads = 8
         self._serialize_kwargs = self.info.get("serialize_kwargs", {})
         self._deserialize_kwargs = self.info.get("deserialize_kwargs", {})
         if self.storage_format == "parquet" and "schema_spec" in self._serialize_kwargs:
@@ -431,7 +424,7 @@ class Biglist(BiglistBase[Element]):
         return self.info.get("storage_version", 0)
 
     def _warn_flush(self):
-        if not self._flushed:
+        if self._append_buffer or self._append_files_buffer:
             warnings.warn(
                 f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
             )
@@ -497,7 +490,6 @@ class Biglist(BiglistBase[Element]):
             Also check out `mpservice.multiprocesing.MP_SPAWN_CTX <https://mpservice.readthedocs.io/en/latest/util.html#mpservice.multiprocessing.MP_SPAWN_CTX>`_.
         """
         self._append_buffer.append(x)
-        self._flushed = False
         if len(self._append_buffer) >= self.batch_size:
             self._flush()
 
@@ -506,7 +498,7 @@ class Biglist(BiglistBase[Element]):
         for v in x:
             self.append(v)
 
-    def _flush(self, *, wait: bool = False) -> None:
+    def _flush(self) -> None:
         """
         Persist the content of the in-memory buffer to a file,
         reset the buffer, and update relevant book-keeping variables.
@@ -515,8 +507,7 @@ class Biglist(BiglistBase[Element]):
         reaches ``self.batch_size``. This happens w/o the user's intervention.
         """
         if not self._append_buffer:
-            if self._file_dumper is not None and wait:
-                self._file_dumper.wait()
+            # Called by `self.flush`.
             return
 
         buffer = self._append_buffer
@@ -534,31 +525,25 @@ class Biglist(BiglistBase[Element]):
 
         data_file = self.data_path / filename
 
-        if wait:
-            if self._file_dumper is not None:
-                self._file_dumper.wait()
-            self.dump_data_file(data_file, buffer, **self._serialize_kwargs)
-        else:
-            if self._file_dumper is None:
-                self._file_dumper = Dumper(
-                    self._get_thread_pool(), self._n_write_threads
-                )
-            self._file_dumper.dump_file(
-                self.dump_data_file, data_file, buffer, **self._serialize_kwargs
+        if self._file_dumper is None:
+            self._file_dumper = Dumper(
+                self._get_thread_pool(), self._n_write_threads
             )
-            # This call will return quickly if the dumper has queue
-            # capacity for the file. The file meta data below
-            # will be updated as if the saving has completed, although
-            # it hasn't (it is only queued). This allows the waiting-to-be-saved
-            # data to be accessed property.
+        self._file_dumper.dump_file(
+            self.dump_data_file, data_file, buffer, **self._serialize_kwargs
+        )
+        # This call will return quickly if the dumper has queue
+        # capacity for the file. The file meta data below
+        # will be updated as if the saving has completed, although
+        # it hasn't (it is only queued). This allows the waiting-to-be-saved
+        # data to be accessed properly.
 
-            # TODO:
-            # what if dump fails later? The 'n_data_files' file is updated
-            # already assuming everything will be fine.
+        # TODO:
+        # what if dump fails later? Is there meta data corruption?
 
         self._append_files_buffer.append((filename, buffer_len))
 
-    def flush(self, *, lock_timeout=120) -> None:
+    def flush(self, *, lock_timeout=300) -> None:
         """
         :meth:`_flush` is called automatically whenever the "append buffer"
         is full, so to persist the data and empty the buffer.
@@ -574,7 +559,7 @@ class Biglist(BiglistBase[Element]):
         because updating ``info.json`` involves locking.
 
         Updating ``info.json`` to include new data files (created due to :meth:`append` and :meth:`extend`)
-        if performed by :meth:`flush`.
+        is performed by :meth:`flush`.
         This is the second reason that user should call :meth:`flush` at the end of their
         data writting session, regardless of whether all the new data have been persisted
         in data files. (They would be if their count happens to be a multiple of ``self.batch_size``.)
@@ -582,7 +567,7 @@ class Biglist(BiglistBase[Element]):
         If there are multiple workers adding data to this biglist at the same time
         (from multiple processes or machines), data added by one worker will not be visible
         to another worker until the writing worker calls :meth:`flush` and the reading worker
-        calls :meth:`reload` (or :meth:`flush`).
+        calls :meth:`reload` or :meth:`flush`.
 
         Further, user should assume that data not yet persisted (i.e. still in "append buffer")
         are not visible to data reading via :meth:`__getitem__` or :meth:`__iter__` and not included in
@@ -604,26 +589,26 @@ class Biglist(BiglistBase[Element]):
         This is a legitimate case in parallel or distributed writing, or writing in
         multiple sessions.
         """
-        if getattr(self, '_flushed', True):
-            return
-
-        self._flush(wait=True)
+        self._flush()
+        if self._file_dumper is not None:
+            self._file_dumper.wait()
 
         # Other workers in other threads, processes, or machines may have appended data
         # to the list. This block merges the appends by the current worker with
         # appends by other workers. The last call to ``flush`` across all workers
         # will get the final meta info right.
-        with lock_to_use(self._info_file, timeout=lock_timeout) as ff:
-            z0 = ff.read_json()["data_files_info"]
-            z = sorted(set((*(tuple(v[:2]) for v in z0), *self._append_files_buffer)))
-            # TODO: maybe a merge sort can be more efficient.
-            cum = list(itertools.accumulate(v[1] for v in z))
-            z = [(a, b, c) for (a, b), c in zip(z, cum)]
-            self.info["data_files_info"] = z
-            ff.write_json(self.info, overwrite=True)
-
-        self._append_files_buffer.clear()
-        self._flushed = True
+        if self._append_files_buffer:
+            with lock_to_use(self._info_file, timeout=lock_timeout) as ff:
+                z0 = ff.read_json()["data_files_info"]
+                z = sorted(set((*(tuple(v[:2]) for v in z0), *self._append_files_buffer)))
+                # TODO: maybe a merge sort can be more efficient.
+                cum = list(itertools.accumulate(v[1] for v in z))
+                z = [(a, b, c) for (a, b), c in zip(z, cum)]
+                self.info["data_files_info"] = z
+                ff.write_json(self.info, overwrite=True)
+            self._append_files_buffer.clear()
+        else:
+            self.reload()
 
     def reload(self) -> None:
         """
@@ -638,13 +623,12 @@ class Biglist(BiglistBase[Element]):
 
         Creating a new object pointing to the same storage location would achieve the same effect.
         """
-        # with lock_to_use(self._info_file):
-        # self.info = self._info_file.read_json()
         self.info = self._info_file.read_json()
 
     @property
     def files(self):
         # This method should be cheap to call.
+        # TODO: call `reload`?
         self._warn_flush()
         if self._deserialize_kwargs:
             fun = functools.partial(self.load_data_file, **self._deserialize_kwargs)
@@ -957,7 +941,7 @@ class Multiplexer:
         path: PathType,
         task_id: str | None = None,
         worker_id: str | None = None,
-        timeout: int | float = 120,
+        timeout: int | float = 300,
     ):
         """
         Create a Multiplexer object and use it to distribute the data elements that have been

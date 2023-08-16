@@ -5,9 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
-## [0.8.3] - in progress
+## [0.8.3] - 2023-08-15
 
 - Bug fix in Parquet schema.
+- increased default value of ``Biglist._n_write_threads`` from 3 to 8.
 
 
 ## [0.8.2] - 2023-06-14

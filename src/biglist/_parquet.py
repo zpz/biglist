@@ -90,6 +90,8 @@ class ParquetFileReader(FileReader):
         #
         # because the instance method `file.close` can't be used as the callback---the
         # object `file` is no long available at that time.
+        #
+        # See https://github.com/apache/arrow/issues/35318
         return file
 
     def __init__(self, path: PathType):

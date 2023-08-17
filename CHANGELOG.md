@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.8.4] - in progress
+
+- New method ``Biglist.make_file_name``, which allows user to insert custom content in the file names.
+
+
 ## [0.8.3] - 2023-08-15
 
 - Bug fix in Parquet schema.

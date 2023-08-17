@@ -498,6 +498,28 @@ class Biglist(BiglistBase[Element]):
         for v in x:
             self.append(v)
 
+    def make_file_name(self, buffer_len: int, extra: str = '') -> str:
+        # If you need to customize the data file name for any reason, you should do that via ``extra``
+        # and keep the other patterns unchanged.
+        #
+        # One possible usecase is this: in distributed writing, you want files written by different workers
+        # to be distinguishable by the file names. Do something like this:
+        #
+        #       def worker(datapath: str, worker_id: str, ...):
+        #           out = Biglist(datapath)
+        #           _make_file_name = out.make_file_name
+        #           out.make_file_name = lambda buffer_len: _make_file_name(buffer_len, worker_id)
+        if extra:
+            extra = extra.lstrip('_').rstrip('_') + '_'
+        return f"{datetime.utcnow().strftime('%Y%m%d%H%M%S.%f')}_{extra}{str(uuid4()).replace('-', '')[:10]}_{buffer_len}"
+        # File name pattern introduced on 7/25/2022.
+        # This should guarantee the file name is unique, hence
+        # we do not need to verify that this file name is not already used.
+        # Also include timestamp and item count in the file name, in case
+        # later we decide to use these pieces of info.
+        # Changes in 0.7.4: the time part changes from epoch to datetime, with guaranteed fixed length.
+        # Change in 0.8.4: the uuid part has dash removed and length reduced to 10; add ``extra``.
+
     def _flush(self) -> None:
         """
         Persist the content of the in-memory buffer to a file,
@@ -515,13 +537,7 @@ class Biglist(BiglistBase[Element]):
         self._append_buffer = []
 
         datafile_ext = self.storage_format.replace("-", "_")
-        filename = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S.%f')}_{uuid4()}_{buffer_len}.{datafile_ext}"
-        # File name pattern introduced on 7/25/2022.
-        # this should almost guarantee the file name is unique, hence
-        # we do not need to verify this file name does not exist in `data_files`.
-        # Also include timestamp and item count in the file name, in case
-        # later we decide to use these pieces of info.
-        # Changes in 0.7.4: the time part changes from epoch to datetime, with guaranteed fixed length.
+        filename = f"{self.make_file_name(buffer_len)}.{datafile_ext}"
 
         data_file = self.data_path / filename
 

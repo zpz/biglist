@@ -26,6 +26,25 @@ from biglist._biglist import (
 from boltons import iterutils
 
 
+def test_custom_file_name():
+    out = Biglist.new()
+    print('')
+    for _ in range(5):
+        buffer_len = random.randint(100, 200)
+        fn = out.make_file_name(buffer_len)
+        print(fn)
+        assert fn.count('_') == 2
+
+    _make_file_name = out.make_file_name
+    out.make_file_name = lambda buffer_len: _make_file_name(buffer_len, 'myworker')
+    for _ in range(5):
+        buffer_len = random.randint(100, 200)
+        fn = out.make_file_name(buffer_len)
+        print(fn)
+        assert fn.count('_') == 3
+        assert 'myworker' in fn
+
+
 def test_numbers():
     class MyBiglist(Biglist[int]):
         pass

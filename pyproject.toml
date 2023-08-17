@@ -33,7 +33,7 @@ Source = "https://github.com/zpz/biglist"
 zstandard = ["zstandard"]
 lz4 = ["lz4"]
 doc = [
-    "sphinx",
+    "sphinx < 7.2.0",
     "numpydoc",
     "pydata-sphinx-theme",
 ]

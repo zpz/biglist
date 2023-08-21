@@ -499,16 +499,19 @@ class Biglist(BiglistBase[Element]):
             self.append(v)
 
     def make_file_name(self, buffer_len: int, extra: str = '') -> str:
-        # If you need to customize the data file name for any reason, you should do that via ``extra``
-        # and keep the other patterns unchanged.
-        #
-        # One possible usecase is this: in distributed writing, you want files written by different workers
-        # to be distinguishable by the file names. Do something like this:
-        #
-        #       def worker(datapath: str, worker_id: str, ...):
-        #           out = Biglist(datapath)
-        #           _make_file_name = out.make_file_name
-        #           out.make_file_name = lambda buffer_len: _make_file_name(buffer_len, worker_id)
+        '''
+        If you need to customize the data file name for any reason, you should do that via ``extra``
+        and keep the other patterns unchanged.
+        
+        One possible usecase is this: in distributed writing, you want files written by different workers
+        to be distinguishable by the file names. Do something like this:
+        
+              def worker(datapath: str, worker_id: str, ...):
+                  out = Biglist(datapath)
+                  _make_file_name = out.make_file_name
+                  out.make_file_name = lambda buffer_len: _make_file_name(buffer_len, worker_id)
+                  ...
+        '''
         if extra:
             extra = extra.lstrip('_').rstrip('_') + '_'
         return f"{datetime.utcnow().strftime('%Y%m%d%H%M%S.%f')}_{extra}{str(uuid4()).replace('-', '')[:10]}_{buffer_len}"

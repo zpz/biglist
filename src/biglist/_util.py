@@ -359,20 +359,20 @@ def get_global_thread_pool():
     # Refer to ``get_shared_thread_pool`` in package ``mpservice.concurrent.futures``.
 
     with _global_thread_pool_lock_:
-        executor = _global_thread_pool_.get('default')
+        executor = _global_thread_pool_.get('_biglist_')
         if executor is None or executor._shutdown:
             executor = concurrent.futures.ThreadPoolExecutor()
-            _global_thread_pool_['default'] = executor
+            _global_thread_pool_['_biglist_'] = executor
     return executor
 
 
 if hasattr(os, 'register_at_fork'):  # not available on Windows
 
     def _clear_global_state():
-        executor = _global_thread_pool_.get('default')
+        executor = _global_thread_pool_.get('_biglist_')
         if executor is not None:
             executor.shutdown(wait=False)
-            _global_thread_pool_.pop('default', None)
+            _global_thread_pool_.pop('_biglist_', None)
 
         global _global_thread_pool_lock_
         try:

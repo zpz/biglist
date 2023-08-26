@@ -622,7 +622,7 @@ We can get info about the row-groups, or even retrieve a row-group as the unit o
 7
 >>> f0.metadata  # doctest: +ELLIPSIS
 <pyarrow._parquet.FileMetaData object at 0x7...>
-  created_by: parquet-cpp-arrow version 12.0.0
+  created_by: parquet-cpp-arrow version 1...
   num_columns: 3
   num_rows: 61
   num_row_groups: 7
@@ -947,7 +947,7 @@ The function :func:`write_arrays_to_parquet` is provided to write data columns t
 10000
 >>> f.metadata   # doctest: +ELLIPSIS
 <pyarrow._parquet.FileMetaData object at 0x7...>
-  created_by: parquet-cpp-arrow version 12.0.0
+  created_by: parquet-cpp-arrow version 1...
   num_columns: 2
   num_rows: 10000
   num_row_groups: 1

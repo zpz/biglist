@@ -940,7 +940,7 @@ class Multiplexer:
 
             Usually this class is used to distribute data to a cluster of machines, hence
             this path points to a location in a cloud storage that is supported by
-            `upathlib <https://github.com/zpz/upathlib`_.
+            `upathlib <https://github.com/zpz/upathlib>`_.
         """
         path = resolve_path(path)
         bl = Biglist.new(

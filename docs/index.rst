@@ -131,7 +131,7 @@ For Biglist, this would require loading and unloading each of a possibly large n
 Biglist does not want to give user the illusion that they can use these methods at will and lightly.
 
 For this reason, the protocol :class:`Seq` is defined, which has three methods:
-``__len__``, ``__iter__``, and ``__getitem__``.
+:meth:`~Seq.__len__`, :meth:`~Seq.__iter__`, and :meth:`~Seq.__getitem__`.
 Therefore, classes that implement this protocol are
 `Sized <https://docs.python.org/3/library/collections.abc.html#collections.abc.Sized>`_,
 `Iterable <https://docs.python.org/3/library/collections.abc.html#collections.abc.Iterable>`_,
@@ -253,7 +253,7 @@ Reading from a Biglist in multiple processes
 
 To *collectively* consume a :class:`Biglist` object from multiple processes,
 we can distribute :class:`FileReader`\s to the processes.
-The FileReader's of ``mylist`` is accessed via its property ``files``, which returns a :class:`FileSeq`:
+The FileReader's of ``mylist`` is accessed via its property :meth:`~Biglist.files`, which returns a :class:`FileSeq`:
 
 >>> files = mylist.files
 >>> files  # doctest: +SKIP
@@ -545,7 +545,7 @@ Reading a ParquetBiglist
 
 The fundamental reading API is the same between :class:`Biglist` and :class:`ParquetBiglist`:
 random access, slicing/dicing using :class:`Slicer`, iteration,
-distributed reading via :meth:`FileSeq.concurrent_iter`---these are all used the same way.
+distributed reading via its :meth:`~ParquetBiglist.files`---these are all used the same way.
 
 However, the structures of the data files are very different between :class:`Biglist` and :class:`ParquetBiglist`.
 For Biglist, each data file contains a straight Python list, elements of which being whatever have been
@@ -622,7 +622,7 @@ We can get info about the row-groups, or even retrieve a row-group as the unit o
 7
 >>> f0.metadata  # doctest: +ELLIPSIS
 <pyarrow._parquet.FileMetaData object at 0x7...>
-  created_by: parquet-cpp-arrow version 12.0.0
+  created_by: parquet-cpp-arrow version 1...
   num_columns: 3
   num_rows: 61
   num_row_groups: 7
@@ -703,7 +703,8 @@ Parquet is a *columnar* format.
 If we only need a subset of the columns, we should say so, so that the un-needed columns will
 not be loaded from disk (or cloud, as it may be).
 
-Both :class:`ParquetFileReader` and :class:`ParquetBatchData` provide the method ``columns`` to return a new object
+Both :class:`ParquetFileReader` and :class:`ParquetBatchData` provide the method :meth:`~ParquetFileReader.columns` 
+(:meth:`~ParquetBatchData.columns`) to return a new object
 with only the selected columns.
 For ParquetFileReader, if data have not been loaded, reading of the new object will only load the selected columns.
 For ParquetBatchData, its data is already in memory, hence column selection leads to a data subset.
@@ -761,7 +762,8 @@ The original `pyarrow`_ values will not look as nice:
 [<pyarrow.Int64Scalar: 234>, <pyarrow.Int64Scalar: 235>, <pyarrow.Int64Scalar: 236>, <pyarrow.Int64Scalar: 237>, <pyarrow.Int64Scalar: 238>, <pyarrow.Int64Scalar: 239>, <pyarrow.Int64Scalar: 240>, <pyarrow.Int64Scalar: 241>]
 >>> sales.scalar_as_py = True
 
-Both :class:`ParquetFileReader` and :class:`ParquetBatchData` have another method called ``column``, which retrieves a single column
+Both :class:`ParquetFileReader` and :class:`ParquetBatchData` have another method called :meth:`~ParquetFileReader.column`
+(:meth:`~ParquetBatchData.column`), which retrieves a single column
 and returns a
 `pyarrow.Array`_ or
 `pyarrow.ChunkedArray`_. For example,
@@ -874,7 +876,7 @@ For example,
 Slicer
 ------
 
-:class:`Slicer` takes any :class:`Seq`` and provides :meth:`~Slicer.__getitem__` that accepts
+:class:`Slicer` takes any :class:`Seq` and provides :meth:`~Slicer.__getitem__` that accepts
 a single index, or a slice, or a list of indices. A single-index access will return
 the requested element; the other two scenarios return a new Slicer via a zero-copy operation.
 To get all the elements out of a Slicer, either iterate it or call its method :meth:`~Slicer.collect`.
@@ -945,7 +947,7 @@ The function :func:`write_arrays_to_parquet` is provided to write data columns t
 10000
 >>> f.metadata   # doctest: +ELLIPSIS
 <pyarrow._parquet.FileMetaData object at 0x7...>
-  created_by: parquet-cpp-arrow version 12.0.0
+  created_by: parquet-cpp-arrow version 1...
   num_columns: 2
   num_rows: 10000
   num_row_groups: 1

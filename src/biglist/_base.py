@@ -76,7 +76,7 @@ class FileSeq(Seq[FileReaderType]):
     A FileSeq is a :class:`Seq` of :class:`FileReader` objects.
 
     Since this class represents a sequence of data files,
-    methods such as ``__len__`` and ``__iter__`` are in terms of data *files*
+    methods such as :meth:`__len__` and :meth:`__iter__` are in terms of data *files*
     rather than data *items*. (One data file contains a sequence of data items.)
     """
 
@@ -162,7 +162,7 @@ class BiglistBase(Seq[Element]):
     Here, "reading" and "read-only" is talking about the *data files*.
     This class always needs to write meta info *about* the data files.
     In addition, the subclass :class:`~biglist.Biglist` also creates and manages
-    the data files, whereas :class:`_biglist.ParquetBiglist` provides methods
+    the data files, whereas :class:`~biglist.ParquetBiglist` provides methods
     to read existing data files, treating them as read-only.
 
     This class is generic with a parameter indicating the type of the data items,
@@ -230,15 +230,15 @@ class BiglistBase(Seq[Element]):
             Initial info that should be written into the *info* file before ``__init__`` is called.
             This is in addition to whatever this method internally decides to write.
 
-            The info file `info.json` is written before ``__init__`` is called.
-            In ``__init__``, this file is read into ``self.info``.
+            The info file `info.json` is written before :meth:`__init__` is called.
+            In :meth:`__init__`, this file is read into ``self.info``.
 
             This parameter can be used to write some high-level info that ``__init__``
             needs.
 
             If the info is not needed in ``__init__``, then user can always add it
             to ``self.info`` after the object has been instantiated, hence saving general info
-            `info.json` is not the intended use of this parameter.
+            in ``info.json`` is not the intended use of this parameter.
 
             User rarely needs to use this parameter. It is mainly used by the internals
             of the method ``new`` of subclasses.
@@ -340,6 +340,12 @@ class BiglistBase(Seq[Element]):
         This is an alias to :meth:`num_data_items`.
         """
         return self.num_data_items
+
+    def __getstate__(self):
+        return (self.path,)
+
+    def __setstate__(self, data):
+        self.__init__(data[0])
 
     def _get_thread_pool(self):
         if self._thread_pool_ is None:

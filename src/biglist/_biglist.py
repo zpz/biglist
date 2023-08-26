@@ -91,7 +91,7 @@ class Biglist(BiglistBase[Element]):
             Name of the format to be associated with the new serializer.
 
             After registering the new serializer with name "xyz", one can use
-            ``storage_format='xyz'`` in calls to ``new``.
+            ``storage_format='xyz'`` in calls to :meth:`new`.
             When reading the object back from persistence,
             make sure this registry is also in place so that the correct
             deserializer can be found.
@@ -174,7 +174,7 @@ class Biglist(BiglistBase[Element]):
         Parameters
         ----------
         path
-            Passed on to :meth:`BiglistBase.new` of ``BiglistBase``.
+            Passed on to :meth:`BiglistBase.new`.
         batch_size
             Max number of data elements in each persisted data file.
 
@@ -197,12 +197,13 @@ class Biglist(BiglistBase[Element]):
 
             - It should not be so large that it is "unwieldy", e.g. approaching 1GB.
 
-            - When :meth:`~_base.BiglistBase.__iter__`\\ating over a :class:`Biglist` object, there can be up to (by default) 4
-              files-worth of data in memory at any time. See the method :meth:`iter_files`.
+            - When :meth:`__iter__`\\ating over a :class:`Biglist` object, there can be up to (by default) 4
+              files-worth of data in memory at any time, where 4 is ``self._n_read_threads`` plus 1.
 
             - When :meth:`append`\\ing or :meth:`extend`\\ing to a :class:`Biglist` object at high speed,
-              there can be up to (by default) 4 times ``batch_size`` data elements in memory at any time.
-              See :meth:`_flush` and :class:`Dumper`.
+              there can be up to (by default) 9 times ``batch_size`` data elements in memory at any time,
+              where 9 is ``self._n_write_threads`` plus 1.
+              See :meth:`_flush` and :class:`~biglist._biglist.Dumper`.
 
             Another consideration is access pattern of elements in the :class:`Biglist`. If
             there are many "jumping around" with random element access, large data files
@@ -483,11 +484,6 @@ class Biglist(BiglistBase[Element]):
         In the processes, use independent ``Biglist`` objects that point to the same "path".
         Each of the objects will maintain its own in-memory buffer and save its own files once the buffer
         fills up. Remember to :meth:`flush` at the end of work in each process.
-
-        .. note:: Use the "spawn" method to start processes.
-            In ``multiprocessing``, look for the method `get_context <https://docs.python.org/3/library/multiprocessing.html#multiprocessing.get_context>`_.
-            In ``concurrent.futures.ProcessPoolExecutor``, look for the parameter `mp_context <https://docs.python.org/3/library/concurrent.futures.html#concurrent.futures.ProcessPoolExecutor>`_.
-            Also check out `mpservice.multiprocesing.MP_SPAWN_CTX <https://mpservice.readthedocs.io/en/latest/util.html#mpservice.multiprocessing.MP_SPAWN_CTX>`_.
         """
         self._append_buffer.append(x)
         if len(self._append_buffer) >= self.batch_size:
@@ -741,7 +737,7 @@ class BiglistFileReader(FileReader[Element]):
             A function that will be used to load the data file.
             This must be pickle-able.
             Usually this is :meth:`Biglist.load_data_file`.
-            If you customize this, please see the doc of :meth:`FileReader.__init__`.
+            If you customize this, please see the doc of :class:`~biglist.FileReader`.
         """
         super().__init__()
         self.path: Upath = resolve_path(path)
@@ -838,16 +834,16 @@ class ParquetSerializer(serializer.ByteSerializer):
 
         The content of the item dict should follow a regular pattern.
         Not every structure is supported. The data `x` must be acceptable to
-        ``pyarrow.Table.from_pylist``. If unsure, use a list with a couple data elements
+        `pyarrow.Table.from_pylist <https://arrow.apache.org/docs/python/generated/pyarrow.Table.html#pyarrow.Table.from_pylist>`_. If unsure, use a list with a couple data elements
         and experiment with ``pyarrow.Table.from_pylist`` directly.
 
-        When using ``storage_format='parquet'`` for ``Biglist``, each data element is a dict
+        When using ``storage_format='parquet'`` for :class:`Biglist`, each data element is a dict
         with a consistent structure that is acceptable to ``pyarrow.Table.from_pylist``.
         When reading the Biglist, the original Python data elements are returned.
         (A record read out may not be exactly equal to the original that was written, in that
         elements that were missing in a record when written may have been filled in with ``None``
         when read back out.)
-        In other words, the reading is *not* like that of ``ParquetBiglist``.
+        In other words, the reading is *not* like that of :class:`~biglist.ParquetBiglist`.
         You can always create a separate ParquetBiglist for the data files of the Biglist
         in order to use Parquet-style data reading. The data files are valid Parquet files.
 
@@ -943,7 +939,8 @@ class Multiplexer:
             However, there are no strong reasons to use this facility on a local machine.
 
             Usually this class is used to distribute data to a cluster of machines, hence
-            this path points to a location in a cloud storage that is supported by ``upathlib``.
+            this path points to a location in a cloud storage that is supported by
+            `upathlib <https://github.com/zpz/upathlib>`_.
         """
         path = resolve_path(path)
         bl = Biglist.new(

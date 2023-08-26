@@ -596,7 +596,7 @@ class ParquetBiglist(BiglistBase):
             To include all files, use ``suffix='*'``.
 
         **kwargs
-            additional arguments are passed on to ``__init__``.
+            additional arguments are passed on to :meth:`__init__`.
         """
         if isinstance(data_path, (str, Path, Upath)):
             #  TODO: in py 3.10, we will be able to do `isinstance(data_path, PathType)`

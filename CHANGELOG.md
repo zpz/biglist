@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.8.5] - 2023-08-25
+
+- ``BiglistBase`` now has custom support for pickling.
+- Minor improvements to doc.
+
+
 ## [0.8.4] - 2023-08-20
 
 - New method ``Biglist.make_file_name``, which allows user to insert custom content in the file names.

@@ -342,8 +342,8 @@ class BiglistBase(Seq[Element]):
         return self.num_data_items
 
     def __getstate__(self):
-        return (self.path, )
-    
+        return (self.path,)
+
     def __setstate__(self, data):
         self.__init__(data[0])
 

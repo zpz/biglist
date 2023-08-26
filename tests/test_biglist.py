@@ -2,6 +2,7 @@ import asyncio
 import multiprocessing
 import os
 import os.path
+import pickle
 import queue
 import random
 import threading
@@ -487,3 +488,15 @@ def test_serializers():
     y = serde.serialize(data)
     z = serde.deserialize(y)
     assert z == data
+
+
+def test_pickle():
+    bb = Biglist.new(batch_size=100)
+    bb.append(25)
+    bb.append(46)
+    assert len(bb._append_buffer) == 2
+
+    pickled = pickle.dumps(bb)
+    unpickled = pickle.loads(pickled)
+    assert unpickled.path == bb.path
+    assert len(unpickled._append_buffer) == 0

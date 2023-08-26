@@ -256,7 +256,7 @@ class Slicer(Generic[SeqType]):
         Return a list containing the elements in the current window.
         This is equivalent to ``list(self)``.
 
-        This is often used to substantiate a small slice as a list, because a slice is still a ``Slicer`` object,
+        This is often used to substantiate a small slice as a list, because a slice is still a :class:`Slicer` object,
         which does not directly reveal the data items. For example,
 
         ::

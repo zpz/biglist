@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.8.6] - in progress
+
+- ``Biglist.DEFAULT_STORAGE_FORMAT`` was changed from ``pickle-zstd`` to ``pickle-z`` because the former
+  is available only in optional dependencies. This does not affect any previously persisted Biglist objects.
+- Decreased default value of ``Biglist._n_write_threads`` from 8 to 4.
+
+
 ## [0.8.5] - 2023-08-25
 
 - ``BiglistBase`` now has custom support for pickling.

@@ -71,7 +71,7 @@ atexit.register(_cleanup)
 class Biglist(BiglistBase[Element]):
     registered_storage_formats = {}
 
-    DEFAULT_STORAGE_FORMAT = "pickle-zstd"
+    DEFAULT_STORAGE_FORMAT = "pickle-z"
 
     @classmethod
     def register_storage_format(
@@ -298,7 +298,12 @@ class Biglist(BiglistBase[Element]):
         self._append_buffer: list = []
         self._append_files_buffer: list = []
         self._file_dumper = None
-        self._n_write_threads = 8
+        self._n_write_threads = 4
+        # This value affects memory demand during quick "appending" (and flushing/dumping in the background).
+        # If the memory consumption of each batch is large, you could manually set this to a lower value, like
+        #   lst = Biglist(path)
+        #   lst._n_write_threads = 4
+
         self._serialize_kwargs = self.info.get("serialize_kwargs", {})
         self._deserialize_kwargs = self.info.get("deserialize_kwargs", {})
         if self.storage_format == "parquet" and "schema_spec" in self._serialize_kwargs:

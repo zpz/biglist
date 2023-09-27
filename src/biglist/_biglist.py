@@ -71,7 +71,7 @@ atexit.register(_cleanup)
 class Biglist(BiglistBase[Element]):
     registered_storage_formats = {}
 
-    DEFAULT_STORAGE_FORMAT = "pickle-z"
+    DEFAULT_STORAGE_FORMAT = "pickle-zstd"
 
     @classmethod
     def register_storage_format(

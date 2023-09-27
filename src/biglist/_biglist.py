@@ -919,9 +919,9 @@ class Multiplexer:
 
     The usage consists of two main parts:
 
-    1. In "controller" code, call :meth:`start` to start a new "session". 
+    1. In "controller" code, call :meth:`start` to start a new "session".
     Different sessions (at the same time or otherwise) are independent consumers of the data.
-    
+
     2. In "worker" code, use the session ID that was returned by :meth:`start` to instantiate
     a Multiplexer and iterate over it. In so doing, multiple workers will obtain the data elements
     collectively, i.e., each element is obtained by exactly one worker.

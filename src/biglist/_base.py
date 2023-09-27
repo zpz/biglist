@@ -69,6 +69,7 @@ class FileReader(Seq[Element]):
 
 
 FileReaderType = TypeVar("FileReaderType", bound=FileReader)
+'''This type variable indicates the class :class:`FileReader` or a subclass thereof.'''
 
 
 class FileSeq(Seq[FileReaderType]):

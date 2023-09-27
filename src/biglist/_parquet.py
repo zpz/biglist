@@ -71,8 +71,9 @@ class ParquetFileReader(FileReader):
     @classmethod
     def load_file(cls, path: Upath) -> ParquetFile:
         '''
-        Depending on the implementation, this may read *meta* info only, or
-        load in the entire file eagerly.
+        This reads *meta* info and constructs a ``pyarrow.parquet.ParquetFile`` object.
+        This does not load the entire file.
+        See :meth:`load` for eager loading.
 
         Parameters
         ----------

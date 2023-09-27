@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
-## [0.8.6] - in progress
+## [0.8.6] - 2023-08-26
 
 - ``Biglist.DEFAULT_STORAGE_FORMAT`` was changed from ``pickle-zstd`` to ``pickle-z`` because the former
   is available only in optional dependencies. This does not affect any previously persisted Biglist objects.

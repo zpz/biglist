@@ -13,6 +13,7 @@ dependencies = [
     "deprecation",
     "pyarrow >= 12.0.1",
     "typing-extensions",
+    "zstandard",
 ]
 requires-python = ">=3.8"
 readme = "README.rst"
@@ -30,7 +31,7 @@ Source = "https://github.com/zpz/biglist"
 
 
 [project.optional-dependencies]
-zstandard = ["zstandard"]
+zstandard = []
 lz4 = ["lz4"]
 doc = [
     "sphinx < 7.2.0",
@@ -48,6 +49,9 @@ test = [
     "pytest-asyncio",
 ]
 
+
+# `zstandard` has become required dependency.
+# The `zstandard` extra will be removed later.
 
 # See https://beta.ruff.rs/docs/rules/
 [tool.ruff]

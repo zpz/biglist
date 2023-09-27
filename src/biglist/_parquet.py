@@ -71,8 +71,9 @@ class ParquetFileReader(FileReader):
     @classmethod
     def load_file(cls, path: Upath) -> ParquetFile:
         '''
-        Depending on the implementation, this may read *meta* info only, or
-        load in the entire file eagerly.
+        This reads *meta* info and constructs a ``pyarrow.parquet.ParquetFile`` object.
+        This does not load the entire file.
+        See :meth:`load` for eager loading.
 
         Parameters
         ----------
@@ -156,12 +157,12 @@ class ParquetFileReader(FileReader):
         return self.num_rows
 
     def load(self) -> None:
-        """Eagerly read in the whole file as a table."""
+        """Eagerly read the whole file into memory as a table."""
         if self._data is None:
             self._data = ParquetBatchData(
                 self.file.read(columns=self._column_names, use_threads=True),
             )
-            self._data.scalar_as_py = (self.scalar_as_py,)
+            self._data.scalar_as_py = self.scalar_as_py
             if self.num_row_groups == 1:
                 assert self._row_groups is None
                 self._row_groups = [self._data]

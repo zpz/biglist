@@ -226,6 +226,7 @@ class Biglist(BiglistBase[Element]):
 
             ``serialize_kwargs`` and ``deserialize_kwargs`` are rarely needed.
             One use case is ``schema`` when storage format is "parquet".
+            See :class:`~biglist._biglist.ParquetSerializer`.
 
             ``serialize_kwargs`` and ``deserialize_kwargs``, if not ``None``,
             will be saved in the "info.json" file, hence they must be JSON
@@ -298,7 +299,15 @@ class Biglist(BiglistBase[Element]):
         self._append_buffer: list = []
         self._append_files_buffer: list = []
         self._file_dumper = None
-        self._n_write_threads = 8
+
+        self._n_write_threads = 4
+        '''This value affects memory demand during quick "appending" (and flushing/dumping in the background).
+        If the memory consumption of each batch is large, you could manually set this to a lower value, like::
+
+            lst = Biglist(path)
+            lst._n_write_threads = 4
+        '''
+
         self._serialize_kwargs = self.info.get("serialize_kwargs", {})
         self._deserialize_kwargs = self.info.get("deserialize_kwargs", {})
         if self.storage_format == "parquet" and "schema_spec" in self._serialize_kwargs:
@@ -496,11 +505,13 @@ class Biglist(BiglistBase[Element]):
 
     def make_file_name(self, buffer_len: int, extra: str = '') -> str:
         '''
-        If you need to customize the data file name for any reason, you should do that via ``extra``
+        This method constructs the file name of a data file.
+        If you need to customize this method for any reason, you should do it via ``extra``
         and keep the other patterns unchanged.
+        The string ``extra`` will appear between other fixed patterns in the file name.
 
         One possible usecase is this: in distributed writing, you want files written by different workers
-        to be distinguishable by the file names. Do something like this:
+        to be distinguishable by the file names. Do something like this::
 
               def worker(datapath: str, worker_id: str, ...):
                   out = Biglist(datapath)
@@ -909,10 +920,11 @@ class Multiplexer:
     The usage consists of two main parts:
 
     1. In "controller" code, call :meth:`start` to start a new "session".
-        Different sessions (at the same time or otherwise) are independent consumers of the data.
+    Different sessions (at the same time or otherwise) are independent consumers of the data.
+
     2. In "worker" code, use the session ID that was returned by :meth:`start` to instantiate
-        a Multiplexer and iterate over it. In so doing, multiple workers will obtain the data elements
-        collectively, i.e., each element is obtained by exactly one worker.
+    a Multiplexer and iterate over it. In so doing, multiple workers will obtain the data elements
+    collectively, i.e., each element is obtained by exactly one worker.
     """
 
     @classmethod

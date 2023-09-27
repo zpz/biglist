@@ -145,6 +145,7 @@ class Seq(Protocol[Element]):
 
 
 SeqType = TypeVar("SeqType", bound=Seq)
+'''This type variable indicates the class :class:`Seq` or a subclass thereof.'''
 
 
 class Slicer(Generic[SeqType]):

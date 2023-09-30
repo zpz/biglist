@@ -626,7 +626,6 @@ class Biglist(BiglistBase[Element]):
                             file.remove_file()
                         except Exception as e:
                             logger.error("failed to delete file %s: %r", file, e)
-                            
 
         # Other workers in other threads, processes, or machines may have appended data
         # to the list. This block merges the appends by the current worker with

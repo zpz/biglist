@@ -32,7 +32,7 @@ Source = "https://github.com/zpz/biglist"
 
 [project.optional-dependencies]
 zstandard = []
-lz4 = ["lz4"]
+lz4 = []
 doc = [
     "sphinx < 7.2.0",
     "numpydoc",

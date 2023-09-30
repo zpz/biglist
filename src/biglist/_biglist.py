@@ -559,15 +559,12 @@ class Biglist(BiglistBase[Element]):
         # This call will return quickly if the dumper has queue
         # capacity for the file. The file meta data below
         # will be updated as if the saving has completed, although
-        # it hasn't (it is only queued). This allows the waiting-to-be-saved
-        # data to be accessed properly.
-
-        # TODO:
-        # what if dump fails later? Is there meta data corruption?
+        # it hasn't (it is only queued). If dumping failed, the entry
+        # will be deleted in `flush()`.
 
         self._append_files_buffer.append((filename, buffer_len))
 
-    def flush(self, *, lock_timeout=300) -> None:
+    def flush(self, *, lock_timeout=300, raise_on_write_error: bool = True) -> None:
         """
         :meth:`_flush` is called automatically whenever the "append buffer"
         is full, so to persist the data and empty the buffer.
@@ -615,7 +612,20 @@ class Biglist(BiglistBase[Element]):
         """
         self._flush()
         if self._file_dumper is not None:
-            self._file_dumper.wait()
+            errors = self._file_dumper.wait(raise_on_error=raise_on_write_error)
+            if errors:
+                for file, e in errors:
+                    logger.error("failed to write file %s: %r", file, e)
+                    fname = file.name
+                    for i, (f, _) in enumerate(self._append_files_buffer):
+                        if f == fname:
+                            self._append_files_buffer.pop(i)
+                            break
+                    if file.exists():
+                        try:
+                            file.remove_file()
+                        except Exception as e:
+                            logger.error("failed to delete file %s: %r", file, e)
 
         # Other workers in other threads, processes, or machines may have appended data
         # to the list. This block merges the appends by the current worker with
@@ -722,19 +732,29 @@ class Dumper:
         # to finish.
 
         task = self._executor.submit(file_dumper, data_file, data, **kwargs)
+        task._file = data_file
         self._tasks.add(task)
         task.add_done_callback(self._callback)
         # If task is already finished when this callback is being added,
         # then it is called immediately.
 
-    def wait(self):
+    def wait(self, *, raise_on_error: bool = True):
         """
         Wait to finish all the submitted dumping tasks.
         """
         if self._tasks:
             concurrent.futures.wait(self._tasks)
-            for t in self._tasks:
-                _ = t.result()
+            if raise_on_error:
+                for t in self._tasks:
+                    _ = t.result()
+            else:
+                errors = []
+                for t in self._tasks:
+                    try:
+                        _ = t.result()
+                    except Exception as e:
+                        errors.append((t._file, e))
+                return errors
 
 
 class BiglistFileReader(FileReader[Element]):
@@ -901,10 +921,12 @@ Biglist.register_storage_format("pickle-z", serializer.ZPickleSerializer)
 Biglist.register_storage_format("parquet", ParquetSerializer)
 
 
+# Available if the package `zstandard` is installed.
 if hasattr(serializer, 'ZstdPickleSerializer'):
     Biglist.register_storage_format("pickle-zstd", serializer.ZstdPickleSerializer)
 
 
+# Available if the package `lz4` is installed.
 if hasattr(serializer, 'Lz4PickleSerializer'):
     Biglist.register_storage_format("pickle-lz4", serializer.Lz4PickleSerializer)
 

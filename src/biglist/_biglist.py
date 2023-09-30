@@ -559,8 +559,8 @@ class Biglist(BiglistBase[Element]):
         # This call will return quickly if the dumper has queue
         # capacity for the file. The file meta data below
         # will be updated as if the saving has completed, although
-        # it hasn't (it is only queued). This allows the waiting-to-be-saved
-        # data to be accessed properly.
+        # it hasn't (it is only queued). If dumping failed, the entry
+        # will be deleted in `flush()`.
 
         self._append_files_buffer.append((filename, buffer_len))
 

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.8.7] - in progress
+
+- Removed the optional dependency `lz4`. User just need to install package `lz4` themselves in order to use 
+the storage format `pickle-lz4`.
+- ``Biglist.flush`` got new parameter ``raise_on_write_error``.
+
+
 ## [0.8.6] - 2023-09-26
 
 - Made ``zstandard`` a required (as opposed to optional) dependency, because ``Biglist.DEFAULT_STORAGE_FORMAT`` defaults to ``pickle-zstd``.

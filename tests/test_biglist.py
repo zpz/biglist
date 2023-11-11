@@ -75,7 +75,7 @@ def test_numbers():
     data = list(range(len(mylist)))
     n = 0
     for x in mylist:
-        assert x == data[n], f"n: {n}, x: {x}, data[n]: {data[n]}"
+        assert x == data[n], f'n: {n}, x: {x}, data[n]: {data[n]}'
         n += 1
 
     assert list(mylist) == data
@@ -129,7 +129,7 @@ def test_iter_cancel():
 
 
 def add_to_biglist(path, prefix, length):
-    name = f"{multiprocessing.current_process().name} {threading.current_thread().name}"
+    name = f'{multiprocessing.current_process().name} {threading.current_thread().name}'
     print('entering', name)
     try:
         bl = Biglist(path)

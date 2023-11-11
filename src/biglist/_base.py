@@ -68,8 +68,8 @@ class FileReader(Seq[Element]):
         raise NotImplementedError
 
 
-FileReaderType = TypeVar("FileReaderType", bound=FileReader)
-'''This type variable indicates the class :class:`FileReader` or a subclass thereof.'''
+FileReaderType = TypeVar('FileReaderType', bound=FileReader)
+"""This type variable indicates the class :class:`FileReader` or a subclass thereof."""
 
 
 class FileSeq(Seq[FileReaderType]):
@@ -184,9 +184,7 @@ class BiglistBase(Seq[Element]):
         to find temporary locations. For example, they may want
         to use a temporary location in a cloud storage.
         """
-        path = LocalUpath(
-            os.path.abspath(tempfile.gettempdir()), str(uuid.uuid4())
-        )  # type: ignore
+        path = LocalUpath(os.path.abspath(tempfile.gettempdir()), str(uuid.uuid4()))  # type: ignore
         return path  # type: ignore
 
     @classmethod
@@ -294,7 +292,7 @@ class BiglistBase(Seq[Element]):
             raise Exception(f'directory "{path}" already exists')
         if path.is_file():
             raise FileExistsError(path)
-        (path / "info.json").write_json(init_info or {}, overwrite=False)
+        (path / 'info.json').write_json(init_info or {}, overwrite=False)
         obj = cls(path, **kwargs)
         obj.keep_files = keep_files
         return obj
@@ -324,7 +322,7 @@ class BiglistBase(Seq[Element]):
         self.info: dict
         """Various meta info."""
 
-        self._info_file = self.path / "info.json"
+        self._info_file = self.path / 'info.json'
         self.info = self._info_file.read_json()
         self._n_read_threads = 3
 
@@ -358,7 +356,7 @@ class BiglistBase(Seq[Element]):
         self.path.rmrf(concurrent=concurrent)
 
     def __del__(self):
-        if getattr(self, "keep_files", True) is False:
+        if getattr(self, 'keep_files', True) is False:
             self.destroy(concurrent=False)
 
     def __getitem__(self, idx: int) -> Element:
@@ -370,7 +368,7 @@ class BiglistBase(Seq[Element]):
 
         if not isinstance(idx, int):
             raise TypeError(
-                f"{self.__class__.__name__} indices must be integers, not {type(idx).__name__}"
+                f'{self.__class__.__name__} indices must be integers, not {type(idx).__name__}'
             )
 
         if idx >= 0 and self._read_buffer_file_idx is not None:
@@ -397,15 +395,11 @@ class BiglistBase(Seq[Element]):
         if self._read_buffer_file_idx is not None:
             n1, n2 = self._read_buffer_item_range  # type: ignore
             if idx < n1:
-                ifile1 = (
-                    self._read_buffer_file_idx
-                )  # pylint: disable=access-member-before-definition
+                ifile1 = self._read_buffer_file_idx  # pylint: disable=access-member-before-definition
             elif idx < n2:
                 return self._read_buffer[idx - n1]  # type: ignore
             else:
-                ifile0 = (
-                    self._read_buffer_file_idx + 1
-                )  # pylint: disable=access-member-before-definition
+                ifile0 = self._read_buffer_file_idx + 1  # pylint: disable=access-member-before-definition
 
         # Now find the data file that contains the target item.
         ifile = bisect.bisect_right(data_files_cumlength, idx, lo=ifile0, hi=ifile1)

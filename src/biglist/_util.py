@@ -15,7 +15,7 @@ from upathlib import Upath
 
 @contextmanager
 def lock_to_use(file: Upath, timeout=300):
-    f = file.with_suffix(file.suffix + ".lock")
+    f = file.with_suffix(file.suffix + '.lock')
     with f.lock(timeout=timeout):
         yield file
 
@@ -87,7 +87,7 @@ def locate_idx_in_chunked_seq(
     return igrp, idx - last_chunk[1], last_chunk
 
 
-Element = TypeVar("Element")
+Element = TypeVar('Element')
 """
 This type variable is used to annotate the type of a data element.
 """
@@ -144,8 +144,8 @@ class Seq(Protocol[Element]):
             yield self[i]
 
 
-SeqType = TypeVar("SeqType", bound=Seq)
-'''This type variable indicates the class :class:`Seq` or a subclass thereof.'''
+SeqType = TypeVar('SeqType', bound=Seq)
+"""This type variable indicates the class :class:`Seq` or a subclass thereof."""
 
 
 class Slicer(Generic[SeqType]):
@@ -186,7 +186,7 @@ class Slicer(Generic[SeqType]):
         self._range = range_
 
     def __repr__(self):
-        return f"<{self.__class__.__name__} into {self.__len__()}/{len(self._list)} of {self._list!r}>"
+        return f'<{self.__class__.__name__} into {self.__len__()}/{len(self._list)} of {self._list!r}>'
 
     def __str__(self):
         return self.__repr__()

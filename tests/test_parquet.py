@@ -72,10 +72,10 @@ def test_idx_locator():
 
 def test_parquet_table(tmp_path):
     data = [
-        {'key': 'tom', 'value': {'age': 38, 'income': 100, 'address': "NYC"}},
-        {'key': 'jane', 'value': {'age': 39, 'income': 200, 'address': "LA"}},
+        {'key': 'tom', 'value': {'age': 38, 'income': 100, 'address': 'NYC'}},
+        {'key': 'jane', 'value': {'age': 39, 'income': 200, 'address': 'LA'}},
         {'key': 'frank', 'value': {'age': 40, 'income': 300.2, 'address': 'SF'}},
-        {'key': 'john', 'value': {'age': 22, 'income': 40, 'address': "DC"}},
+        {'key': 'john', 'value': {'age': 22, 'income': 40, 'address': 'DC'}},
     ]
     table = pyarrow.Table.from_pylist(data)
     print(table)

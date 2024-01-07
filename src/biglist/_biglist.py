@@ -931,7 +931,7 @@ if hasattr(serializer, 'Lz4PickleSerializer'):
     Biglist.register_storage_format("pickle-lz4", serializer.Lz4PickleSerializer)
 
 
-class Multiplexer:
+class Multiplexer[Iterable[Element]]:
     """
     Multiplexer is used to distribute data elements to multiple "workers" so that
     each element is obtained by exactly one worker.
@@ -952,7 +952,7 @@ class Multiplexer:
     @classmethod
     def new(
         cls,
-        data: Iterable[Any],
+        data: Iterable[Element],
         path: PathType | None,
         *,
         batch_size: int = 10_000,
@@ -1020,7 +1020,7 @@ class Multiplexer:
         self._timeout = timeout
 
     @property
-    def data(self) -> Biglist:
+    def data(self) -> Biglist[Element]:
         """
         Return the data elements stored in this Multiplexer.
         """

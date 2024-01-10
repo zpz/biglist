@@ -545,6 +545,7 @@ class ParquetBiglist(BiglistBase):
     """
     ``ParquetBiglist`` defines a kind of "external biglist", that is,
     it points to pre-existing Parquet files and provides facilities to read them.
+
     As long as you use a ParquetBiglist object to read, it is assumed that
     the dataset (all the data files) have not changed since the object was created
     by :meth:`new`.

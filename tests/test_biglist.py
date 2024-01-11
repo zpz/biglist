@@ -8,6 +8,7 @@ import random
 import threading
 import time
 import uuid
+from uuid import uuid4
 from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
@@ -15,15 +16,15 @@ from concurrent.futures import (
     wait,
 )
 from shutil import rmtree
-from time import sleep
 
 import pyarrow
 import pytest
-from biglist import Biglist, Multiplexer, ParquetBiglist, Slicer
+from biglist import Biglist, ParquetBiglist, Slicer, read_parquet_file, write_arrays_to_parquet
 from biglist._biglist import (
     JsonByteSerializer,
     ParquetSerializer,
 )
+from upathlib import LocalUpath
 from boltons import iterutils
 
 
@@ -316,40 +317,6 @@ async def test_async():
     assert sum(results) == sum(v * v for v in biglist)
 
 
-def mult_worker(path, task_id, q):
-    worker_id = multiprocessing.current_process().name
-    total = 0
-    for x in Multiplexer(path, task_id, worker_id):
-        print(worker_id, 'got', x)
-        total += x * x
-        sleep(0.1)
-    print(worker_id, 'finishing with total', total)
-    q.put(total)
-
-
-def test_multiplexer(tmp_path):
-    N = 30
-    mux = Multiplexer.new(range(1, 1 + N), tmp_path, batch_size=4)
-    task_id = mux.start()
-
-    ctx = multiprocessing.get_context('spawn')
-    q = ctx.Queue()
-    workers = [
-        ctx.Process(target=mult_worker, args=(mux.path, task_id, q)) for _ in range(5)
-    ]
-    for w in workers:
-        w.start()
-    for w in workers:
-        w.join()
-
-    total = 0
-    while not q.empty():
-        total += q.get()
-    assert total == sum(x * x for x in range(1, 1 + N))
-
-    s = mux.stat()
-    print(s)
-    assert mux.done()
 
 
 def test_parquet():
@@ -500,3 +467,139 @@ def test_pickle():
     unpickled = pickle.loads(pickled)
     assert unpickled.path == bb.path
     assert len(unpickled._append_buffer) == 0
+
+
+def test_parquet_biglist(tmp_path):
+    path = LocalUpath(tmp_path)
+    path.rmrf(quiet=True)
+    path.path.mkdir(parents=True)
+
+    N = 10000
+
+    # key = pyarrow.array([random.randint(0, 10000) for _ in range(N)])
+    # val = pyarrow.array([str(uuid4()) for _ in range(N)])
+    # tab = pyarrow.Table.from_arrays([key, val], names=['key', 'value'])
+    # parquet.write_table(tab, str(path / 'data_1.parquet'))
+
+    write_arrays_to_parquet(
+        [
+            [random.randint(0, 10000) for _ in range(N)],
+            [str(uuid4()) for _ in range(N)],
+        ],
+        path / 'data_1.parquet',
+        names=['key', 'value'],
+    )
+
+    # key = pyarrow.array([random.randint(0, 10000) for _ in range(N)])
+    # val = pyarrow.array([str(uuid4()) for _ in range(N)])
+    # tab = pyarrow.Table.from_arrays([key, val], names=['key', 'value'])
+    (path / 'd2').path.mkdir()
+
+    # parquet.write_table(tab, str(path / 'd2' / 'data_2.parquet'))
+
+    write_arrays_to_parquet(
+        [
+            [random.randint(0, 10000) for _ in range(N)],
+            [str(uuid4()) for _ in range(N)],
+        ],
+        path / 'd2' / 'data_2.parquet',
+        names=['key', 'value'],
+    )
+
+    biglist = ParquetBiglist.new(path)
+    assert len(biglist) == N + N
+    assert len(biglist.files) == 2
+
+    print('')
+    print('datafiles')
+    z = biglist.files.data_files_info
+    print(z)
+    print('datafiles_info:\n', z)
+    assert all(isinstance(v[0], str) for v in z)
+    print('')
+
+    print(biglist[0])
+    print(biglist[999])
+    print('')
+
+    k = 0
+    for z in biglist:
+        print(z)
+        k += 1
+        if k > 20:
+            break
+
+    print('')
+    z = Slicer(biglist)[100:130:2]
+    assert len(z) == 15
+    print(z)
+    print(z[2])
+    print('')
+    print(list(z[::3]))
+
+    print('')
+    print(biglist)
+    print(Slicer(biglist))
+    print(biglist.files[0])
+    print(biglist.files[1].data)
+    print('')
+    print(biglist.files[1].data())
+
+    # specify columns
+    print('')
+    p = biglist.files.data_files_info[0][0]
+    d = read_parquet_file(p)
+    d1 = d.columns(['key', 'value'])
+    print(d1[3])
+    d2 = d1.columns(['value'])
+    assert isinstance(d2[2], str)
+    print(d2[2])
+    with pytest.raises(ValueError):
+        d2.columns(['key'])
+    print(Slicer(d.columns(['key']))[7:17].collect())
+    print(list(Slicer(d)[:7]))
+
+    #
+    print('')
+    d = read_parquet_file(p)
+    d.scalar_as_py = False
+    assert d.num_columns == 2
+    assert d.column_names == ['key', 'value']
+    z = d[3]
+    print(z)
+    assert isinstance(z['key'], pyarrow.Int64Scalar)
+    assert isinstance(z['value'], pyarrow.StringScalar)
+
+    # The `pyarrow.Scalar` types compare unequal to Python native types
+    assert z['key'] != z['key'].as_py()
+    assert z['value'] != z['value'].as_py()
+
+    print('')
+    d = read_parquet_file(p)
+    z = d[3]
+    print(z)
+    assert isinstance(z['key'], int)
+    assert isinstance(z['value'], str)
+
+    print('')
+    d = read_parquet_file(p)
+    for k, row in enumerate(d):
+        print(row)
+        if k > 3:
+            break
+
+    print('')
+    d = read_parquet_file(p)
+    for k, row in enumerate(d):
+        print(row)
+        if k > 3:
+            break
+
+    print('')
+    d = read_parquet_file(p)
+    d.scalar_as_py = False
+    d.load()
+    for k, row in enumerate(d):
+        print(row)
+        if k > 3:
+            break

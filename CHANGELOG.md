@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.8.7] - 2023-10-19
 
-- Removed the optional dependency `lz4`. User just need to install package `lz4` themselves in order to use 
+- Removed the optional dependency `lz4`. User just needs to install package `lz4` themselves in order to use 
 the storage format `pickle-lz4`.
 - ``Biglist.flush`` got new parameter ``raise_on_write_error``.
 

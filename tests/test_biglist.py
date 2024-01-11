@@ -8,7 +8,6 @@ import random
 import threading
 import time
 import uuid
-from uuid import uuid4
 from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
@@ -16,16 +15,23 @@ from concurrent.futures import (
     wait,
 )
 from shutil import rmtree
+from uuid import uuid4
 
 import pyarrow
 import pytest
-from biglist import Biglist, ParquetBiglist, Slicer, read_parquet_file, write_arrays_to_parquet
+from biglist import (
+    Biglist,
+    ParquetBiglist,
+    Slicer,
+    read_parquet_file,
+    write_arrays_to_parquet,
+)
 from biglist._biglist import (
     JsonByteSerializer,
     ParquetSerializer,
 )
-from upathlib import LocalUpath
 from boltons import iterutils
+from upathlib import LocalUpath
 
 
 def test_custom_file_name():
@@ -315,8 +321,6 @@ async def test_async():
     tasks = (sum_square(x) for x in biglist.files)
     results = await asyncio.gather(*tasks)
     assert sum(results) == sum(v * v for v in biglist)
-
-
 
 
 def test_parquet():

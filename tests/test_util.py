@@ -7,11 +7,11 @@ from biglist._base import BiglistBase
 from biglist._parquet import ParquetBatchData
 from biglist._util import (
     Chain,
+    FileReader,
+    FileSeq,
     Seq,
     Slicer,
     locate_idx_in_chunked_seq,
-    FileReader,
-    FileSeq,
 )
 
 

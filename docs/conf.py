@@ -71,4 +71,4 @@ html_theme_options = {
     'collapse_navigation': False,
 }
 
-html_static_path = ['_static']
+# html_static_path = ['_static']

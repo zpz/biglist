@@ -115,7 +115,6 @@ def test_parquet_table(tmp_path):
     assert data2.to_pylist() == data
 
 
-
 def test_parquet_schema():
     type_spec = (
         'struct',

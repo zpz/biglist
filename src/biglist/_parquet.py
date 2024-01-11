@@ -15,7 +15,7 @@ try:
 except ImportError:
     pass
 
-from ._util import locate_idx_in_chunked_seq, Seq, FileReader
+from ._util import FileReader, Seq, locate_idx_in_chunked_seq
 
 # If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
 # and "credential_token_expiration". These can be obtained via
@@ -532,7 +532,6 @@ def read_parquet_file(path: PathType) -> ParquetFileReader:
         Path of the file.
     """
     return ParquetFileReader(path)
-
 
 
 def make_parquet_type(type_spec: str | Sequence):

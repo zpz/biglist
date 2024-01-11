@@ -15,7 +15,6 @@ def mult_worker(path, task_id, q):
     q.put(total)
 
 
-
 def test_multiplexer(tmp_path):
     N = 30
     mux = Multiplexer.new(range(1, 1 + N), tmp_path, batch_size=4)

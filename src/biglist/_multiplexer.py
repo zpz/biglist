@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import multiprocessing
 import threading
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sized
 from datetime import datetime
 
 from upathlib import PathType, Upath, resolve_path
@@ -14,7 +14,7 @@ from ._util import Element, lock_to_use
 logger = logging.getLogger(__name__)
 
 
-class Multiplexer(Iterable[Element]):
+class Multiplexer(Iterable[Element], Sized):
     """
     Multiplexer is used to distribute data elements to multiple "workers" so that
     each element is obtained by exactly one worker.

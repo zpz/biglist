@@ -4,7 +4,6 @@ import itertools
 import logging
 from collections.abc import Iterable, Iterator, Sequence
 from multiprocessing.util import Finalize
-from pathlib import Path
 
 import pyarrow
 from pyarrow.fs import FileSystem, GcsFileSystem
@@ -16,13 +15,7 @@ try:
 except ImportError:
     pass
 
-from ._base import (
-    BiglistBase,
-    FileReader,
-    FileSeq,
-    Seq,
-)
-from ._util import get_global_thread_pool, locate_idx_in_chunked_seq, lock_to_use
+from ._util import locate_idx_in_chunked_seq, Seq, FileReader
 
 # If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
 # and "credential_token_expiration". These can be obtained via
@@ -57,7 +50,7 @@ class ParquetFileReader(FileReader):
         """
         cls._GCP_PROJECT_ID, cls._GCP_CREDENTIALS, renewed = get_google_auth(
             project_id=getattr(cls, '_GCP_PROJECT_ID', None),
-            credentials=getattr(cls, "_GCP_CREDENTIALS", None),
+            credentials=getattr(cls, '_GCP_CREDENTIALS', None),
             valid_for_seconds=good_for_seconds,
         )
         if renewed or getattr(cls, '_GCSFS', None) is None:
@@ -70,7 +63,7 @@ class ParquetFileReader(FileReader):
 
     @classmethod
     def load_file(cls, path: Upath) -> ParquetFile:
-        '''
+        """
         This reads *meta* info and constructs a ``pyarrow.parquet.ParquetFile`` object.
         This does not load the entire file.
         See :meth:`load` for eager loading.
@@ -79,7 +72,7 @@ class ParquetFileReader(FileReader):
         ----------
         path
             Path of the file.
-        '''
+        """
         ff, pp = FileSystem.from_uri(str(path))
         if isinstance(ff, GcsFileSystem):
             ff = cls.get_gcsfs()
@@ -342,7 +335,7 @@ class ParquetFileReader(FileReader):
             else:
                 cc = [col for col in cols if col not in self._column_names]
                 raise ValueError(
-                    f"cannot select the columns {cc} because they are not in existing set of columns"
+                    f'cannot select the columns {cc} because they are not in existing set of columns'
                 )
 
         obj = self.__class__(self.path)
@@ -410,7 +403,7 @@ class ParquetBatchData(Seq):
         self.column_names = data.schema.names
 
     def __repr__(self):
-        return "<{} with {} rows, {} columns>".format(
+        return '<{} with {} rows, {} columns>'.format(
             self.__class__.__name__,
             self.num_rows,
             self.num_columns,
@@ -514,7 +507,7 @@ class ParquetBatchData(Seq):
         else:
             cc = [col for col in cols if col not in self.column_names]
             raise ValueError(
-                f"cannot select the columns {cc} because they are not in existing set of columns"
+                f'cannot select the columns {cc} because they are not in existing set of columns'
             )
 
         z = self.__class__(self._data.select(cols))
@@ -540,208 +533,6 @@ def read_parquet_file(path: PathType) -> ParquetFileReader:
     """
     return ParquetFileReader(path)
 
-
-class ParquetBiglist(BiglistBase):
-    """
-    ``ParquetBiglist`` defines a kind of "external biglist", that is,
-    it points to pre-existing Parquet files and provides facilities to read them.
-
-    As long as you use a ParquetBiglist object to read, it is assumed that
-    the dataset (all the data files) have not changed since the object was created
-    by :meth:`new`.
-    """
-
-    @classmethod
-    def new(
-        cls,
-        data_path: PathType | Sequence[PathType],
-        path: PathType | None = None,
-        *,
-        suffix: str = ".parquet",
-        **kwargs,
-    ) -> ParquetBiglist:
-        """
-        This classmethod gathers info of the specified data files and
-        saves the info to facilitate reading the data files.
-        The data files remain "external" to the :class:`ParquetBiglist` object;
-        the "data" persisted and managed by the ParquetBiglist object
-        are the meta info about the Parquet data files.
-
-        If the number of data files is small, it's feasible to create a temporary
-        object of this class (by leaving ``path`` at the default value ``None``)
-        "on-the-fly" for one-time use.
-
-        Parameters
-        ----------
-        path
-            Passed on to :meth:`BiglistBase.new` of :class:`BiglistBase`.
-        data_path
-            Parquet file(s) or folder(s) containing Parquet files.
-
-            If this is a single path, then it's either a Parquet file or a directory.
-            If this is a list, each element is either a Parquet file or a directory;
-            there can be a mix of files and directories.
-            Directories are traversed recursively for Parquet files.
-            The paths can be local, or in the cloud, or a mix of both.
-
-            Once the info of all Parquet files are gathered,
-            their order is fixed as far as this :class:`ParquetBiglist` is concerned.
-            The data sequence represented by this ParquetBiglist follows this
-            order of the files. The order is determined as follows:
-
-                The order of the entries in ``data_path`` is preserved; if any entry is a
-                directory, the files therein (recursively) are sorted by the string
-                value of each file's full path.
-
-        suffix
-            Only files with this suffix will be included.
-            To include all files, use ``suffix='*'``.
-
-        **kwargs
-            additional arguments are passed on to :meth:`__init__`.
-        """
-        if isinstance(data_path, (str, Path, Upath)):
-            #  TODO: in py 3.10, we will be able to do `isinstance(data_path, PathType)`
-            data_path = [resolve_path(data_path)]
-        else:
-            data_path = [resolve_path(p) for p in data_path]
-
-        def get_file_meta(p: Upath):
-            ff = ParquetFileReader.load_file(p)
-            meta = ff.metadata
-            return {
-                "path": str(p),  # str of full path
-                "num_rows": meta.num_rows,
-                # "row_groups_num_rows": [
-                #     meta.row_group(k).num_rows for k in range(meta.num_row_groups)
-                # ],
-            }
-
-        pool = get_global_thread_pool()
-        tasks = []
-        for p in data_path:
-            if p.is_file():
-                if suffix == "*" or p.name.endswith(suffix):
-                    tasks.append(pool.submit(get_file_meta, p))
-            else:
-                tt = []
-                for pp in p.riterdir():
-                    if suffix == "*" or pp.name.endswith(suffix):
-                        tt.append((str(pp), pool.submit(get_file_meta, pp)))
-                tt.sort()
-                for p, t in tt:
-                    tasks.append(t)
-
-        assert tasks
-        datafiles = []
-        for k, t in enumerate(tasks):
-            datafiles.append(t.result())
-            if (k + 1) % 1000 == 0:
-                logger.info("processed %d files", k + 1)
-
-        datafiles_cumlength = list(
-            itertools.accumulate(v["num_rows"] for v in datafiles)
-        )
-
-        obj = super().new(path, **kwargs)  # type: ignore
-        obj.info["datapath"] = [str(p) for p in data_path]
-
-        # Removed in 0.7.4
-        # obj.info["datafiles"] = datafiles
-        # obj.info["datafiles_cumlength"] = datafiles_cumlength
-
-        # Added in 0.7.4
-        data_files_info = [
-            (a["path"], a["num_rows"], b)
-            for a, b in zip(datafiles, datafiles_cumlength)
-        ]
-        obj.info["data_files_info"] = data_files_info
-
-        obj.info["storage_format"] = "parquet"
-        obj.info["storage_version"] = 1
-        # `storage_version` is a flag for certain breaking changes in the implementation,
-        # such that certain parts of the code (mainly concerning I/O) need to
-        # branch into different treatments according to the version.
-        # This has little relation to `storage_format`.
-        # version 1 designator introduced in version 0.7.4.
-        # prior to 0.7.4 it is absent, and considered 0.
-
-        obj._info_file.write_json(obj.info, overwrite=True)
-
-        return obj
-
-    def __init__(self, *args, **kwargs):
-        """Please see doc of the base class."""
-        super().__init__(*args, **kwargs)
-        self.keep_files: bool = True
-        """Indicates whether the meta info persisted by this object should be kept or deleted when this object is garbage-collected.
-
-        This does *not* affect the external Parquet data files.
-        """
-
-        # For back compat. Added in 0.7.4.
-        if self.info and "data_files_info" not in self.info:
-            # This is not called by ``new``, instead is opening an existing dataset
-            assert self.storage_version == 0
-            data_files_info = [
-                (a["path"], a["num_rows"], b)
-                for a, b in zip(
-                    self.info["datafiles"], self.info["datafiles_cumlength"]
-                )
-            ]
-            self.info["data_files_info"] = data_files_info
-            with lock_to_use(self._info_file) as ff:
-                ff.write_json(self.info, overwrite=True)
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {len(self.files)} data file(s) stored at {self.info['datapath']}>"
-
-    @property
-    def storage_version(self) -> int:
-        return self.info.get("storage_version", 0)
-
-    @property
-    def files(self):
-        # This method should be cheap to call.
-        return ParquetFileSeq(
-            self.path,
-            self.info["data_files_info"],
-        )
-
-
-class ParquetFileSeq(FileSeq[ParquetFileReader]):
-    def __init__(
-        self,
-        root_dir: Upath,
-        data_files_info: list[tuple[str, int, int]],
-    ):
-        """
-        Parameters
-        ----------
-        root_dir
-            Root directory for storage of meta info.
-        data_files_info
-            A list of data files that constitute the file sequence.
-            Each tuple in the list is comprised of a file path (relative to
-            ``root_dir``), number of data items in the file, and cumulative
-            number of data items in the files up to the one at hand.
-            Therefore, the order of the files in the list is significant.
-        """
-        self._root_dir = root_dir
-        self._data_files_info = data_files_info
-
-    @property
-    def path(self):
-        return self._root_dir
-
-    @property
-    def data_files_info(self):
-        return self._data_files_info
-
-    def __getitem__(self, idx: int):
-        return ParquetFileReader(
-            self._data_files_info[idx][0],
-        )
 
 
 def make_parquet_type(type_spec: str | Sequence):
@@ -789,16 +580,16 @@ def make_parquet_type(type_spec: str | Sequence):
         type_name = type_spec[0]
         args = type_spec[1:]
 
-    if type_name in ("string", "float64", "bool_", "int8", "int64", "uint8", "uint64"):
+    if type_name in ('string', 'float64', 'bool_', 'int8', 'int64', 'uint8', 'uint64'):
         assert not args
         return getattr(pyarrow, type_name)()
 
-    if type_name == "list_":
+    if type_name == 'list_':
         if len(args) > 2:
             raise ValueError(f"'pyarrow.list_' expects 1 or 2 args, got `{args}`")
         return pyarrow.list_(make_parquet_type(args[0]), *args[1:])
 
-    if type_name in ("map_", "dictionary"):
+    if type_name in ('map_', 'dictionary'):
         if len(args) > 3:
             raise ValueError(f"'pyarrow.{type_name}' expects 2 or 3 args, got `{args}`")
         return getattr(pyarrow, type_name)(
@@ -807,37 +598,37 @@ def make_parquet_type(type_spec: str | Sequence):
             *args[2:],
         )
 
-    if type_name == "struct":
+    if type_name == 'struct':
         assert len(args) == 1
         return pyarrow.struct((make_parquet_field(v) for v in args[0]))
 
-    if type_name == "large_list":
+    if type_name == 'large_list':
         assert len(args) == 1
         return pyarrow.large_list(make_parquet_type(args[0]))
 
     if type_name in (
-        "int16",
-        "int32",
-        "uint16",
-        "uint32",
-        "float32",
-        "date32",
-        "date64",
-        "month_day_nano_interval",
-        "utf8",
-        "large_binary",
-        "large_string",
-        "large_utf8",
-        "null",
+        'int16',
+        'int32',
+        'uint16',
+        'uint32',
+        'float32',
+        'date32',
+        'date64',
+        'month_day_nano_interval',
+        'utf8',
+        'large_binary',
+        'large_string',
+        'large_utf8',
+        'null',
     ):
         assert not args
         return getattr(pyarrow, type_name)()
 
-    if type_name in ("time32", "time64", "duration"):
+    if type_name in ('time32', 'time64', 'duration'):
         assert len(args) == 1
-    elif type_name in ("timestamp", "decimal128"):
+    elif type_name in ('timestamp', 'decimal128'):
         assert len(args) in (1, 2)
-    elif type_name in ("binary",):
+    elif type_name in ('binary',):
         assert len(args) <= 1
     else:
         raise ValueError(f"unknown pyarrow type '{type_name}'")

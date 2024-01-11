@@ -34,7 +34,7 @@ Source = "https://github.com/zpz/biglist"
 zstandard = []
 lz4 = []
 doc = [
-    "sphinx < 7.2.0",
+    "sphinx",
     "numpydoc",
     "pydata-sphinx-theme",
 ]
@@ -44,8 +44,6 @@ gcs = [
 ]
 test = [
     "boltons",
-    "mypy",
-    "ruff",
     "pytest-asyncio",
 ]
 
@@ -62,6 +60,9 @@ exclude = ["tests/experiments"]
 
 [tool.ruff.per-file-ignores]
 "__init__.py" = ["E402", "F401"]
+
+[tool.ruff.format]
+quote-style = "single"
 
 
 [tool.pytest.ini_options]

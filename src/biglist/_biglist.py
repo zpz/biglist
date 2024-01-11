@@ -14,7 +14,7 @@ import string
 import threading
 import warnings
 import weakref
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence, Sized
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
 from typing import Any, Callable
@@ -22,19 +22,11 @@ from uuid import uuid4
 
 import pyarrow
 from typing_extensions import Self
-from upathlib import serializer
+from upathlib import serializer, Path, Upath, PathType, resolve_path
 
-from ._base import (
-    BiglistBase,
-    Element,
-    FileReader,
-    FileSeq,
-    PathType,
-    Upath,
-    resolve_path,
-)
-from ._parquet import make_parquet_schema
-from ._util import lock_to_use
+from ._util import get_global_thread_pool, lock_to_use, Element, FileReader, FileSeq
+from ._base import BiglistBase
+from ._parquet import make_parquet_schema, ParquetFileReader
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +63,7 @@ atexit.register(_cleanup)
 class Biglist(BiglistBase[Element]):
     registered_storage_formats = {}
 
-    DEFAULT_STORAGE_FORMAT = "pickle-zstd"
+    DEFAULT_STORAGE_FORMAT = 'pickle-zstd'
 
     @classmethod
     def register_storage_format(
@@ -99,11 +91,11 @@ class Biglist(BiglistBase[Element]):
         serializer
             A subclass of `upathlib.serializer.ByteSerializer <https://github.com/zpz/upathlib/blob/main/src/upathlib/serializer.py>`_.
         """
-        good = string.ascii_letters + string.digits + "-_"
+        good = string.ascii_letters + string.digits + '-_'
         assert all(n in good for n in name)
-        if name.replace("_", "-") in cls.registered_storage_formats:
+        if name.replace('_', '-') in cls.registered_storage_formats:
             raise ValueError(f"serializer '{name}' is already registered")
-        name = name.replace("_", "-")
+        name = name.replace('_', '-')
         cls.registered_storage_formats[name] = serializer
 
     @classmethod
@@ -132,7 +124,7 @@ class Biglist(BiglistBase[Element]):
         :meth:`load_data_file`
         """
         serializer = cls.registered_storage_formats[
-            path.suffix.lstrip(".").replace("_", "-")
+            path.suffix.lstrip('.').replace('_', '-')
         ]
         path.write_bytes(serializer.serialize(data, **kwargs))
 
@@ -153,7 +145,7 @@ class Biglist(BiglistBase[Element]):
         dump_data_file
         """
         deserializer = cls.registered_storage_formats[
-            path.suffix.lstrip(".").replace("_", "-")
+            path.suffix.lstrip('.').replace('_', '-')
         ]
         data = path.read_bytes()
         return deserializer.deserialize(data, **kwargs)
@@ -251,20 +243,20 @@ class Biglist(BiglistBase[Element]):
         if not batch_size:
             batch_size = 1000
             warnings.warn(
-                "The default batch-size, 1000, may not be optimal for your use case; consider using the parameter ``batch_size``."
+                'The default batch-size, 1000, may not be optimal for your use case; consider using the parameter ``batch_size``.'
             )
         else:
             assert batch_size > 0
 
         if storage_format is None:
             storage_format = cls.DEFAULT_STORAGE_FORMAT
-        if storage_format.replace("_", "-") not in cls.registered_storage_formats:
+        if storage_format.replace('_', '-') not in cls.registered_storage_formats:
             raise ValueError(f"invalid value of `storage_format`: '{storage_format}'")
 
         init_info = {
             **(init_info or {}),
-            "storage_format": storage_format.replace("_", "-"),
-            "storage_version": 3,
+            'storage_format': storage_format.replace('_', '-'),
+            'storage_version': 3,
             # `storage_version` is a flag for certain breaking changes in the implementation,
             # such that certain parts of the code (mainly concerning I/O) need to
             # branch into different treatments according to the version.
@@ -273,13 +265,13 @@ class Biglist(BiglistBase[Element]):
             # version 1 designator introduced on 2022/7/25
             # version 2 designator introduced in version 0.7.4.
             # version 3 designator introduced in version 0.7.7.
-            "batch_size": batch_size,
-            "data_files_info": [],
+            'batch_size': batch_size,
+            'data_files_info': [],
         }
         if serialize_kwargs:
-            init_info["serialize_kwargs"] = serialize_kwargs
+            init_info['serialize_kwargs'] = serialize_kwargs
         if deserialize_kwargs:
-            init_info["deserialize_kwargs"] = deserialize_kwargs
+            init_info['deserialize_kwargs'] = deserialize_kwargs
 
         obj = super().new(path, init_info=init_info, **kwargs)  # type: ignore
         return obj
@@ -301,34 +293,34 @@ class Biglist(BiglistBase[Element]):
         self._file_dumper = None
 
         self._n_write_threads = 4
-        '''This value affects memory demand during quick "appending" (and flushing/dumping in the background).
+        """This value affects memory demand during quick "appending" (and flushing/dumping in the background).
         If the memory consumption of each batch is large, you could manually set this to a lower value, like::
 
             lst = Biglist(path)
             lst._n_write_threads = 4
-        '''
+        """
 
-        self._serialize_kwargs = self.info.get("serialize_kwargs", {})
-        self._deserialize_kwargs = self.info.get("deserialize_kwargs", {})
-        if self.storage_format == "parquet" and "schema_spec" in self._serialize_kwargs:
+        self._serialize_kwargs = self.info.get('serialize_kwargs', {})
+        self._deserialize_kwargs = self.info.get('deserialize_kwargs', {})
+        if self.storage_format == 'parquet' and 'schema_spec' in self._serialize_kwargs:
             # Build the schema so that it does not need to be done each time the function
             # ``ParquetSerializer.serialize`` is called. Maybe this does not matter.
-            assert "schema" not in self._serialize_kwargs
+            assert 'schema' not in self._serialize_kwargs
             kk = copy.deepcopy(self._serialize_kwargs)
-            kk["schema"] = make_parquet_schema(kk["schema_spec"])
-            del kk["schema_spec"]
+            kk['schema'] = make_parquet_schema(kk['schema_spec'])
+            del kk['schema_spec']
             self._serialize_kwargs = kk
 
         _biglist_objs.add(self)
 
         # For back compat.
-        if self.info.get("storage_version", 0) < 3:
+        if self.info.get('storage_version', 0) < 3:
             # This is not called by ``new``, instead is opening an existing dataset.
             # Usually these legacy datasets are in a "read-only" mode, i.e., you should
             # not append more data to them. If you do, the back-compat code below
             # may not be totally reliable if the dataset is being used by multiple workers
             # concurrently.
-            if "data_files_info" not in self.info:  # added in 0.7.4
+            if 'data_files_info' not in self.info:  # added in 0.7.4
                 if self.storage_version == 0:
                     # This may not be totally reliable in every scenario.
                     # The older version had a parameter `lazy`, which is gone now.
@@ -336,7 +328,7 @@ class Biglist(BiglistBase[Element]):
                     # However, as long as older datasets are in a "read-only" status,
                     # this is fine.
                     try:
-                        data_info_file = self.path / "datafiles_info.json"
+                        data_info_file = self.path / 'datafiles_info.json'
                         data_files = data_info_file.read_json()
                         # A list of tuples, (file_name, item_count)
                     except FileNotFoundError:
@@ -349,9 +341,9 @@ class Biglist(BiglistBase[Element]):
                     # <itemcount> contains no '-' nor '_';
                     # <ext> may contain '_'.
                     files0 = (v.name for v in self.data_path.iterdir())
-                    files1 = (v.split("_") + [v] for v in files0)
+                    files1 = (v.split('_') + [v] for v in files0)
                     files2 = (
-                        (float(v[0]), v[-1], int(v[2].partition(".")[0]))
+                        (float(v[0]), v[-1], int(v[2].partition('.')[0]))
                         # timestamp, file name, item count
                         for v in files1
                     )
@@ -382,7 +374,7 @@ class Biglist(BiglistBase[Element]):
                 else:
                     data_files_info = []
 
-                self.info["data_files_info"] = data_files_info
+                self.info['data_files_info'] = data_files_info
                 with lock_to_use(self._info_file) as ff:
                     ff.write_json(self.info, overwrite=True)
 
@@ -391,24 +383,24 @@ class Biglist(BiglistBase[Element]):
                 # Convert full path to file name.
                 # Version 0.7.4 was used very briefly, hence very few datasets
                 # were created by that version.
-                data_files_info = self.info["data_files_info"]
+                data_files_info = self.info['data_files_info']
                 if data_files_info:
                     new_info = None
-                    if os.name == "nt" and "\\" in data_files_info[0][0]:
+                    if os.name == 'nt' and '\\' in data_files_info[0][0]:
                         new_info = [
-                            (f[(f.rfind("\\") + 1) :], *_) for f, *_ in data_files_info
+                            (f[(f.rfind('\\') + 1) :], *_) for f, *_ in data_files_info
                         ]
-                    elif "/" in data_files_info[0][0]:
+                    elif '/' in data_files_info[0][0]:
                         new_info = [
-                            (f[(f.rfind("/") + 1) :], *_) for f, *_ in data_files_info
+                            (f[(f.rfind('/') + 1) :], *_) for f, *_ in data_files_info
                         ]
                     if new_info:
-                        self.info["data_files_info"] = new_info
+                        self.info['data_files_info'] = new_info
                         with lock_to_use(self._info_file) as ff:
                             ff.write_json(self.info, overwrite=True)
 
     def __del__(self) -> None:
-        if getattr(self, "keep_files", True) is False:
+        if getattr(self, 'keep_files', True) is False:
             self.destroy(concurrent=False)
         else:
             self._warn_flush()
@@ -417,21 +409,21 @@ class Biglist(BiglistBase[Element]):
     @property
     def batch_size(self) -> int:
         """The max number of data items in one data file."""
-        return self.info["batch_size"]
+        return self.info['batch_size']
 
     @property
     def data_path(self) -> Upath:
-        return self.path / "store"
+        return self.path / 'store'
 
     @property
     def storage_format(self) -> str:
         """The value of ``storage_format`` used in :meth:`new`, either user-specified or the default value."""
-        return self.info["storage_format"].replace("_", "-")
+        return self.info['storage_format'].replace('_', '-')
 
     @property
     def storage_version(self) -> int:
         """The internal format used in persistence. This is a read-only attribute for information only."""
-        return self.info.get("storage_version", 0)
+        return self.info.get('storage_version', 0)
 
     def _warn_flush(self):
         if self._append_buffer or self._append_files_buffer:
@@ -504,7 +496,7 @@ class Biglist(BiglistBase[Element]):
             self.append(v)
 
     def make_file_name(self, buffer_len: int, extra: str = '') -> str:
-        '''
+        """
         This method constructs the file name of a data file.
         If you need to customize this method for any reason, you should do it via ``extra``
         and keep the other patterns unchanged.
@@ -518,7 +510,7 @@ class Biglist(BiglistBase[Element]):
                   _make_file_name = out.make_file_name
                   out.make_file_name = lambda buffer_len: _make_file_name(buffer_len, worker_id)
                   ...
-        '''
+        """
         if extra:
             extra = extra.lstrip('_').rstrip('_') + '_'
         return f"{datetime.utcnow().strftime('%Y%m%d%H%M%S.%f')}_{extra}{str(uuid4()).replace('-', '')[:10]}_{buffer_len}"
@@ -546,8 +538,8 @@ class Biglist(BiglistBase[Element]):
         buffer_len = len(buffer)
         self._append_buffer = []
 
-        datafile_ext = self.storage_format.replace("-", "_")
-        filename = f"{self.make_file_name(buffer_len)}.{datafile_ext}"
+        datafile_ext = self.storage_format.replace('-', '_')
+        filename = f'{self.make_file_name(buffer_len)}.{datafile_ext}'
 
         data_file = self.data_path / filename
 
@@ -615,7 +607,7 @@ class Biglist(BiglistBase[Element]):
             errors = self._file_dumper.wait(raise_on_error=raise_on_write_error)
             if errors:
                 for file, e in errors:
-                    logger.error("failed to write file %s: %r", file, e)
+                    logger.error('failed to write file %s: %r', file, e)
                     fname = file.name
                     for i, (f, _) in enumerate(self._append_files_buffer):
                         if f == fname:
@@ -625,7 +617,7 @@ class Biglist(BiglistBase[Element]):
                         try:
                             file.remove_file()
                         except Exception as e:
-                            logger.error("failed to delete file %s: %r", file, e)
+                            logger.error('failed to delete file %s: %r', file, e)
 
         # Other workers in other threads, processes, or machines may have appended data
         # to the list. This block merges the appends by the current worker with
@@ -633,14 +625,14 @@ class Biglist(BiglistBase[Element]):
         # will get the final meta info right.
         if self._append_files_buffer:
             with lock_to_use(self._info_file, timeout=lock_timeout) as ff:
-                z0 = ff.read_json()["data_files_info"]
+                z0 = ff.read_json()['data_files_info']
                 z = sorted(
                     set((*(tuple(v[:2]) for v in z0), *self._append_files_buffer))
                 )
                 # TODO: maybe a merge sort can be more efficient.
                 cum = list(itertools.accumulate(v[1] for v in z))
                 z = [(a, b, c) for (a, b), c in zip(z, cum)]
-                self.info["data_files_info"] = z
+                self.info['data_files_info'] = z
                 ff.write_json(self.info, overwrite=True)
             self._append_files_buffer.clear()
 
@@ -672,7 +664,7 @@ class Biglist(BiglistBase[Element]):
             self.path,
             [
                 (str(self.data_path / row[0]), *row[1:])
-                for row in self.info["data_files_info"]
+                for row in self.info['data_files_info']
             ],
             fun,
         )
@@ -915,23 +907,227 @@ class ParquetSerializer(serializer.ByteSerializer):
         return table.to_pylist()
 
 
-Biglist.register_storage_format("json", JsonByteSerializer)
-Biglist.register_storage_format("pickle", serializer.PickleSerializer)
-Biglist.register_storage_format("pickle-z", serializer.ZPickleSerializer)
-Biglist.register_storage_format("parquet", ParquetSerializer)
+Biglist.register_storage_format('json', JsonByteSerializer)
+Biglist.register_storage_format('pickle', serializer.PickleSerializer)
+Biglist.register_storage_format('pickle-z', serializer.ZPickleSerializer)
+Biglist.register_storage_format('parquet', ParquetSerializer)
 
 
 # Available if the package `zstandard` is installed.
 if hasattr(serializer, 'ZstdPickleSerializer'):
-    Biglist.register_storage_format("pickle-zstd", serializer.ZstdPickleSerializer)
+    Biglist.register_storage_format('pickle-zstd', serializer.ZstdPickleSerializer)
 
 
 # Available if the package `lz4` is installed.
 if hasattr(serializer, 'Lz4PickleSerializer'):
-    Biglist.register_storage_format("pickle-lz4", serializer.Lz4PickleSerializer)
+    Biglist.register_storage_format('pickle-lz4', serializer.Lz4PickleSerializer)
 
 
-class Multiplexer[Iterable[Element]]:
+
+class ParquetBiglist(BiglistBase):
+    """
+    ``ParquetBiglist`` defines a kind of "external biglist", that is,
+    it points to pre-existing Parquet files and provides facilities to read them.
+
+    As long as you use a ParquetBiglist object to read, it is assumed that
+    the dataset (all the data files) have not changed since the object was created
+    by :meth:`new`.
+    """
+
+    @classmethod
+    def new(
+        cls,
+        data_path: PathType | Sequence[PathType],
+        path: PathType | None = None,
+        *,
+        suffix: str = ".parquet",
+        **kwargs,
+    ) -> ParquetBiglist:
+        """
+        This classmethod gathers info of the specified data files and
+        saves the info to facilitate reading the data files.
+        The data files remain "external" to the :class:`ParquetBiglist` object;
+        the "data" persisted and managed by the ParquetBiglist object
+        are the meta info about the Parquet data files.
+
+        If the number of data files is small, it's feasible to create a temporary
+        object of this class (by leaving ``path`` at the default value ``None``)
+        "on-the-fly" for one-time use.
+
+        Parameters
+        ----------
+        path
+            Passed on to :meth:`BiglistBase.new` of :class:`BiglistBase`.
+        data_path
+            Parquet file(s) or folder(s) containing Parquet files.
+
+            If this is a single path, then it's either a Parquet file or a directory.
+            If this is a list, each element is either a Parquet file or a directory;
+            there can be a mix of files and directories.
+            Directories are traversed recursively for Parquet files.
+            The paths can be local, or in the cloud, or a mix of both.
+
+            Once the info of all Parquet files are gathered,
+            their order is fixed as far as this :class:`ParquetBiglist` is concerned.
+            The data sequence represented by this ParquetBiglist follows this
+            order of the files. The order is determined as follows:
+
+                The order of the entries in ``data_path`` is preserved; if any entry is a
+                directory, the files therein (recursively) are sorted by the string
+                value of each file's full path.
+
+        suffix
+            Only files with this suffix will be included.
+            To include all files, use ``suffix='*'``.
+
+        **kwargs
+            additional arguments are passed on to :meth:`__init__`.
+        """
+        if isinstance(data_path, (str, Path, Upath)):
+            #  TODO: in py 3.10, we will be able to do `isinstance(data_path, PathType)`
+            data_path = [resolve_path(data_path)]
+        else:
+            data_path = [resolve_path(p) for p in data_path]
+
+        def get_file_meta(p: Upath):
+            ff = ParquetFileReader.load_file(p)
+            meta = ff.metadata
+            return {
+                "path": str(p),  # str of full path
+                "num_rows": meta.num_rows,
+                # "row_groups_num_rows": [
+                #     meta.row_group(k).num_rows for k in range(meta.num_row_groups)
+                # ],
+            }
+
+        pool = get_global_thread_pool()
+        tasks = []
+        for p in data_path:
+            if p.is_file():
+                if suffix == "*" or p.name.endswith(suffix):
+                    tasks.append(pool.submit(get_file_meta, p))
+            else:
+                tt = []
+                for pp in p.riterdir():
+                    if suffix == "*" or pp.name.endswith(suffix):
+                        tt.append((str(pp), pool.submit(get_file_meta, pp)))
+                tt.sort()
+                for p, t in tt:
+                    tasks.append(t)
+
+        assert tasks
+        datafiles = []
+        for k, t in enumerate(tasks):
+            datafiles.append(t.result())
+            if (k + 1) % 1000 == 0:
+                logger.info("processed %d files", k + 1)
+
+        datafiles_cumlength = list(
+            itertools.accumulate(v["num_rows"] for v in datafiles)
+        )
+
+        obj = super().new(path, **kwargs)  # type: ignore
+        obj.info["datapath"] = [str(p) for p in data_path]
+
+        # Removed in 0.7.4
+        # obj.info["datafiles"] = datafiles
+        # obj.info["datafiles_cumlength"] = datafiles_cumlength
+
+        # Added in 0.7.4
+        data_files_info = [
+            (a["path"], a["num_rows"], b)
+            for a, b in zip(datafiles, datafiles_cumlength)
+        ]
+        obj.info["data_files_info"] = data_files_info
+
+        obj.info["storage_format"] = "parquet"
+        obj.info["storage_version"] = 1
+        # `storage_version` is a flag for certain breaking changes in the implementation,
+        # such that certain parts of the code (mainly concerning I/O) need to
+        # branch into different treatments according to the version.
+        # This has little relation to `storage_format`.
+        # version 1 designator introduced in version 0.7.4.
+        # prior to 0.7.4 it is absent, and considered 0.
+
+        obj._info_file.write_json(obj.info, overwrite=True)
+
+        return obj
+
+    def __init__(self, *args, **kwargs):
+        """Please see doc of the base class."""
+        super().__init__(*args, **kwargs)
+        self.keep_files: bool = True
+        """Indicates whether the meta info persisted by this object should be kept or deleted when this object is garbage-collected.
+
+        This does *not* affect the external Parquet data files.
+        """
+
+        # For back compat. Added in 0.7.4.
+        if self.info and "data_files_info" not in self.info:
+            # This is not called by ``new``, instead is opening an existing dataset
+            assert self.storage_version == 0
+            data_files_info = [
+                (a["path"], a["num_rows"], b)
+                for a, b in zip(
+                    self.info["datafiles"], self.info["datafiles_cumlength"]
+                )
+            ]
+            self.info["data_files_info"] = data_files_info
+            with lock_to_use(self._info_file) as ff:
+                ff.write_json(self.info, overwrite=True)
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} at '{self.path}' with {len(self)} records in {len(self.files)} data file(s) stored at {self.info['datapath']}>"
+
+    @property
+    def storage_version(self) -> int:
+        return self.info.get("storage_version", 0)
+
+    @property
+    def files(self):
+        # This method should be cheap to call.
+        return ParquetFileSeq(
+            self.path,
+            self.info["data_files_info"],
+        )
+
+
+class ParquetFileSeq(FileSeq[ParquetFileReader]):
+    def __init__(
+        self,
+        root_dir: Upath,
+        data_files_info: list[tuple[str, int, int]],
+    ):
+        """
+        Parameters
+        ----------
+        root_dir
+            Root directory for storage of meta info.
+        data_files_info
+            A list of data files that constitute the file sequence.
+            Each tuple in the list is comprised of a file path (relative to
+            ``root_dir``), number of data items in the file, and cumulative
+            number of data items in the files up to the one at hand.
+            Therefore, the order of the files in the list is significant.
+        """
+        self._root_dir = root_dir
+        self._data_files_info = data_files_info
+
+    @property
+    def path(self):
+        return self._root_dir
+
+    @property
+    def data_files_info(self):
+        return self._data_files_info
+
+    def __getitem__(self, idx: int):
+        return ParquetFileReader(
+            self._data_files_info[idx][0],
+        )
+
+
+class Multiplexer(Iterable[Element], Sized):
     """
     Multiplexer is used to distribute data elements to multiple "workers" so that
     each element is obtained by exactly one worker.
@@ -978,7 +1174,7 @@ class Multiplexer[Iterable[Element]]:
         """
         path = resolve_path(path)
         bl = Biglist.new(
-            path / "data",
+            path / 'data',
             batch_size=batch_size,
             storage_format=storage_format,
         )
@@ -1025,7 +1221,7 @@ class Multiplexer[Iterable[Element]]:
         Return the data elements stored in this Multiplexer.
         """
         if self._data is None:
-            self._data = Biglist(self.path / "data")
+            self._data = Biglist(self.path / 'data')
         return self._data
 
     def __len__(self) -> int:
@@ -1038,7 +1234,7 @@ class Multiplexer[Iterable[Element]]:
         """
         `task_id`: returned by :meth:`start`.
         """
-        return self.path / ".mux" / task_id / "info.json"
+        return self.path / '.mux' / task_id / 'info.json'
 
     def start(self) -> str:
         """
@@ -1060,9 +1256,9 @@ class Multiplexer[Iterable[Element]]:
         task_id = datetime.utcnow().isoformat()
         self._mux_info_file(task_id).write_json(
             {
-                "total": len(self.data),
-                "next": 0,
-                "time": datetime.utcnow().isoformat(),
+                'total': len(self.data),
+                'next': 0,
+                'time': datetime.utcnow().isoformat(),
             },
             overwrite=False,
         )
@@ -1081,7 +1277,7 @@ class Multiplexer[Iterable[Element]]:
         """
         assert self._task_id
         if not self._worker_id:
-            self._worker_id = "{} {}".format(
+            self._worker_id = '{} {}'.format(
                 multiprocessing.current_process().name,
                 threading.current_thread().name,
             )
@@ -1098,15 +1294,15 @@ class Multiplexer[Iterable[Element]]:
                 # `FileNotFoundError` here. User may want
                 # to do retry here.
 
-                n = ss["next"]
-                if n == ss["total"]:
+                n = ss['next']
+                if n == ss['total']:
                     return
                 ff.write_json(
                     {
-                        "next": n + 1,
-                        "worker_id": worker_id,
-                        "time": datetime.utcnow().isoformat(),
-                        "total": ss["total"],
+                        'next': n + 1,
+                        'worker_id': worker_id,
+                        'time': datetime.utcnow().isoformat(),
+                        'total': ss['total'],
                     },
                     overwrite=True,
                 )
@@ -1127,7 +1323,7 @@ class Multiplexer[Iterable[Element]]:
         that has had its :meth:`start` called.
         """
         ss = self.stat()
-        return ss["next"] == ss["total"]
+        return ss['next'] == ss['total']
 
     def destroy(self) -> None:
         """

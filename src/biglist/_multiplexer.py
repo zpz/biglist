@@ -15,7 +15,7 @@ from ._biglist import Biglist
 logger = logging.getLogger(__name__)
 
 
-class Multiplexer[Iterable[Element]]:
+class Multiplexer(Iterable[Element]):
     """
     Multiplexer is used to distribute data elements to multiple "workers" so that
     each element is obtained by exactly one worker.

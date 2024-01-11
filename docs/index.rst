@@ -995,7 +995,7 @@ API reference
 .. autoclass:: biglist.FileReader
 
 
-.. autodata:: biglist._base.FileReaderType
+.. autodata:: biglist._util.FileReaderType
 
 
 .. autoclass:: biglist.FileSeq

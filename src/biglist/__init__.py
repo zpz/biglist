@@ -34,7 +34,13 @@ but also for any :class:`Seq`.
 from __future__ import annotations
 
 from ._base import BiglistBase
-from ._biglist import Biglist, BiglistFileReader, BiglistFileSeq, ParquetBiglist, ParquetFileSeq
+from ._biglist import (
+    Biglist,
+    BiglistFileReader,
+    BiglistFileSeq,
+    ParquetBiglist,
+    ParquetFileSeq,
+)
 from ._multiplexer import Multiplexer
 from ._parquet import (
     ParquetBatchData,
@@ -48,10 +54,10 @@ from ._parquet import (
 )
 from ._util import (
     Chain,
-    Seq,
-    Slicer,
     FileReader,
     FileSeq,
+    Seq,
+    Slicer,
 )
 
 __version__ = '0.8.7'

@@ -3,14 +3,13 @@ from __future__ import annotations
 import logging
 import multiprocessing
 import threading
-from collections.abc import Iterator, Iterable
+from collections.abc import Iterable, Iterator
 from datetime import datetime
 
-from upathlib import Upath, resolve_path, PathType
+from upathlib import PathType, Upath, resolve_path
 
-from ._util import lock_to_use, Element
 from ._biglist import Biglist
-
+from ._util import Element, lock_to_use
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +61,7 @@ class Multiplexer(Iterable[Element]):
         """
         path = resolve_path(path)
         bl = Biglist.new(
-            path / "data",
+            path / 'data',
             batch_size=batch_size,
             storage_format=storage_format,
         )
@@ -109,7 +108,7 @@ class Multiplexer(Iterable[Element]):
         Return the data elements stored in this Multiplexer.
         """
         if self._data is None:
-            self._data = Biglist(self.path / "data")
+            self._data = Biglist(self.path / 'data')
         return self._data
 
     def __len__(self) -> int:
@@ -122,7 +121,7 @@ class Multiplexer(Iterable[Element]):
         """
         `task_id`: returned by :meth:`start`.
         """
-        return self.path / ".mux" / task_id / "info.json"
+        return self.path / '.mux' / task_id / 'info.json'
 
     def start(self) -> str:
         """
@@ -144,9 +143,9 @@ class Multiplexer(Iterable[Element]):
         task_id = datetime.utcnow().isoformat()
         self._mux_info_file(task_id).write_json(
             {
-                "total": len(self.data),
-                "next": 0,
-                "time": datetime.utcnow().isoformat(),
+                'total': len(self.data),
+                'next': 0,
+                'time': datetime.utcnow().isoformat(),
             },
             overwrite=False,
         )
@@ -165,7 +164,7 @@ class Multiplexer(Iterable[Element]):
         """
         assert self._task_id
         if not self._worker_id:
-            self._worker_id = "{} {}".format(
+            self._worker_id = '{} {}'.format(
                 multiprocessing.current_process().name,
                 threading.current_thread().name,
             )
@@ -182,15 +181,15 @@ class Multiplexer(Iterable[Element]):
                 # `FileNotFoundError` here. User may want
                 # to do retry here.
 
-                n = ss["next"]
-                if n == ss["total"]:
+                n = ss['next']
+                if n == ss['total']:
                     return
                 ff.write_json(
                     {
-                        "next": n + 1,
-                        "worker_id": worker_id,
-                        "time": datetime.utcnow().isoformat(),
-                        "total": ss["total"],
+                        'next': n + 1,
+                        'worker_id': worker_id,
+                        'time': datetime.utcnow().isoformat(),
+                        'total': ss['total'],
                     },
                     overwrite=True,
                 )
@@ -211,7 +210,7 @@ class Multiplexer(Iterable[Element]):
         that has had its :meth:`start` called.
         """
         ss = self.stat()
-        return ss["next"] == ss["total"]
+        return ss['next'] == ss['total']
 
     def destroy(self) -> None:
         """

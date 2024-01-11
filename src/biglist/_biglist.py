@@ -22,11 +22,11 @@ from uuid import uuid4
 
 import pyarrow
 from typing_extensions import Self
-from upathlib import serializer, Path, Upath, PathType, resolve_path
+from upathlib import Path, PathType, Upath, resolve_path, serializer
 
-from ._util import get_global_thread_pool, lock_to_use, Element, FileReader, FileSeq
 from ._base import BiglistBase
-from ._parquet import make_parquet_schema, ParquetFileReader
+from ._parquet import ParquetFileReader, make_parquet_schema
+from ._util import Element, FileReader, FileSeq, get_global_thread_pool, lock_to_use
 
 logger = logging.getLogger(__name__)
 
@@ -923,7 +923,6 @@ if hasattr(serializer, 'Lz4PickleSerializer'):
     Biglist.register_storage_format('pickle-lz4', serializer.Lz4PickleSerializer)
 
 
-
 class ParquetBiglist(BiglistBase):
     """
     ``ParquetBiglist`` defines a kind of "external biglist", that is,
@@ -940,7 +939,7 @@ class ParquetBiglist(BiglistBase):
         data_path: PathType | Sequence[PathType],
         path: PathType | None = None,
         *,
-        suffix: str = ".parquet",
+        suffix: str = '.parquet',
         **kwargs,
     ) -> ParquetBiglist:
         """
@@ -993,8 +992,8 @@ class ParquetBiglist(BiglistBase):
             ff = ParquetFileReader.load_file(p)
             meta = ff.metadata
             return {
-                "path": str(p),  # str of full path
-                "num_rows": meta.num_rows,
+                'path': str(p),  # str of full path
+                'num_rows': meta.num_rows,
                 # "row_groups_num_rows": [
                 #     meta.row_group(k).num_rows for k in range(meta.num_row_groups)
                 # ],
@@ -1004,12 +1003,12 @@ class ParquetBiglist(BiglistBase):
         tasks = []
         for p in data_path:
             if p.is_file():
-                if suffix == "*" or p.name.endswith(suffix):
+                if suffix == '*' or p.name.endswith(suffix):
                     tasks.append(pool.submit(get_file_meta, p))
             else:
                 tt = []
                 for pp in p.riterdir():
-                    if suffix == "*" or pp.name.endswith(suffix):
+                    if suffix == '*' or pp.name.endswith(suffix):
                         tt.append((str(pp), pool.submit(get_file_meta, pp)))
                 tt.sort()
                 for p, t in tt:
@@ -1020,14 +1019,14 @@ class ParquetBiglist(BiglistBase):
         for k, t in enumerate(tasks):
             datafiles.append(t.result())
             if (k + 1) % 1000 == 0:
-                logger.info("processed %d files", k + 1)
+                logger.info('processed %d files', k + 1)
 
         datafiles_cumlength = list(
-            itertools.accumulate(v["num_rows"] for v in datafiles)
+            itertools.accumulate(v['num_rows'] for v in datafiles)
         )
 
         obj = super().new(path, **kwargs)  # type: ignore
-        obj.info["datapath"] = [str(p) for p in data_path]
+        obj.info['datapath'] = [str(p) for p in data_path]
 
         # Removed in 0.7.4
         # obj.info["datafiles"] = datafiles
@@ -1035,13 +1034,13 @@ class ParquetBiglist(BiglistBase):
 
         # Added in 0.7.4
         data_files_info = [
-            (a["path"], a["num_rows"], b)
+            (a['path'], a['num_rows'], b)
             for a, b in zip(datafiles, datafiles_cumlength)
         ]
-        obj.info["data_files_info"] = data_files_info
+        obj.info['data_files_info'] = data_files_info
 
-        obj.info["storage_format"] = "parquet"
-        obj.info["storage_version"] = 1
+        obj.info['storage_format'] = 'parquet'
+        obj.info['storage_version'] = 1
         # `storage_version` is a flag for certain breaking changes in the implementation,
         # such that certain parts of the code (mainly concerning I/O) need to
         # branch into different treatments according to the version.
@@ -1063,16 +1062,16 @@ class ParquetBiglist(BiglistBase):
         """
 
         # For back compat. Added in 0.7.4.
-        if self.info and "data_files_info" not in self.info:
+        if self.info and 'data_files_info' not in self.info:
             # This is not called by ``new``, instead is opening an existing dataset
             assert self.storage_version == 0
             data_files_info = [
-                (a["path"], a["num_rows"], b)
+                (a['path'], a['num_rows'], b)
                 for a, b in zip(
-                    self.info["datafiles"], self.info["datafiles_cumlength"]
+                    self.info['datafiles'], self.info['datafiles_cumlength']
                 )
             ]
-            self.info["data_files_info"] = data_files_info
+            self.info['data_files_info'] = data_files_info
             with lock_to_use(self._info_file) as ff:
                 ff.write_json(self.info, overwrite=True)
 
@@ -1081,14 +1080,14 @@ class ParquetBiglist(BiglistBase):
 
     @property
     def storage_version(self) -> int:
-        return self.info.get("storage_version", 0)
+        return self.info.get('storage_version', 0)
 
     @property
     def files(self):
         # This method should be cheap to call.
         return ParquetFileSeq(
             self.path,
-            self.info["data_files_info"],
+            self.info['data_files_info'],
         )
 
 

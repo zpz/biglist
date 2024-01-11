@@ -11,10 +11,9 @@ from collections.abc import Iterator
 
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
-from ._util import Element, Seq, get_global_thread_pool, FileReader, FileSeq
+from ._util import Element, FileReader, FileSeq, Seq, get_global_thread_pool
 
 logger = logging.getLogger(__name__)
-
 
 
 class BiglistBase(Seq[Element]):

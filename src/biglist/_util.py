@@ -6,10 +6,10 @@ import itertools
 import os
 import threading
 import weakref
+from abc import abstractmethod
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from typing import Generic, Protocol, TypeVar, runtime_checkable
-from abc import abstractmethod
 
 from upathlib import Upath
 
@@ -404,8 +404,8 @@ class FileReader(Seq[Element]):
         raise NotImplementedError
 
 
-FileReaderType = TypeVar("FileReaderType", bound=FileReader)
-'''This type variable indicates the class :class:`FileReader` or a subclass thereof.'''
+FileReaderType = TypeVar('FileReaderType', bound=FileReader)
+"""This type variable indicates the class :class:`FileReader` or a subclass thereof."""
 
 
 class FileSeq(Seq[FileReaderType]):

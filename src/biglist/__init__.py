@@ -2,7 +2,7 @@
 The package `biglist <https://github.com/zpz/biglist>`_ provides persisted, out-of-memory Python data structures
 that implement the :class:`Seq` interface (a simplified |Sequence|_) with the capabilities of
 concurrent and distributed reading and writing.
-The main use case is processing large amounts of data that can not fit in memory.
+The main use case is sequentially processing large amounts of data that can not fit in memory.
 
 Currently, two kinds of "biglists" are provided, namely :class:`Biglist` and :class:`ParquetBiglist`.
 
@@ -15,6 +15,8 @@ Appending can be conducted by a number of distributed workers.
 :class:`ParquetBiglist` defines a kind of "external biglist". When given the paths to a set of
 pre-existing data files in the Apache Parquet format,
 this class provides a rich set of facilities for reading the data.
+(Potentially confusingly, :class:`Biglist` can save data in Parquet format among others; that type of a ``Biglist``
+is *not* a ``ParquetBiglist``.)
 
 :class:`Biglist` and :class:`ParquetBiglist` share the same core API for *reading*.
 Although random element access is supported, it is not optimized
@@ -31,13 +33,12 @@ but also for any :class:`Seq`.
 """
 from __future__ import annotations
 
-from ._base import BiglistBase, FileReader, FileSeq
-from ._biglist import Biglist, BiglistFileReader, BiglistFileSeq, Multiplexer
+from ._base import BiglistBase
+from ._biglist import Biglist, BiglistFileReader, BiglistFileSeq, ParquetBiglist, ParquetFileSeq
+from ._multiplexer import Multiplexer
 from ._parquet import (
     ParquetBatchData,
-    ParquetBiglist,
     ParquetFileReader,
-    ParquetFileSeq,
     make_parquet_field,
     make_parquet_schema,
     make_parquet_type,
@@ -49,6 +50,8 @@ from ._util import (
     Chain,
     Seq,
     Slicer,
+    FileReader,
+    FileSeq,
 )
 
 __version__ = "0.8.7"

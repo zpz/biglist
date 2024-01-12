@@ -38,11 +38,11 @@ but also for any :class:`Seq`.
 from __future__ import annotations
 
 from ._biglist import (
-    BiglistBase,
-    FileSeq,
     Biglist,
+    BiglistBase,
     BiglistFileReader,
     BiglistFileSeq,
+    FileSeq,
     ParquetBiglist,
     ParquetFileSeq,
 )

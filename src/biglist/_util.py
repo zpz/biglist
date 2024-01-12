@@ -5,7 +5,7 @@ import itertools
 from abc import abstractmethod
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from typing import Generic, Protocol, TypeVar, runtime_checkable
+from typing import Protocol, TypeVar, runtime_checkable
 
 from upathlib import Upath
 
@@ -139,7 +139,6 @@ class Seq(Protocol[Element]):
         # A reference, or naive, implementation.
         for i in range(self.__len__()):
             yield self[i]
-
 
 
 class Slicer(Seq[Element]):

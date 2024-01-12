@@ -1,38 +1,35 @@
 from __future__ import annotations
 
 import atexit
+import bisect
 import concurrent.futures
 import copy
 import functools
 import io
 import itertools
 import json
+import logging
 import os
+import queue
 import string
+import tempfile
 import threading
+import uuid
 import warnings
 import weakref
+from abc import abstractmethod
 from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any, Callable, TypeVar
 from uuid import uuid4
-import bisect
-import logging
-import queue
-import tempfile
-import uuid
-from abc import abstractmethod
-from typing import TypeVar
-
 
 import pyarrow
 from typing_extensions import Self
-from upathlib import Path, PathType, Upath, resolve_path, serializer, LocalUpath
+from upathlib import LocalUpath, Path, PathType, Upath, resolve_path, serializer
 
 from ._parquet import ParquetFileReader, make_parquet_schema
-from ._util import Element, FileReader, lock_to_use, Seq
-
+from ._util import Element, FileReader, Seq, lock_to_use
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +63,6 @@ def _cleanup():
 atexit.register(_cleanup)
 
 
-
-
 _global_thread_pool_ = weakref.WeakValueDictionary()
 _global_thread_pool_lock_ = threading.Lock()
 
@@ -99,7 +94,6 @@ if hasattr(os, 'register_at_fork'):  # this is not available on Windows
         _global_thread_pool_lock_ = threading.Lock()
 
     os.register_at_fork(after_in_child=_clear_global_state)
-
 
 
 FileReaderType = TypeVar('FileReaderType', bound=FileReader)

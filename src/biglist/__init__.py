@@ -37,8 +37,9 @@ but also for any :class:`Seq`.
 """
 from __future__ import annotations
 
-from ._base import BiglistBase, FileSeq
 from ._biglist import (
+    BiglistBase,
+    FileSeq,
     Biglist,
     BiglistFileReader,
     BiglistFileSeq,

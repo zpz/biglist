@@ -1,11 +1,7 @@
 from __future__ import annotations
 
 import bisect
-import concurrent.futures
 import itertools
-import os
-import threading
-import weakref
 from abc import abstractmethod
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
@@ -145,14 +141,8 @@ class Seq(Protocol[Element]):
             yield self[i]
 
 
-SeqType = TypeVar('SeqType', bound=Seq)
-"""This type variable indicates the class :class:`Seq` or a subclass thereof."""
 
-# HKT would be useful: https://github.com/python/typing/issues/548
-# https://sobolevn.me/2020/10/higher-kinded-types-in-python
-
-
-class Slicer(Generic[SeqType]):
+class Slicer(Seq[Element]):
     """
     This class wraps a :class:`Seq` and enables element access by slice or index array,
     in addition to single integer.
@@ -163,17 +153,9 @@ class Slicer(Generic[SeqType]):
     Actual data elements are retrieved from the underlying ``Seq``
     only when a single-element is accessed or iteration is performed.
     In other words, until an actual data element needs to be returned, it's all operations on the indices.
-
-    This class is generic with the parameter ``SeqType`` indicating the type of the underlying ``Seq``.
-    For example, you may write::
-
-        def func(x: Slicer[list[int]]):
-            ...
-
-    ``Slicer`` implements the :class:`Seq` protocol.
     """
 
-    def __init__(self, list_: SeqType, range_: None | range | Seq[int] = None):
+    def __init__(self, list_: Seq[Element], range_: None | range | Seq[int] = None):
         """
         This provides a "slice" of, or "window" into, ``list_``.
 
@@ -250,7 +232,7 @@ class Slicer(Generic[SeqType]):
                 yield self._list[i]
 
     @property
-    def raw(self) -> SeqType:
+    def raw(self) -> Seq[Element]:
         """
         Return the underlying data :class:`Seq`, that is, the ``list_``
         that was passed into :meth:`__init__`.
@@ -288,27 +270,17 @@ class Slicer(Generic[SeqType]):
         return list(self)
 
 
-class Chain(Generic[SeqType]):
+class Chain(Seq[Element]):
     """
     This class tracks a series of :class:`Seq` objects to provide
     random element access and iteration on the series as a whole,
     with zero-copy.
 
-    This class is generic with a parameter indicating the type of the member sequences.
-    For example,
-
-    ::
-
-        def func(x: Chain[list[int] | Biglist[int]]):
-            ...
-
-    ``Chain`` implements the :class:`Seq` protocol.
-
     This class is in contrast with the standard `itertools.chain <https://docs.python.org/3/library/itertools.html#itertools.chain>`_,
     which takes iterables.
     """
 
-    def __init__(self, list_: SeqType, *lists: SeqType):
+    def __init__(self, list_: Seq[Element], *lists: Seq[Element]):
         self._lists = (list_, *lists)
         self._lists_len: None | list[int] = None
         self._lists_len_cumsum: None | list[int] = None
@@ -353,7 +325,7 @@ class Chain(Generic[SeqType]):
             yield from v
 
     @property
-    def raw(self) -> tuple[SeqType, ...]:
+    def raw(self) -> tuple[Seq[Element], ...]:
         """
         Return the underlying list of :class:`Seq`\\s.
 
@@ -413,36 +385,3 @@ class FileReader(Seq[Element]):
         they may take advantage of the in-memory data if this method *has been called*.).
         """
         raise NotImplementedError
-
-
-_global_thread_pool_ = weakref.WeakValueDictionary()
-_global_thread_pool_lock_ = threading.Lock()
-
-
-def get_global_thread_pool():
-    # Refer to ``get_shared_thread_pool`` in package ``mpservice.concurrent.futures``.
-
-    with _global_thread_pool_lock_:
-        executor = _global_thread_pool_.get('_biglist_')
-        if executor is None or executor._shutdown:
-            executor = concurrent.futures.ThreadPoolExecutor()
-            _global_thread_pool_['_biglist_'] = executor
-    return executor
-
-
-if hasattr(os, 'register_at_fork'):  # not available on Windows
-
-    def _clear_global_state():
-        executor = _global_thread_pool_.get('_biglist_')
-        if executor is not None:
-            executor.shutdown(wait=False)
-            _global_thread_pool_.pop('_biglist_', None)
-
-        global _global_thread_pool_lock_
-        try:
-            _global_thread_pool_lock_.release()
-        except RuntimeError:  # 'release unlocked lock'
-            pass
-        _global_thread_pool_lock_ = threading.Lock()
-
-    os.register_at_fork(after_in_child=_clear_global_state)

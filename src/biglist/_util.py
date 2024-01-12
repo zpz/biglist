@@ -108,9 +108,9 @@ class Seq(Protocol[Element]):
     are usable.
 
     A class that implements this protocol is sized, iterable, and subscriptable by an int index.
-    This is a subset of the methods provided by Sequence.
-    In particular, Sequence implements this protocol, hence is considered a subclass
-    of Seq for type checking purposes:
+    This is a subset of the methods provided by ``Sequence``.
+    In particular, ``Sequence`` implements this protocol, hence is considered a subclass
+    of ``Seq`` for type checking purposes:
 
     >>> from biglist import Seq
     >>> from collections.abc import Sequence
@@ -148,19 +148,23 @@ class Seq(Protocol[Element]):
 SeqType = TypeVar('SeqType', bound=Seq)
 """This type variable indicates the class :class:`Seq` or a subclass thereof."""
 
+# HKT would be useful: https://github.com/python/typing/issues/548
+# https://sobolevn.me/2020/10/higher-kinded-types-in-python
+
 
 class Slicer(Generic[SeqType]):
     """
-    This class wraps a :class:`Seq` and enables access by slice or index array,
-    in addition to single-index access.
+    This class wraps a :class:`Seq` and enables element access by slice or index array,
+    in addition to single integer.
 
-    A Slicer object makes "zero-copy"---it keeps track of
-    indices of selected elements along with a reference to
-    the underlying Seq. This object may be sliced again in a repeated "zoom in" fashion.
-    Actual data elements are retrieved from the underlying Seq
-    only when a single-element is accessed or iteration is performed,
+    A ``Slicer`` object makes "zero-copy"---it holds a reference to the underlying ``Seq``
+    and keeps track of indices of the selected elements.
+    A ``Slicer`` object may be sliced again in a repeated "zoom in" fashion.
+    Actual data elements are retrieved from the underlying ``Seq``
+    only when a single-element is accessed or iteration is performed.
+    In other words, until an actual data element needs to be returned, it's all operations on the indices.
 
-    This class is generic with the parameter ``SeqType`` indicating the type of the underlying Seq.
+    This class is generic with the parameter ``SeqType`` indicating the type of the underlying ``Seq``.
     For example, you may write::
 
         def func(x: Slicer[list[int]]):
@@ -178,10 +182,12 @@ class Slicer(Generic[SeqType]):
         such as ``range(3, 8)``,
         or a list of indices such as ``[1, 3, 5, 6]``.
         If ``range_`` is ``None``, the "window" covers the entire ``list_``.
-        A common practice is to omit ``range_``, and access a slice of the Slicer object,
+        A common practice is to create a ``Slicer`` object without ``range_``,
+        and then access a slice of it,
         for example, ``Slicer(obj)[3:8]`` rather than ``Slicer(obj, range(3,8))``.
 
         During the use of this object, the underlying ``list_`` must remain unchanged.
+        Otherwise purplexing and surprising things may happen.
         """
         self._list = list_
         self._range = range_
@@ -204,8 +210,8 @@ class Slicer(Generic[SeqType]):
         Negative index and standard slice syntax work as expected.
 
         Single-index access returns the requested data element.
-        Slice and index-array accesses return a new :class:`Slicer` object.
-        The resultant Slicer object can, naturally, be sliced again, like
+        Slice and index-array accesses return a new :class:`Slicer` object,
+        which, naturally, can be sliced again, like
 
         ::
 
@@ -233,7 +239,7 @@ class Slicer(Generic[SeqType]):
             return self.__class__(self._list, idx)
         return self.__class__(self._list, [self._range[i] for i in idx])
 
-    def __iter__(self) -> Iterator:
+    def __iter__(self) -> Iterator[Element]:
         """Iterate over the elements in the current window or "slice"."""
         if self._range is None:
             yield from self._list
@@ -245,15 +251,21 @@ class Slicer(Generic[SeqType]):
 
     @property
     def raw(self) -> SeqType:
-        """Return the underlying data :class:`Seq`."""
+        """
+        Return the underlying data :class:`Seq`, that is, the ``list_``
+        that was passed into :meth:`__init__`.
+        """
         return self._list
 
     @property
     def range(self) -> None | range | Seq[int]:
-        """Return the parameter ``range_`` that was provided to :meth:`__init__`, representing the selection of items in the underlying Seq."""
+        """
+        Return the parameter ``range_`` that was provided to :meth:`__init__`,
+        representing the selection of items in the underlying ``Seq``.
+        """
         return self._range
 
-    def collect(self) -> list:
+    def collect(self) -> list[Element]:
         """
         Return a list containing the elements in the current window.
         This is equivalent to ``list(self)``.
@@ -269,7 +281,7 @@ class Slicer(Generic[SeqType]):
             >>> Slicer(x)[3:11].collect()
             [3, 4, 5, 6, 7, 8, 9, 10]
 
-        (A list is used for illustration. In reality, list supports slicing directly, hence would not need Slicer.)
+        (A list is used for illustration. In reality, list supports slicing directly, hence would not need ``Slicer``.)
 
         .. warning:: Do not call this on "big" data!
         """
@@ -278,7 +290,7 @@ class Slicer(Generic[SeqType]):
 
 class Chain(Generic[SeqType]):
     """
-    This class tracks a series of :class:`Seq` to provide
+    This class tracks a series of :class:`Seq` objects to provide
     random element access and iteration on the series as a whole,
     with zero-copy.
 
@@ -325,7 +337,7 @@ class Chain(Generic[SeqType]):
             self._len = sum(self._lists_len)
         return self._len
 
-    def __getitem__(self, idx: int):
+    def __getitem__(self, idx: int) -> Element:
         if self._lists_len_cumsum is None:
             if self._lists_len is None:
                 self._lists_len = [len(v) for v in self._lists]
@@ -336,7 +348,7 @@ class Chain(Generic[SeqType]):
         self._get_item_last_list = list_info
         return self._lists[ilist][idx_in_list]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Element]:
         for v in self._lists:
             yield from v
 
@@ -345,9 +357,9 @@ class Chain(Generic[SeqType]):
         """
         Return the underlying list of :class:`Seq`\\s.
 
-        A member Seq could be a :class:`Slicer`. The current method
-        does not follow a Slicer to its "raw" component, b/c
-        that could represent a different set of elements than the Slicer
+        A member ``Seq`` could be a :class:`Slicer`. The current method
+        does not follow a ``Slicer`` to its "raw" component, b/c
+        that could represent a different set of elements than the ``Slicer``
         object.
         """
         return self._lists
@@ -355,10 +367,10 @@ class Chain(Generic[SeqType]):
 
 class FileReader(Seq[Element]):
     """
-    A FileReader is a "lazy" loader of a data file.
+    A ``FileReader`` is a "lazy" loader of a data file.
     It keeps track of the path of a data file along with a loader function,
     but performs the loading only when needed.
-    In particular, upon initiation of a FileReader object,
+    In particular, upon initiation of a ``FileReader`` object,
     file loading has not happened, and the object
     is light weight and friendly to pickling.
 
@@ -366,15 +378,14 @@ class FileReader(Seq[Element]):
     the data. At a minimum, the :class:`Seq` API is implemented.
 
     With loaded data and associated facilities, this object may no longer
-    be pickle-able, depending on the specifics of the subclass.
+    be pickle-able, depending on the specifics of a subclass.
 
-    One use case of this class is to pass around FileReader objects
+    One use case of this class is to pass around ``FileReader`` objects
     (that are initiated but not loaded) in
     `multiprocessing <https://docs.python.org/3/library/multiprocessing.html>`_ code for concurrent data processing.
 
     This class is generic with a parameter indicating the type of the elements in the data sequence
-    contained in the file.
-    For example you can write::
+    contained in the file. For example you can write::
 
         def func(file_reader: FileReader[int]):
             ...
@@ -389,104 +400,17 @@ class FileReader(Seq[Element]):
     @abstractmethod
     def load(self) -> None:
         """
-        This method *eagerly* loads all the data from the file.
+        This method *eagerly* loads all the data from the file into memory.
 
-        Once this method has been called, typically the entire data file is loaded
-        into memory, and subsequent data consumption should all draw upon this
-        in-memory copy. However, if the data file is large, and especially
-        if only part of the data is of interest, calling this method may not be
-        the best approach. This all depends on the specifics of the subclass.
+        Once this method has been called, subsequent data consumption should
+        all draw upon this in-memory copy. However, if the data file is large,
+        and especially if only part of the data is of interest, calling this method
+        may not be the best approach. This all depends on the specifics of the subclass.
 
         A subclass may allow consuming the data and load parts of data
-        in a "as-needed" or "streaming" fashion. In that approach,
-        this method is not called, although it is available.
-        """
-        raise NotImplementedError
-
-
-FileReaderType = TypeVar('FileReaderType', bound=FileReader)
-"""This type variable indicates the class :class:`FileReader` or a subclass thereof."""
-
-
-class FileSeq(Seq[FileReaderType]):
-    """
-    A FileSeq is a :class:`Seq` of :class:`FileReader` objects.
-
-    Since this class represents a sequence of data files,
-    methods such as :meth:`__len__` and :meth:`__iter__` are in terms of data *files*
-    rather than data *items*. (One data file contains a sequence of data items.)
-    """
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} at '{self.path}' with {self.num_data_items} elements in {self.num_data_files} data file(s)>"
-
-    def __str__(self):
-        return self.__repr__()
-
-    @property
-    @abstractmethod
-    def data_files_info(self) -> list[tuple[str, int, int]]:
-        """
-        Return a list of tuples for the data files.
-        Each tuple, representing one data file, consists of
-        "file path", "element count in the file",
-        and "cumulative element count in the data files so far".
-
-        Implementation in a subclass should consider caching the value
-        so that repeated calls are cheap.
-        """
-        raise NotImplementedError
-
-    @property
-    def num_data_files(self) -> int:
-        """Number of data files."""
-        return len(self.data_files_info)
-
-    @property
-    def num_data_items(self) -> int:
-        """Total number of data items in the data files."""
-        z = self.data_files_info
-        if not z:
-            return 0
-        return z[-1][-1]
-
-    def __len__(self) -> int:
-        """Number of data files."""
-        return self.num_data_files
-
-    @abstractmethod
-    def __getitem__(self, idx: int) -> FileReaderType:
-        """
-        Return the :class:`FileReader` for the data file at the specified
-        (0-based) index. The returned FileReader object has not loaded data yet,
-        and is guaranteed to be pickle-able.
-
-        Parameters
-        ----------
-        idx
-            Index of the file (0-based) in the list of data files as returned
-            by :meth:`data_files_info`.
-        """
-        raise NotImplementedError
-
-    def __iter__(self) -> Iterator[FileReaderType]:
-        """
-        Yield one data file at a time.
-
-        .. seealso:: :meth:`__getitem__`
-        """
-        for i in range(self.__len__()):
-            yield self.__getitem__(i)
-
-    @property
-    @abstractmethod
-    def path(self) -> Upath:
-        """
-        Return the location (a "directory") where this object
-        saves info about the data files, and any other info the implementation chooses
-        to save.
-
-        Note that this location does not need to be related to the location of the data files.
+        in a "as-needed" or "streaming" fashion. In that approach, :meth:`__getitem__`
+        and :meth:`__iter__` do not require this method to be called (although
+        they may take advantage of the in-memory data if this method *has been called*.).
         """
         raise NotImplementedError
 

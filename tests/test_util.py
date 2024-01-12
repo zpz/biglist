@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence, Sized
 
 import pytest
-from biglist._base import BiglistBase, FileSeq
+from biglist._biglist import BiglistBase, FileSeq
 from biglist._parquet import ParquetBatchData
 from biglist._util import (
     Chain,

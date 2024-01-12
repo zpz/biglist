@@ -182,7 +182,7 @@ class Slicer(Generic[SeqType]):
         such as ``range(3, 8)``,
         or a list of indices such as ``[1, 3, 5, 6]``.
         If ``range_`` is ``None``, the "window" covers the entire ``list_``.
-        A common practice is to create a ``Slicer`` object without ``range_``, 
+        A common practice is to create a ``Slicer`` object without ``range_``,
         and then access a slice of it,
         for example, ``Slicer(obj)[3:8]`` rather than ``Slicer(obj, range(3,8))``.
 
@@ -402,9 +402,9 @@ class FileReader(Seq[Element]):
         """
         This method *eagerly* loads all the data from the file into memory.
 
-        Once this method has been called, subsequent data consumption should 
-        all draw upon this in-memory copy. However, if the data file is large, 
-        and especially if only part of the data is of interest, calling this method 
+        Once this method has been called, subsequent data consumption should
+        all draw upon this in-memory copy. However, if the data file is large,
+        and especially if only part of the data is of interest, calling this method
         may not be the best approach. This all depends on the specifics of the subclass.
 
         A subclass may allow consuming the data and load parts of data
@@ -413,8 +413,6 @@ class FileReader(Seq[Element]):
         they may take advantage of the in-memory data if this method *has been called*.).
         """
         raise NotImplementedError
-
-
 
 
 _global_thread_pool_ = weakref.WeakValueDictionary()

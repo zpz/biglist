@@ -157,7 +157,7 @@ class Multiplexer(Iterable[Element], Sized):
         it holds the session ID just like the other workers. However, the coordinator code
         does not have to *participate* in reading.
 
-        The returned value identifies one particular reading session. All workers that use the same 
+        The returned value identifies one particular reading session. All workers that use the same
         session ID participate in the same reading session, i.e. the data elements will be split between them.
         There can be multiple, independent reading sessions going on at the same time.
         """

@@ -47,13 +47,13 @@ To install ``biglist`` and use local disk for persistence, simply do
 
 ::
 
-   pip install biglist
+   python3 -m pip install biglist
 
 If you need to use Google Cloud Storage for persistence, do
 
 ::
 
-   pip install "biglist[gcs]"
+   python3 -m pip install "biglist[gcs]"
 
 
 Creating a Biglist
@@ -989,13 +989,7 @@ API reference
    :exclude-members: __init__
 
 
-.. autodata:: biglist._util.SeqType
-
-
 .. autoclass:: biglist.FileReader
-
-
-.. autodata:: biglist._util.FileReaderType
 
 
 .. autoclass:: biglist.FileSeq

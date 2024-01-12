@@ -24,8 +24,12 @@ class Multiplexer(Iterable[Element], Sized):
 
     The usage consists of two main parts:
 
-    1. In "controller" code, call :meth:`start` to start a new "session".
+    1. In "coordinator" code, call :meth:`start` to start a new "session".
     Different sessions (at the same time or otherwise) are independent consumers of the data.
+
+       Typically, this dataset, which is small and easy to create, is consumed only once.
+       In this case, the coordinator code typically calls :meth:`new` to create a new Multiplexer,
+       then calls :meth:`start` on it, and then manages to send the session ID to workers.
 
     2. In "worker" code, use the session ID that was returned by :meth:`start` to instantiate
     a Multiplexer and iterate over it. In so doing, multiple workers will obtain the data elements
@@ -87,9 +91,9 @@ class Multiplexer(Iterable[Element], Sized):
             The directory where data is stored. This is the ``path`` that was passed to :meth:`new`.
         task_id
             A string that was returned by :meth:`start` on another instance
-            of this class with the same ``path`` parameter.
+            of this class that points to the same ``path``.
         worker_id
-            A string representing a particular worker.
+            A string representing the current worker (i.e. this instance).
             This is meaningful only if ``task_id`` is provided.
             If ``task_id`` is provided but ``worker_id`` is missing,
             a default is constructed based on thread name and process name.
@@ -125,18 +129,37 @@ class Multiplexer(Iterable[Element], Sized):
 
     def start(self) -> str:
         """
-        One worker, such as a "coordinator", calls this method once.
-        After that, one or more workers independently
-        iterate over a :class:`Multiplexer` object with the task-ID returned by
-        this method. The data that was provided to :meth:`new` is
-        split between the workers in that each data element will be obtained
+        Let's say there is a "coordinator" and some "workers"; these are programs running in
+        threads, processes, or distributed machines. The coordinator creates a new Multiplexer
+        and calls this method to start a "session" to read (i.e. iterate over) the elements
+        in this Multiplexer::
+
+            mux = Multiplexer.new(range(1000))
+            task_id = mux.start()
+            mux_path = mux.path
+
+        The ``task_id`` is then provided to the workers, which will create Multiplexer instances
+        pointing to the same dataset and using the ``task_id`` to participate in the reading session::
+
+            mux = Multiplexer(mux_path, task_id)
+            for x in mux:
+                ...
+
+        The data that was provided to :meth:`new` is
+        split between the workers so that each data element will be obtained
         by exactly one worker.
 
         In order to call this method, the object should have been initiated without
-        ``task_id`` or ``worker_id``.
+        ``task_id`` or ``worker_id``. Often, that is an object that has just been
+        created by :meth:`new`.
 
-        The returned value is the argument ``task_id`` to be provided to :meth:`__init__`
-        in worker code.
+        After this call, the coordinator also becomes a "member" in this reading session because
+        it holds the session ID just like the other workers. However, the coordinator code
+        does not have to *participate* in reading.
+
+        The returned value identifies one particular reading session. All workers that use the same 
+        session ID participate in the same reading session, i.e. the data elements will be split between them.
+        There can be multiple, independent reading sessions going on at the same time.
         """
         assert not self._task_id
         assert not self._worker_id
@@ -159,8 +182,9 @@ class Multiplexer(Iterable[Element], Sized):
         """
         Worker iterates over the data contained in the Multiplexer.
 
-        In order to call this method, ``task_id`` must have been provided
-        to :meth:`__init__`.
+        In order to call this method, the instance must hold a reading session ID.
+        This is the case either the instance has been created with ``task_id`` provided to :meth:`__init__`,
+        or :meth:`start` has been called on the instance.
         """
         assert self._task_id
         if not self._worker_id:
@@ -198,6 +222,8 @@ class Multiplexer(Iterable[Element], Sized):
     def stat(self) -> dict:
         """
         Return status info of an ongoing iteration.
+
+        In order to call this method, the instance must hold a reading session ID.
         """
         assert self._task_id
         return self._mux_info_file(self._task_id).read_json()
@@ -206,7 +232,9 @@ class Multiplexer(Iterable[Element], Sized):
         """
         Return whether the data iteration is finished.
 
-        This is often called in the "controller" code on the object
+        In order to call this method, the instance must hold a reading session ID.
+
+        This is often called in the "coordinator" code on the object
         that has had its :meth:`start` called.
         """
         ss = self.stat()

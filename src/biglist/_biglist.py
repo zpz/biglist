@@ -23,9 +23,9 @@ import pyarrow
 from typing_extensions import Self
 from upathlib import Path, PathType, Upath, resolve_path, serializer
 
-from ._base import BiglistBase
+from ._base import BiglistBase, FileSeq
 from ._parquet import ParquetFileReader, make_parquet_schema
-from ._util import Element, FileReader, FileSeq, get_global_thread_pool, lock_to_use
+from ._util import Element, FileReader, get_global_thread_pool, lock_to_use
 
 logger = logging.getLogger(__name__)
 

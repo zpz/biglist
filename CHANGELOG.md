@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.8.8] - in progress
 
-- `Multiplexer` becomes generic with a type parameter for the type of its data elements.
+- Removed ``Multiplexer``. (It was moved to ``upathlib``.)
 - The generic parameter of `Chain` and `Slicer` is now the type of the data elements. Previously it is the type of the constituent Seq (which contain data elements).
 
 

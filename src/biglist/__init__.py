@@ -46,7 +46,6 @@ from ._biglist import (
     ParquetBiglist,
     ParquetFileSeq,
 )
-from ._multiplexer import Multiplexer
 from ._parquet import (
     ParquetBatchData,
     ParquetFileReader,

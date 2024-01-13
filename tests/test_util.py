@@ -141,7 +141,7 @@ def test_slicer():
     assert list(llv) == [1, 5, 9]
 
     x = list(range(20))
-    z: Slicer[list[int]] = Slicer(x, [2, 3, 5, 6, 13])
+    z: Slicer[int] = Slicer(x, [2, 3, 5, 6, 13])
     assert z[3] == 6
     assert z[1:4].collect() == [3, 5, 6]
     assert len(z) == 5
@@ -151,7 +151,7 @@ def test_chain():
     mylist1 = list(range(0, 8))
     mylist2 = list(range(8, 18))
     mylist3 = list(range(18, 32))
-    mylist: Chain[list[int]] = Chain(mylist1, mylist2, mylist3)
+    mylist: Chain[int] = Chain(mylist1, mylist2, mylist3)
     data = list(range(32))
 
     assert len(mylist) == len(data)

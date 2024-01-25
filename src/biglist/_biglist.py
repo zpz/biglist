@@ -645,7 +645,7 @@ class Biglist(BiglistBase[Element]):
             types that are supported by the standard ``json`` library.
             (However, the few formats "natively" supported by Biglist may get special treatment
             to relax this requirement.)
-            If this is not possible, the solution is to define a custom serialization class and 
+            If this is not possible, the solution is to define a custom serialization class and
             register it with :meth:`register_storage_format`.
         **kwargs
             additional arguments are passed on to :meth:`BiglistBase.new`.
@@ -964,7 +964,7 @@ class Biglist(BiglistBase[Element]):
             self.registered_storage_formats[self.storage_format].dump,
             buffer,
             data_file,
-            **self._serialize_kwargs
+            **self._serialize_kwargs,
         )
         # This call will return quickly if the dumper has queue
         # capacity for the file. The file meta data below
@@ -1313,7 +1313,6 @@ class ParquetSerializer(serializer.Serializer):
             y = io.BytesIO(y)
         table = pyarrow.parquet.ParquetFile(y, **kwargs).read()
         return table.to_pylist()
-
 
 
 Biglist.register_storage_format('parquet', ParquetSerializer)

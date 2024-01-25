@@ -923,16 +923,13 @@ API reference
 .. autoclass:: biglist.FileReader
 
 
-.. autoclass:: biglist.FileSeq
-
-
 .. autoclass:: biglist.Slicer
 
 
 .. autoclass:: biglist.Chain
 
 
-.. autoclass:: BiglistBase
+.. autoclass:: biglist._biglist.BiglistBase
 
 
 .. autoclass:: biglist.Biglist
@@ -941,16 +938,10 @@ API reference
 .. autoclass:: biglist.BiglistFileReader
 
 
-.. autoclass:: biglist.BiglistFileSeq
-
-
 .. autoclass:: biglist.ParquetBiglist
 
 
 .. autoclass:: biglist.ParquetFileReader
-
-
-.. autoclass:: biglist.ParquetFileSeq
 
 
 .. autoclass:: biglist.ParquetBatchData

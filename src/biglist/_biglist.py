@@ -7,7 +7,6 @@ import copy
 import functools
 import io
 import itertools
-import json
 import logging
 import os
 import queue
@@ -526,7 +525,11 @@ class BiglistBase(Seq[Element]):
 
 
 class Biglist(BiglistBase[Element]):
-    registered_storage_formats = {}
+    registered_storage_formats = {
+        'json': serializer.JsonSerializer,
+        'pickle': serializer.PickleSerializer,
+        'pickle-zstd': serializer.ZstdPickleSerializer,
+    }
 
     DEFAULT_STORAGE_FORMAT = 'pickle-zstd'
 
@@ -534,7 +537,7 @@ class Biglist(BiglistBase[Element]):
     def register_storage_format(
         cls,
         name: str,
-        serializer: type[serializer.ByteSerializer],
+        serializer: type[serializer.Serializer],
     ) -> None:
         """
         Register a new serializer to handle data file dumping and loading.
@@ -554,10 +557,10 @@ class Biglist(BiglistBase[Element]):
             deserializer can be found.
 
         serializer
-            A subclass of `upathlib.serializer.ByteSerializer <https://github.com/zpz/upathlib/blob/main/src/upathlib/serializer.py>`_.
+            A subclass of `upathlib.serializer.Serializer <https://github.com/zpz/upathlib/blob/main/src/upathlib/serializer.py>`_.
 
-            Although this class needs to provide the ``ByteSerializer`` API, it is possible to write data files in text mode.
-            See :class:`JsonByteSerializer` for an example.
+            Although this class needs to provide the ``Serializer`` API, it is possible to write data files in text mode.
+            The registered 'json' format does that.
         """
         good = string.ascii_letters + string.digits + '-_'
         assert all(n in good for n in name)
@@ -565,58 +568,6 @@ class Biglist(BiglistBase[Element]):
             raise ValueError(f"serializer '{name}' is already registered")
         name = name.replace('_', '-')
         cls.registered_storage_formats[name] = serializer
-
-    @classmethod
-    def dump_data_file(cls, path: Upath, data: list[Element], **kwargs) -> None:
-        """
-        This method persists a batch of data elements, always a list,
-        to disk or cloud storage.
-
-        It is recommended to persist objects of Python built-in types only,
-        unless the :class:`Biglist` is being used on-the-fly temporarily.
-        One useful pattern is to :meth:`append` output of ``custom_instance.to_dict()``,
-        and use ``custom_class.from_dict(...)`` upon reading to transform
-        the persisted dict back to the custom type.
-
-        If a subclass wants to perform such ``to_dict``/``from_dict``
-        transformations for the user, it can customize :meth:`dump_data_file`
-        and :meth:`load_data_file`.
-
-        Parameters
-        ----------
-        **kwargs
-            Additional keyword arguments to the serializer.
-
-        See Also
-        --------
-        :meth:`load_data_file`
-        """
-        serializer = cls.registered_storage_formats[
-            path.suffix.lstrip('.').replace('_', '-')
-        ]
-        path.write_bytes(serializer.serialize(data, **kwargs))
-
-    @classmethod
-    def load_data_file(cls, path: Upath, **kwargs) -> list[Element]:
-        """Load the data file given by ``path``.
-
-        This function is used as the argument ``loader`` to :meth:`BiglistFileReader.__init__`.
-        The value it returns is contained in :class:`FileReader` for subsequent use.
-
-        Parameters
-        ----------
-        **kwargs
-            Additional keyword arguments to the deserializer.
-
-        See Also
-        --------
-        dump_data_file
-        """
-        deserializer = cls.registered_storage_formats[
-            path.suffix.lstrip('.').replace('_', '-')
-        ]
-        data = path.read_bytes()
-        return deserializer.deserialize(data, **kwargs)
 
     @classmethod
     def new(
@@ -694,12 +645,8 @@ class Biglist(BiglistBase[Element]):
             types that are supported by the standard ``json`` library.
             (However, the few formats "natively" supported by Biglist may get special treatment
             to relax this requirement.)
-            If this is not possible, there are two solutions:
-
-            1. Define a subclass of ``Biglist``. The subclass can customize the ``classmethod``\\s
-               :meth:`dump_data_file` and :meth:`load_data_file` to handle extra serialization options
-               internally.
-            2. Define a custom serialization class and register it with :meth:`register_storage_format`.
+            If this is not possible, the solution is to define a custom serialization class and 
+            register it with :meth:`register_storage_format`.
         **kwargs
             additional arguments are passed on to :meth:`BiglistBase.new`.
 
@@ -1014,7 +961,10 @@ class Biglist(BiglistBase[Element]):
         if self._file_dumper is None:
             self._file_dumper = Dumper(self._get_thread_pool(), self._n_write_threads)
         self._file_dumper.dump_file(
-            self.dump_data_file, data_file, buffer, **self._serialize_kwargs
+            self.registered_storage_formats[self.storage_format].dump,
+            buffer,
+            data_file,
+            **self._serialize_kwargs
         )
         # This call will return quickly if the dumper has queue
         # capacity for the file. The file meta data below
@@ -1124,10 +1074,10 @@ class Biglist(BiglistBase[Element]):
         # This method should be cheap to call.
         # TODO: call `reload`?
         self._warn_flush()
+        serde = self.registered_storage_formats[self.storage_format]
+        fun = serde.load
         if self._deserialize_kwargs:
-            fun = functools.partial(self.load_data_file, **self._deserialize_kwargs)
-        else:
-            fun = self.load_data_file
+            fun = functools.partial(fun, **self._deserialize_kwargs)
         return BiglistFileSeq(
             self.path,
             [
@@ -1165,16 +1115,16 @@ class Dumper:
 
     def dump_file(
         self,
-        file_dumper: Callable[[Upath, list], None],
-        data_file: Upath,
+        file_dumper: Callable[[list, Upath], None],
         data: list,
+        data_file: Upath,
         **kwargs,
     ):
         """
         Parameters
         ----------
         file_dumper
-            This function takes a file path and the data as a list, and saves
+            This function takes the data as a list and a file path, and saves
             the data in the file named by the path.
 
         data_file, data
@@ -1191,7 +1141,7 @@ class Dumper:
         # further actions of the `Biglist` and waiting for one file-dumping
         # to finish.
 
-        task = self._executor.submit(file_dumper, data_file, data, **kwargs)
+        task = self._executor.submit(file_dumper, data, data_file, **kwargs)
         task._file = data_file
         self._tasks.add(task)
         task.add_done_callback(self._callback)
@@ -1227,7 +1177,7 @@ class BiglistFileReader(FileReader[Element]):
         loader
             A function that will be used to load the data file.
             This must be pickle-able.
-            Usually this is :meth:`Biglist.load_data_file`.
+            Usually this is the bound method ``load`` of  a subclass of :class:`upathlib.serializer.Serializer`.
             If you customize this, please see the doc of :class:`~biglist.FileReader`.
         """
         super().__init__()
@@ -1299,17 +1249,7 @@ class BiglistFileSeq(FileSeq[BiglistFileReader]):
         return BiglistFileReader(file, self._file_loader)
 
 
-class JsonByteSerializer(serializer.ByteSerializer):
-    @classmethod
-    def serialize(cls, x, **kwargs):
-        return json.dumps(x, **kwargs).encode()
-
-    @classmethod
-    def deserialize(cls, y, **kwargs):
-        return serializer._loads(json.loads, y.decode(), **kwargs)
-
-
-class ParquetSerializer(serializer.ByteSerializer):
+class ParquetSerializer(serializer.Serializer):
     @classmethod
     def serialize(
         cls,
@@ -1375,16 +1315,8 @@ class ParquetSerializer(serializer.ByteSerializer):
         return table.to_pylist()
 
 
-Biglist.register_storage_format('json', JsonByteSerializer)
-Biglist.register_storage_format('pickle', serializer.PickleSerializer)
-Biglist.register_storage_format('pickle-z', serializer.ZPickleSerializer)
-Biglist.register_storage_format('pickle-zstd', serializer.ZstdPickleSerializer)
+
 Biglist.register_storage_format('parquet', ParquetSerializer)
-
-
-# Available if the package `lz4` is installed.
-if hasattr(serializer, 'Lz4PickleSerializer'):
-    Biglist.register_storage_format('pickle-lz4', serializer.Lz4PickleSerializer)
 
 
 class ParquetBiglist(BiglistBase):

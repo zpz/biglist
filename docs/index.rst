@@ -562,11 +562,13 @@ We can get info about the row-groups, or even retrieve a row-group as the unit o
   num_columns: 3
   num_rows: 10
   total_byte_size: 408
+  sorting_columns: ()
 >>> f0.metadata.row_group(0)  # doctest: +ELLIPSIS
 <pyarrow._parquet.RowGroupMetaData object at 0x7...>
   num_columns: 3
   num_rows: 10
   total_byte_size: 408
+  sorting_columns: ()
 >>> rg = f0.row_group(0)
 >>> rg
 <ParquetBatchData with 10 rows, 3 columns>

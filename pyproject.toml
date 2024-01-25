@@ -9,13 +9,13 @@ authors = [
     {name = "Zepu Zhang", email = "zepu.zhang@gmail.com"},
 ]
 dependencies = [
-    "upathlib >= 0.8.3",
+    "upathlib >= 0.9.2",
     "deprecation",
     "pyarrow >= 12.0.1",
     "typing-extensions",
     "zstandard",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 readme = "README.rst"
 license = {file = "LICENSE"}
 classifiers = [
@@ -37,7 +37,7 @@ doc = [
     "pydata-sphinx-theme",
 ]
 gcs = [
-    "upathlib[gcs] >= 0.8.3",
+    "upathlib[gcs] >= 0.9.2",
 ]
 test = [
     "boltons",
@@ -47,7 +47,7 @@ test = [
 
 # See https://beta.ruff.rs/docs/rules/
 [tool.ruff]
-target-version = "py38"
+target-version = "py310"
 select = ["E", "F", "S", "I001"]  # isort
 ignore = ["E501", "S101", "S102", "S103", "S104", "S108", "S301", "S311", "S603", "S607", "S608"]
 exclude = ["tests/experiments"]

@@ -4,10 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.8.8] - in progress
+
+## [0.8.8] - 2024-01-25
 
 - Removed ``Multiplexer``. (It was moved to ``upathlib``.)
 - The generic parameter of `Chain` and `Slicer` is now the type of the data elements. Previously it is the type of the constituent Seq (which contain data elements).
+- Removed classmethods ``Biglist.load_data_file`` and ``Biglist.dump_data_file``. Updated the usage of `serializers` following ``upathlib`` upgrade.
+- Removed registration of the storage format 'pickle-lz4' for ``Biglist``.
 
 
 ## [0.8.7] - 2023-10-19

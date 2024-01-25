@@ -39,12 +39,8 @@ from __future__ import annotations
 
 from ._biglist import (
     Biglist,
-    BiglistBase,
     BiglistFileReader,
-    BiglistFileSeq,
-    FileSeq,
     ParquetBiglist,
-    ParquetFileSeq,
 )
 from ._parquet import (
     ParquetBatchData,
@@ -63,4 +59,4 @@ from ._util import (
     Slicer,
 )
 
-__version__ = '0.8.7'
+__version__ = '0.8.8'

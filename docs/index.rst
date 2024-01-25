@@ -20,6 +20,7 @@
 .. _pyarrow.fs.GcsFileSystem: https://arrow.apache.org/docs/python/generated/pyarrow.fs.GcsFileSystem.html
 .. _upathlib.Upath: https://github.com/zpz/upathlib/blob/main/src/upathlib/_upath.py
 
+
 .. testsetup:: *
 
    from biglist import *
@@ -302,79 +303,7 @@ in the cloud. Since a FileReader object is pickle-able, it works just fine if we
 and send it to another machine, provided the file path that is contained in the FileReader object
 is in the cloud, hence accessible from the other machine.
 We need a mechanism to distribute these FileReader objects to machines.
-For that, read on.
-
-Using Biglist to implement a "multiplexer"
-------------------------------------------
-
-The above distributes *files* to workers.
-This is efficient for processing large amounts of data.
-
-There are cases where we want to distribute individual *elements* to workers.
-Suppose we perform some brute-force search on a cluster of machines;
-there are 1000 grids, and the algorithm takes on one grid at a time.
-Now, the grid is a "hyper-parameter" or "control parameter" that takes 1000 possible values.
-We want to distribute these 1000 values to the workers.
-How can we do that?
-
-Use :class:`Multiplexer` provided by `biglist`.
-
-Multiplexer is implemented using a Biglist.
-Let's show its usage using local data and multiprocessing.
-(For real work, we would use cloud storage and a cluster of machines.)
-First, create a :class:`Multiplexer` to hold the values to be distributed:
-
->>> from upathlib import LocalUpath
->>> p = LocalUpath('/tmp/test/mux')
->>> p.rmrf()
-0
->>> hyper = Multiplexer.new(range(20), p)
->>> len(hyper)
-20
-
-Next, design an interesting worker function:
-
->>> import multiprocessing, random, time
->>>
->>> def worker(path, task_id):
-...     for x in Multiplexer(path, task_id):
-...         time.sleep(random.uniform(0.1, 0.2))  # doing a lot of things
-...         print(x, 'done in', multiprocessing.current_process().name)
-
-Back in the main process,
-
->>> task_id = hyper.start()
->>> tasks = [multiprocessing.Process(target=worker, args=(hyper.path, task_id)) for _ in range(5)]
->>> for t in tasks:
-...     t.start()
->>>
-2 done in Process-13
-0 done in Process-11
-1 done in Process-12
-4 done in Process-15
-3 done in Process-14
-6 done in Process-11
-7 done in Process-12
-8 done in Process-15
-5 done in Process-13
-9 done in Process-14
-12 done in Process-15
-13 done in Process-13
-11 done in Process-12
-10 done in Process-11
-14 done in Process-14
-15 done in Process-15
-18 done in Process-11
-16 done in Process-13
-17 done in Process-12
-19 done in Process-14
->>>
->>> for t in tasks:
-...     t.join()
->>> hyper.done()
-True
->>> hyper.destroy()
->>>
+For that, check out ``Multiplexer`` from ``upathlib``.
 
 
 Writing to a Biglist in multiple workers
@@ -633,11 +562,13 @@ We can get info about the row-groups, or even retrieve a row-group as the unit o
   num_columns: 3
   num_rows: 10
   total_byte_size: 408
+  sorting_columns: ()
 >>> f0.metadata.row_group(0)  # doctest: +ELLIPSIS
 <pyarrow._parquet.RowGroupMetaData object at 0x7...>
   num_columns: 3
   num_rows: 10
   total_byte_size: 408
+  sorting_columns: ()
 >>> rg = f0.row_group(0)
 >>> rg
 <ParquetBatchData with 10 rows, 3 columns>
@@ -1011,9 +942,6 @@ API reference
 
 
 .. autoclass:: biglist.BiglistFileSeq
-
-
-.. autoclass:: biglist.Multiplexer
 
 
 .. autoclass:: biglist.ParquetBiglist

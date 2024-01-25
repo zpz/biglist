@@ -27,7 +27,6 @@ from biglist import (
     write_arrays_to_parquet,
 )
 from biglist._biglist import (
-    JsonByteSerializer,
     ParquetSerializer,
 )
 from boltons import iterutils
@@ -155,7 +154,7 @@ def add_to_biglist(path, prefix, length):
 
 def test_multi_appenders():
     sets = [('a', 10), ('b', 8), ('c', 22), ('d', 17), ('e', 24)]
-    bl = Biglist.new(batch_size=6, keep_files=True, storage_format='pickle-z')
+    bl = Biglist.new(batch_size=6, keep_files=True, storage_format='pickle-zstd')
     # print('bl at', bl.path)
 
     prefix, ll = sets[0]
@@ -197,7 +196,7 @@ def iter_file(q_files):
 
 
 def test_file_readers():
-    bl = Biglist.new(batch_size=5, storage_format='pickle-z')
+    bl = Biglist.new(batch_size=5, storage_format='pickle-zstd')
     nn = 567
     bl.extend(range(nn))
     bl.flush()
@@ -445,12 +444,6 @@ def test_parquet():
 
 
 def test_serializers():
-    data = [12, 23.8, {'a': [9, 'xyz'], 'b': {'first': 3, 'second': 2.3}}, None]
-    for serde in (JsonByteSerializer,):
-        y = serde.serialize(data)
-        z = serde.deserialize(y)
-        assert z == data
-
     data = [
         {'a': [9, 10], 'b': {'first': 3, 'second': 2.3}},
         {'a': [11, None], 'b': {'first': 8, 'second': 3.3}},

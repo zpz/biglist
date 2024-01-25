@@ -26,6 +26,4 @@ Production ready.
 Python version
 --------------
 
-Development and testing were conducted in Python 3.8 until version 0.7.8.
-Starting with 0.7.9, development and testing happen in Python 3.10.
-Code continues to NOT intentionally use features beyond Python 3.8.
+3.10 or newer.

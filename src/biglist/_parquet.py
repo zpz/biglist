@@ -11,7 +11,7 @@ from pyarrow.parquet import FileMetaData, ParquetFile
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
 try:
-    from upathlib.gcs import get_google_auth
+    from upathlib import get_google_auth
 except ImportError:
     pass
 
@@ -317,7 +317,7 @@ class ParquetFileReader(FileReader):
 
         Examples
         --------
-        >>> obj = ParquetFileReader('file_path', ParquetBiglist.load_data_file)  # doctest: +SKIP
+        >>> obj = ParquetFileReader('file_path')  # doctest: +SKIP
         >>> obj1 = obj.columns(['a', 'b', 'c'])  # doctest: +SKIP
         >>> print(obj1[2])  # doctest: +SKIP
         >>> obj2 = obj1.columns(['b', 'c'])  # doctest: +SKIP

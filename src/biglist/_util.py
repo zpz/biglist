@@ -7,7 +7,6 @@ from collections.abc import Iterator, Sequence
 from typing import Protocol, TypeVar, runtime_checkable
 
 
-
 def locate_idx_in_chunked_seq(
     idx: int,
     len_cumsum: Sequence[int],

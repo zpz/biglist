@@ -28,7 +28,7 @@ from typing_extensions import Self
 from upathlib import LocalUpath, Path, PathType, Upath, resolve_path, serializer
 
 from ._parquet import ParquetFileReader, make_parquet_schema
-from ._util import Element, FileReader, Seq, lock_to_use
+from ._util import Element, FileReader, Seq
 
 logger = logging.getLogger(__name__)
 
@@ -790,7 +790,7 @@ class Biglist(BiglistBase[Element]):
                     data_files_info = []
 
                 self.info['data_files_info'] = data_files_info
-                with lock_to_use(self._info_file) as ff:
+                with self._info_file.lock() as ff:
                     ff.write_json(self.info, overwrite=True)
 
             else:
@@ -811,7 +811,7 @@ class Biglist(BiglistBase[Element]):
                         ]
                     if new_info:
                         self.info['data_files_info'] = new_info
-                        with lock_to_use(self._info_file) as ff:
+                        with self._info_file.lock() as ff:
                             ff.write_json(self.info, overwrite=True)
 
     def __del__(self) -> None:
@@ -1042,7 +1042,7 @@ class Biglist(BiglistBase[Element]):
         # appends by other workers. The last call to ``flush`` across all workers
         # will get the final meta info right.
         if self._append_files_buffer:
-            with lock_to_use(self._info_file, timeout=lock_timeout) as ff:
+            with self._info_file.lock(timeout=lock_timeout) as ff:
                 z0 = ff.read_json()['data_files_info']
                 z = sorted(
                     set((*(tuple(v[:2]) for v in z0), *self._append_files_buffer))
@@ -1467,7 +1467,7 @@ class ParquetBiglist(BiglistBase):
                 )
             ]
             self.info['data_files_info'] = data_files_info
-            with lock_to_use(self._info_file) as ff:
+            with self._info_file.lock() as ff:
                 ff.write_json(self.info, overwrite=True)
 
     def __repr__(self):

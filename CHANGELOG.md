@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.8.9] - 2024-01-31
+
+- Update usage of file lock following ``upathlib`` upgrade.
+
+
 ## [0.8.8] - 2024-01-25
 
 - Removed ``Multiplexer``. (It was moved to ``upathlib``.)

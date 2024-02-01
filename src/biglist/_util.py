@@ -4,17 +4,7 @@ import bisect
 import itertools
 from abc import abstractmethod
 from collections.abc import Iterator, Sequence
-from contextlib import contextmanager
 from typing import Protocol, TypeVar, runtime_checkable
-
-from upathlib import Upath
-
-
-@contextmanager
-def lock_to_use(file: Upath, timeout=300):
-    f = file.with_suffix(file.suffix + '.lock')
-    with f.lock(timeout=timeout):
-        yield file
 
 
 def locate_idx_in_chunked_seq(

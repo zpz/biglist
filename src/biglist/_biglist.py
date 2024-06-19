@@ -955,43 +955,70 @@ class Biglist(BiglistBase[Element]):
         eager: bool = False,
     ) -> None:
         """
+        The persisted biglist consists of a number of data files and an overall meta info file
+        (``info.json`` in the root of ``self.path``).
+        The latter contains, among others, a listing of the data files so that the data elements
+        have a defined order. Only data files listed in the info file are visible to reading.
+
+        When user adds data via :meth:`append` or :meth:`extend`,
         :meth:`_flush` is called automatically whenever the "append buffer"
         is full, so to persist the data and empty the buffer.
         (The capacity of this buffer is equal to ``self.batch_size``.)
-        However, if this buffer is only partially filled when the user is done
-        adding elements to the biglist, the data in the buffer will not be persisted.
-        This is the first reason that user should call ``flush`` when they are done
-        adding data (via :meth:`append` or :meth:`extend`).
+        If multiple Biglist objects in threads, processes, or machines add data concurrently,
+        each object has its own append buffer and does `_flush` independent of other objects.
+        A data file has a random name (comprised of datetime accurate to sub-seconds, 
+        plus a random string, plus other things);
+        there is no risk of name clash when multiple Biglist objects save data files independent of
+        each other.
 
-        Although :meth:`_flush` creates new data files, it does not update the "meta info file"
-        (``info.json`` in the root of ``self.path``) to include the new data files;
-        it only updates the in-memory ``self.info``. This is for efficiency reasons,
-        because updating ``info.json`` involves locking.
+        However, there are two things that the automatic `_flush` does not do:
 
-        Updating ``info.json`` to include new data files (created due to :meth:`append` and :meth:`extend`)
-        is performed by :meth:`flush`.
-        This is the second reason that user should call :meth:`flush` at the end of their
-        data writing session, regardless of whether all the new data have been persisted
-        in data files. (They would be if their count happens to be a multiple of ``self.batch_size``.)
+        First, if the append buffer is only partially filled when the user (of one Biglist object)
+        is done adding elements to the biglist, the data in the buffer will not be persisted.
 
-        If there are multiple workers adding data to this biglist at the same time
-        (from multiple processes or machines), data added by one worker will not be visible
-        to another worker until the writing worker calls :meth:`flush` and the reading worker
-        calls :meth:`reload`.
+        Second, `_flush` does not add new data files it has created into the meta info file.
+        It does not do so because doing it would need to lock the info file, which adds overhead
+        and harms concurrent independent writing.
 
-        Further, user should assume that data not yet persisted (i.e. still in "append buffer")
-        are not visible to data reading via :meth:`__getitem__` or :meth:`__iter__` and not included in
-        :meth:`__len__`, even to the same worker. In common use cases, we do not start reading data
-        until we're done adding data to the biglist (at least "for now"), hence this is not
-        a big issue.
+        These two things are left to the user to do via explicit calls to :meth:`flush`.
+
+        A Biglist object should call :meth:`flush` at the end of its data writing session,
+        regardless of whether all the new data have been persisted in data files. 
+        (They would be if their count happens to be a multiple of ``self.batch_size``.)
+        This will flush the append buffer.
+
+        By default, `flush` also adds new data files the Biglist object has created to the meta info file.
+        (Until that point, all the new data files created by the particular Biglist object
+        are recorded in memory.) This operation locks the info file so that concurrent
+        writers will not corrupt it.
+
+        The parameter `eager` (default `False`) gives this op a twist. If `eager` is `True`,
+        the list of a Biglist object's new data files is written to a small "interim" file,
+        and the meta info file is *not* updated. The interim file has a random name with no risk
+        of name clash between multiple writers. In sum, `flush(eager=True)` persists all data and info
+        but puts the data structure in an "interim" state. Importantly, this op does *not*
+        involve locking, because it does not update the meta info file.
+
+        A call to `flush()` (i.e., `flush(eager=False)`) does all that `flush(eager=True)` does, plus
+        it integrates the content of all interim files, if any, into the meta info file,
+        and deletes the interim files. This op does lock the info file.
+        The parameter `eager` is provided to manage the lock overhead when we write to a
+        cloud-persisted biglist using many concurrent, distributed writers.
+
+        If `flush(eager=True)` has been used, then `flush()`
+        needs to be called at least once before *reading* the data.
+        These two calls may be made by different Biglist objects.
+        
+        User should assume that data not yet fully persisted via `flush`
+        are not visible to data reading via :meth:`__getitem__` or :meth:`__iter__`,
+        and are not included in :meth:`__len__`, even to the same Biglist object that has performed writing. 
+        In common use cases, we do not start reading data until we're done adding data 
+        to the biglist (at least "for now"), hence this is not a big inconvenience.
 
         In summary, call :meth:`flush` when
 
         - You are done adding data (for this "session")
         - or you need to start reading data
-
-        :meth:`flush` has overhead. You should call it only in the two situations above.
-        **Do not** call it frequently "just to be safe".
 
         After a call to ``flush()``, there's no problem to add more elements again by
         :meth:`append` or :meth:`extend`. Data files created by ``flush()`` with less than
@@ -999,28 +1026,12 @@ class Biglist(BiglistBase[Element]):
         This is a legitimate case in parallel or distributed writing, or writing in
         multiple sessions.
 
-        Note: the above talks about the "default" behavior, where `eager` is `False`.
+        Note that `flush` is called automatically when a Biglist object is garbage collected.
+        However, user is strongly recommended to explicitly call `flush` at the end of their writing session.
 
-        The parameter `eager` is provided for the following situation:
-
-        Suppose we use many distributed workers to concurrently write to a biglist,
-        and the biglist is saved in a cloud blob store (such as Google Cloud Storage).
-        By default, `flush` will lock the info file to update things.
-        If `flush` is being called by many workers at around the same time,
-        the locking could make the workers wait for for a while; worse, some workers
-        could fail to acquire a lock due to timeout.
-
-        In such situations, you can use `eager=True`. Then, the info file is not updated, nor
-        locked. Each caller independently saves a file for its meta data (that is supposed to
-        be merged into the info file), in addition to saving data files. As such, all necessary
-        info is persisted, yet it is not properly merged into the overall info file, hence
-        the data structure is in an incomplete state.
-
-        If `eager=True` has been used, then `flush` with `eager=False` (the default)
-        needs to be called at least once before *reading* the data.
-
-        `flush` is called when a Biglist object is garbage collected.
-        However, user is recommended to explicitly call `flush` at the end of their writing session.
+        On the other hand, you should **not** call `flush` frequently "just to be safe".
+        It has I/O overhead, and it may create small data files because it flushes the append buffer
+        regardless of whether it is full.
         """
         self._flush()
         if self._file_dumper is not None:

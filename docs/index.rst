@@ -148,18 +148,16 @@ At that moment, the instance can be *pickled*. This lends itself to uses in mult
 This point of the design will be showcased later.
 
 The centerpiece of a biglist is a sequence of data files in persistence, or correspondingly,
-a sequence of FileReader's in memory. The property :meth:`BiglistBase.files` of BiglistBase
-returns a :class:`FileSeq` to manage the FileReader objects of the biglist.
-Besides implementing the :class:`Seq` protocol, FileSeq provides ways to use the FileReader's
-by distributed workers.
+a sequence of FileReader's in memory. The property :meth:`BiglistBase.files`
+returns a ``FileSeq`` to manage the FileReader objects of the biglist.
 
 Finally, :class:`BiglistBase`
 implements the :class:`Seq` protocol for its data items across the data files.
 
 To sum up,
-a BiglistBase is a Seq of data items across data files;
-BiglistBase.files is a FileSeq, which in turn is a Seq of FileReaders;
-a FileReader is a Seq of data items in one data file.
+a ``BiglistBase`` is a ``Seq`` of data items across data files;
+``BiglistBase.files`` is a ``FileSeq``, which in turn is a ``Seq`` of ``FileReader``\s;
+a ``FileReader`` is a ``Seq`` of data items in one data file.
 
 
 
@@ -254,7 +252,7 @@ Reading from a Biglist in multiple processes
 
 To *collectively* consume a :class:`Biglist` object from multiple processes,
 we can distribute :class:`FileReader`\s to the processes.
-The FileReader's of ``mylist`` is accessed via its property :meth:`~Biglist.files`, which returns a :class:`FileSeq`:
+The FileReader's of ``mylist`` is accessed via its property :meth:`~Biglist.files`, which returns a ``FileSeq``:
 
 >>> files = mylist.files
 >>> files  # doctest: +SKIP

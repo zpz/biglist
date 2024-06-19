@@ -19,7 +19,7 @@ import weakref
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, TypeVar
 from uuid import uuid4
 
@@ -220,7 +220,6 @@ class BiglistBase(Seq[Element]):
         cls,
         path: PathType | None = None,
         *,
-        keep_files: bool | None = None,
         init_info: dict = None,
         **kwargs,
     ) -> BiglistBase:
@@ -242,16 +241,6 @@ class BiglistBase(Seq[Element]):
 
             The subclass :class:`~biglist.Biglist` saves both data and meta-info in this path.
             The subclass :class:`~biglist.ParquetBiglist` saves meta-info only.
-
-        keep_files
-            If not specified, the default behavior is the following:
-
-            - If ``path`` is ``None``, then this is ``False``---the temporary directory
-              will be deleted when this :class:`BiglistBase` object goes away.
-            - If ``path`` is not ``None``, i.e. user has deliberately specified a location,
-              then this is ``True``---files saved by this :class:`BiglistBase` object will stay.
-
-            User can pass in ``True`` or ``False`` explicitly to override the default behavior.
 
         init_info
             Initial info that should be written into the *info* file before ``__init__`` is called.
@@ -310,11 +299,6 @@ class BiglistBase(Seq[Element]):
 
         if not path:
             path = cls.get_temp_path()
-            if keep_files is None:
-                keep_files = False
-        else:
-            if keep_files is None:
-                keep_files = True
         path = resolve_path(path)
         if path.is_dir():
             raise Exception(f'directory "{path}" already exists')
@@ -322,7 +306,6 @@ class BiglistBase(Seq[Element]):
             raise FileExistsError(path)
         (path / 'info.json').write_json(init_info or {}, overwrite=False)
         obj = cls(path, **kwargs)
-        obj.keep_files = keep_files
         return obj
 
     def __init__(
@@ -380,12 +363,7 @@ class BiglistBase(Seq[Element]):
         return self._thread_pool_
 
     def destroy(self, *, concurrent=True) -> None:
-        self.keep_files = False
         self.path.rmrf(concurrent=concurrent)
-
-    def __del__(self):
-        if getattr(self, 'keep_files', True) is False:
-            self.destroy(concurrent=False)
 
     def __getitem__(self, idx: int) -> Element:
         """
@@ -700,8 +678,6 @@ class Biglist(BiglistBase[Element]):
         Please see the base class for additional documentation.
         """
         super().__init__(*args, **kwargs)
-        self.keep_files: bool = True
-        """Indicates whether the persisted files should be kept or deleted when the object is garbage-collected."""
 
         self._append_buffer: list = []
         self._append_files_buffer: list = []
@@ -815,9 +791,7 @@ class Biglist(BiglistBase[Element]):
                             ff.write_json(self.info, overwrite=True)
 
     def __del__(self) -> None:
-        if getattr(self, 'keep_files', True) is False:
-            self.destroy(concurrent=False)
-        else:
+        if self._info_file.is_file():  # otherwise `destroy()` has been called
             self._warn_flush()
             self.flush()
 
@@ -928,7 +902,7 @@ class Biglist(BiglistBase[Element]):
         """
         if extra:
             extra = extra.lstrip('_').rstrip('_') + '_'
-        return f"{datetime.utcnow().strftime('%Y%m%d%H%M%S.%f')}_{extra}{str(uuid4()).replace('-', '')[:10]}_{buffer_len}"
+        return f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S.%f')}_{extra}{str(uuid4()).replace('-', '')[:10]}_{buffer_len}"
         # File name pattern introduced on 7/25/2022.
         # This should guarantee the file name is unique, hence
         # we do not need to verify that this file name is not already used.
@@ -946,7 +920,6 @@ class Biglist(BiglistBase[Element]):
         reaches ``self.batch_size``. This happens w/o the user's intervention.
         """
         if not self._append_buffer:
-            # Called by `self.flush`.
             return
 
         buffer = self._append_buffer
@@ -974,7 +947,13 @@ class Biglist(BiglistBase[Element]):
 
         self._append_files_buffer.append((filename, buffer_len))
 
-    def flush(self, *, lock_timeout=300, raise_on_write_error: bool = True) -> None:
+    def flush(
+        self,
+        *,
+        lock_timeout=300,
+        raise_on_write_error: bool = True,
+        eager: bool = False,
+    ) -> None:
         """
         :meth:`_flush` is called automatically whenever the "append buffer"
         is full, so to persist the data and empty the buffer.
@@ -992,7 +971,7 @@ class Biglist(BiglistBase[Element]):
         Updating ``info.json`` to include new data files (created due to :meth:`append` and :meth:`extend`)
         is performed by :meth:`flush`.
         This is the second reason that user should call :meth:`flush` at the end of their
-        data writting session, regardless of whether all the new data have been persisted
+        data writing session, regardless of whether all the new data have been persisted
         in data files. (They would be if their count happens to be a multiple of ``self.batch_size``.)
 
         If there are multiple workers adding data to this biglist at the same time
@@ -1019,6 +998,29 @@ class Biglist(BiglistBase[Element]):
         :data:`batch_size` elements will stay as is among larger files.
         This is a legitimate case in parallel or distributed writing, or writing in
         multiple sessions.
+
+        Note: the above talks about the "default" behavior, where `eager` is `False`.
+
+        The parameter `eager` is provided for the following situation:
+
+        Suppose we use many distributed workers to concurrently write to a biglist,
+        and the biglist is saved in a cloud blob store (such as Google Cloud Storage).
+        By default, `flush` will lock the info file to update things.
+        If `flush` is being called by many workers at around the same time,
+        the locking could make the workers wait for for a while; worse, some workers
+        could fail to acquire a lock due to timeout.
+
+        In such situations, you can use `eager=True`. Then, the info file is not updated, nor
+        locked. Each caller independently saves a file for its meta data (that is supposed to
+        be merged into the info file), in addition to saving data files. As such, all necessary
+        info is persisted, yet it is not properly merged into the overall info file, hence
+        the data structure is in an incomplete state.
+
+        If `eager=True` has been used, then `flush` with `eager=False` (the default)
+        needs to be called at least once before *reading* the data.
+
+        `flush` is called when a Biglist object is garbage collected.
+        However, user is recommended to explicitly call `flush` at the end of their writing session.
         """
         self._flush()
         if self._file_dumper is not None:
@@ -1041,18 +1043,35 @@ class Biglist(BiglistBase[Element]):
         # to the list. This block merges the appends by the current worker with
         # appends by other workers. The last call to ``flush`` across all workers
         # will get the final meta info right.
+
         if self._append_files_buffer:
-            with self._info_file.lock(timeout=lock_timeout) as ff:
-                z0 = ff.read_json()['data_files_info']
-                z = sorted(
-                    set((*(tuple(v[:2]) for v in z0), *self._append_files_buffer))
-                )
-                # TODO: maybe a merge sort can be more efficient.
-                cum = list(itertools.accumulate(v[1] for v in z))
-                z = [(a, b, c) for (a, b), c in zip(z, cum)]
-                self.info['data_files_info'] = z
-                ff.write_json(self.info, overwrite=True)
+            # Saving file meta data without merging it into `info.json`.
+            # This puts the data structure in a transitional state.
+            filename = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S.%f')}_{str(uuid4()).replace('-', '')[:10]}"
+            (self.path / '_flush_eager' / filename).write_json(
+                self._append_files_buffer, overwrite=False
+            )
             self._append_files_buffer.clear()
+
+            print('wrote file', self.path / '_flush_eager' / filename)
+
+        if not eager:
+            # Merge file meta data into `info.json`, finalizing the data structure.
+            with self._info_file.lock(timeout=lock_timeout) as ff:
+                data = []
+                for f in (self.path / '_flush_eager').iterdir():
+                    z = f.read_json()
+                    data.extend(z)
+                    f.remove_file()
+                if data:
+                    self.info.update(ff.read_json())
+                    z0 = self.info['data_files_info']
+                    z = sorted(set((*(tuple(v[:2]) for v in z0), *map(tuple, data))))
+                    # TODO: maybe a merge sort can be more efficient.
+                    cum = list(itertools.accumulate(v[1] for v in z))
+                    z = [(a, b, c) for (a, b), c in zip(z, cum)]
+                    self.info['data_files_info'] = z
+                    ff.write_json(self.info, overwrite=True)
 
     def reload(self) -> None:
         """
@@ -1450,11 +1469,6 @@ class ParquetBiglist(BiglistBase):
     def __init__(self, *args, **kwargs):
         """Please see doc of the base class."""
         super().__init__(*args, **kwargs)
-        self.keep_files: bool = True
-        """Indicates whether the meta info persisted by this object should be kept or deleted when this object is garbage-collected.
-
-        This does *not* affect the external Parquet data files.
-        """
 
         # For back compat. Added in 0.7.4.
         if self.info and 'data_files_info' not in self.info:

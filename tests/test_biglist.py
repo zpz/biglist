@@ -600,3 +600,47 @@ def test_parquet_biglist(tmp_path):
         print(row)
         if k > 3:
             break
+
+
+def worker_writer(path, idx):
+    bl = Biglist(path)
+    for x in range(idx * 100, idx * 100 + 100):
+        bl.append(x)
+        if (x + 1) % 20 == 0:
+            bl.flush(eager=True)
+    time.sleep(20)
+
+
+def test_eager_flush():
+    bl = Biglist.new(batch_size=5, keep_files=True)
+    print('path:', bl.path)
+    workers = [
+        multiprocessing.Process(target=worker_writer, args=(bl.path, idx))
+        for idx in range(4)
+    ]
+    for w in workers:
+        w.start()
+
+    time.sleep(3)
+    print()
+    print('files')
+    print(list((bl.path / '_flush_eager').iterdir()))
+    print()
+
+    for w in workers:
+        w.join()
+
+    print()
+    print('files')
+    print(list((bl.path / '_flush_eager').iterdir()))
+    print()
+
+    assert not bl
+    assert len(list((bl.path / '_flush_eager').iterdir())) == 20
+    # bl.flush()
+    # assert len(list((bl.path / '_flush_eager').iterdir())) == 0
+    # assert len(bl) == 400
+    # assert sorted(bl) == list(range(400))
+
+
+

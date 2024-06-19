@@ -119,11 +119,9 @@ class Seq(Protocol[Element]):
     # in "cpython/Lib/_collections_abc.py", then a `Seq` inheriting from
     # Sized, Iterable, and Subscriptable.
 
-    def __len__(self) -> int:
-        ...
+    def __len__(self) -> int: ...
 
-    def __getitem__(self, index: int) -> Element:
-        ...
+    def __getitem__(self, index: int) -> Element: ...
 
     def __iter__(self) -> Iterator[Element]:
         # A reference, or naive, implementation.

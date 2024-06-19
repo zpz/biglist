@@ -25,7 +25,7 @@ The intended way of data consumption is by iteration, which
 can be done *collectively* by distributed workers.
 
 Persistence can be on local disk or in cloud storage.
-Thanks to the package `upathlib <https://github.com/zpz/upathlib>`_, 
+Thanks to the package `upathlib <https://github.com/zpz/upathlib>`_,
 the implementation as wel as the end-user API is agnostic to the location of storage.
 
 In support of ``ParquetBiglist``, some utilities are provided for reading and writing Parquet data files.
@@ -35,6 +35,7 @@ Additional utilities provide mechanisms for "slicing and dicing" a biglist,
 as well as "chaining up" a series of biglists. These utilities work not only for biglist,
 but also for any :class:`Seq`.
 """
+
 from __future__ import annotations
 
 from ._biglist import (

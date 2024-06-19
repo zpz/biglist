@@ -316,7 +316,9 @@ def test_mp3():
     cache = Biglist.new(batch_size=1000)
     try:
         ctx = multiprocessing.get_context('spawn')
-        workers = [ctx.Process(target=slow_appender, args=(cache.path,)) for _ in range(6)]
+        workers = [
+            ctx.Process(target=slow_appender, args=(cache.path,)) for _ in range(6)
+        ]
         for w in workers:
             w.start()
         for w in workers:
@@ -686,6 +688,3 @@ def test_eager_flush():
         assert sorted(bl) == list(range(400))
     finally:
         bl.destroy()
-
-
-

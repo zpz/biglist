@@ -947,7 +947,13 @@ class Biglist(BiglistBase[Element]):
 
         self._append_files_buffer.append((filename, buffer_len))
 
-    def flush(self, *, lock_timeout=300, raise_on_write_error: bool = True, eager: bool = False) -> None:
+    def flush(
+        self,
+        *,
+        lock_timeout=300,
+        raise_on_write_error: bool = True,
+        eager: bool = False,
+    ) -> None:
         """
         :meth:`_flush` is called automatically whenever the "append buffer"
         is full, so to persist the data and empty the buffer.
@@ -996,8 +1002,8 @@ class Biglist(BiglistBase[Element]):
         Note: the above talks about the "default" behavior, where `eager` is `False`.
 
         The parameter `eager` is provided for the following situation:
-        
-        Suppose we use many distributed workers to concurrently write to a biglist, 
+
+        Suppose we use many distributed workers to concurrently write to a biglist,
         and the biglist is saved in a cloud blob store (such as Google Cloud Storage).
         By default, `flush` will lock the info file to update things.
         If `flush` is being called by many workers at around the same time,
@@ -1042,11 +1048,12 @@ class Biglist(BiglistBase[Element]):
             # Saving file meta data without merging it into `info.json`.
             # This puts the data structure in a transitional state.
             filename = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S.%f')}_{str(uuid4()).replace('-', '')[:10]}"
-            (self.path / '_flush_eager' / filename).write_json(self._append_files_buffer, overwrite=False)
+            (self.path / '_flush_eager' / filename).write_json(
+                self._append_files_buffer, overwrite=False
+            )
             self._append_files_buffer.clear()
 
             print('wrote file', self.path / '_flush_eager' / filename)
-
 
         if not eager:
             # Merge file meta data into `info.json`, finalizing the data structure.
@@ -1059,9 +1066,7 @@ class Biglist(BiglistBase[Element]):
                 if data:
                     self.info.update(ff.read_json())
                     z0 = self.info['data_files_info']
-                    z = sorted(
-                        set((*(tuple(v[:2]) for v in z0), *map(tuple, data)))
-                    )
+                    z = sorted(set((*(tuple(v[:2]) for v in z0), *map(tuple, data))))
                     # TODO: maybe a merge sort can be more efficient.
                     cum = list(itertools.accumulate(v[1] for v in z))
                     z = [(a, b, c) for (a, b), c in zip(z, cum)]

@@ -966,7 +966,7 @@ class Biglist(BiglistBase[Element]):
         (The capacity of this buffer is equal to ``self.batch_size``.)
         If multiple Biglist objects in threads, processes, or machines add data concurrently,
         each object has its own append buffer and does `_flush` independent of other objects.
-        A data file has a random name (comprised of datetime accurate to sub-seconds, 
+        A data file has a random name (comprised of datetime accurate to sub-seconds,
         plus a random string, plus other things);
         there is no risk of name clash when multiple Biglist objects save data files independent of
         each other.
@@ -983,7 +983,7 @@ class Biglist(BiglistBase[Element]):
         These two things are left to the user to do via explicit calls to :meth:`flush`.
 
         A Biglist object should call :meth:`flush` at the end of its data writing session,
-        regardless of whether all the new data have been persisted in data files. 
+        regardless of whether all the new data have been persisted in data files.
         (They would be if their count happens to be a multiple of ``self.batch_size``.)
         This will flush the append buffer.
 
@@ -1008,11 +1008,11 @@ class Biglist(BiglistBase[Element]):
         If `flush(eager=True)` has been used, then `flush()`
         needs to be called at least once before *reading* the data.
         These two calls may be made by different Biglist objects.
-        
+
         User should assume that data not yet fully persisted via `flush`
         are not visible to data reading via :meth:`__getitem__` or :meth:`__iter__`,
-        and are not included in :meth:`__len__`, even to the same Biglist object that has performed writing. 
-        In common use cases, we do not start reading data until we're done adding data 
+        and are not included in :meth:`__len__`, even to the same Biglist object that has performed writing.
+        In common use cases, we do not start reading data until we're done adding data
         to the biglist (at least "for now"), hence this is not a big inconvenience.
 
         In summary, call :meth:`flush` when

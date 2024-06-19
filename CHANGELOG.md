@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.9.0] - 2024-06-18
+
+- Removed parameter `keep_files`. `__del__` no longer call `destroy`; instead, it always try to call `flush`.
+  User must explicitly `destroy` if so desired.
+- `Biglist.flush` gets new parameter `eager`, default `False`.
+
+
+
 ## [0.8.9] - 2024-01-31
 
 - Update usage of file lock following ``upathlib`` upgrade.

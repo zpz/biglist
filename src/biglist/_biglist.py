@@ -1053,8 +1053,6 @@ class Biglist(BiglistBase[Element]):
             )
             self._append_files_buffer.clear()
 
-            print('wrote file', self.path / '_flush_eager' / filename)
-
         if not eager:
             # Merge file meta data into `info.json`, finalizing the data structure.
             with self._info_file.lock(timeout=lock_timeout) as ff:

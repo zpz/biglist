@@ -25,7 +25,7 @@ from uuid import uuid4
 
 import pyarrow
 from typing_extensions import Self
-from upathlib import LocalUpath, Path, PathType, Upath, resolve_path, serializer
+from upathlib import LocalUpath, PathType, Upath, resolve_path, serializer
 
 from ._parquet import ParquetFileReader, make_parquet_schema
 from ._util import Element, FileReader, Seq
@@ -791,7 +791,7 @@ class Biglist(BiglistBase[Element]):
                             ff.write_json(self.info, overwrite=True)
 
     def __del__(self) -> None:
-        if self._info_file.is_file():  # otherwise `destroy()` has been called
+        if self._info_file.is_file():  # otherwise `destroy()` may have been called
             self._warn_flush()
             self.flush()
 
@@ -816,9 +816,17 @@ class Biglist(BiglistBase[Element]):
 
     def _warn_flush(self):
         if self._append_buffer or self._append_files_buffer:
+            # This is not the only situation that can be suspicious.
+            # If you used `flush(eager=True)` without a `flush()` later,
+            # both `self._append_buffer` and `self._append_files_buffer` can be
+            # empty yet the on-disk info is not fully integrated.
+            #
+            # Unless you know what you are doing, don't use `flush(eager=True)`.
             warnings.warn(
                 f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
             )
+            return True
+        return False
 
     def __len__(self) -> int:
         """
@@ -1028,6 +1036,7 @@ class Biglist(BiglistBase[Element]):
 
         Note that `flush` is called automatically when a Biglist object is garbage collected.
         However, user is strongly recommended to explicitly call `flush` at the end of their writing session.
+        (See :meth:`_warn_flush`.)
 
         On the other hand, you should **not** call `flush` frequently "just to be safe".
         It has I/O overhead, and it may create small data files because it flushes the append buffer
@@ -1055,32 +1064,44 @@ class Biglist(BiglistBase[Element]):
         # appends by other workers. The last call to ``flush`` across all workers
         # will get the final meta info right.
 
+        data = []
+
         if self._append_files_buffer:
-            # Saving file meta data without merging it into `info.json`.
-            # This puts the data structure in a transitional state.
-            filename = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S.%f')}_{str(uuid4()).replace('-', '')[:10]}"
-            (self.path / '_flush_eager' / filename).write_json(
-                self._append_files_buffer, overwrite=False
-            )
-            self._append_files_buffer.clear()
+            if eager:
+                # Saving file meta data without merging it into `info.json`.
+                # This puts the data structure in a transitional state.
+                filename = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S.%f')}_{str(uuid4()).replace('-', '')[:10]}"
+                (self.path / '_flush_eager' / filename).write_json(
+                    self._append_files_buffer, overwrite=False
+                )
+                self._append_files_buffer.clear()
+            else:
+                data.extend(self._append_files_buffer)
 
         if not eager:
             # Merge file meta data into `info.json`, finalizing the data structure.
-            with self._info_file.lock(timeout=lock_timeout) as ff:
-                data = []
+            empty = True
+            if not data:
                 for f in (self.path / '_flush_eager').iterdir():
-                    z = f.read_json()
-                    data.extend(z)
-                    f.remove_file()
-                if data:
-                    self.info.update(ff.read_json())
-                    z0 = self.info['data_files_info']
-                    z = sorted(set((*(tuple(v[:2]) for v in z0), *map(tuple, data))))
-                    # TODO: maybe a merge sort can be more efficient.
-                    cum = list(itertools.accumulate(v[1] for v in z))
-                    z = [(a, b, c) for (a, b), c in zip(z, cum)]
-                    self.info['data_files_info'] = z
-                    ff.write_json(self.info, overwrite=True)
+                    empty = False
+                    break
+            if data or not empty:
+                with self._info_file.lock(timeout=lock_timeout) as ff:
+                    for f in (self.path / '_flush_eager').iterdir():
+                        z = f.read_json()
+                        data.extend(z)
+                        f.remove_file()
+                    if data:
+                        self.info.update(ff.read_json())
+                        z0 = self.info['data_files_info']
+                        z = sorted(
+                            set((*(tuple(v[:2]) for v in z0), *map(tuple, data)))
+                        )
+                        # TODO: maybe a merge sort can be more efficient.
+                        cum = list(itertools.accumulate(v[1] for v in z))
+                        z = [(a, b, c) for (a, b), c in zip(z, cum)]
+                        self.info['data_files_info'] = z
+                        ff.write_json(self.info, overwrite=True)
 
     def reload(self) -> None:
         """
@@ -1405,8 +1426,7 @@ class ParquetBiglist(BiglistBase):
         **kwargs
             additional arguments are passed on to :meth:`__init__`.
         """
-        if isinstance(data_path, (str, Path, Upath)):
-            #  TODO: in py 3.10, we will be able to do `isinstance(data_path, PathType)`
+        if isinstance(data_path, PathType):
             data_path = [resolve_path(data_path)]
         else:
             data_path = [resolve_path(p) for p in data_path]

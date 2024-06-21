@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.9.1] - 2024-06-20
+
+- Finetuning in `Biglist.flush`.
+
+
 ## [0.9.0] - 2024-06-18
 
 - Removed parameter `keep_files`. `__del__` no longer calls `destroy`; instead, it always try to call `flush`.

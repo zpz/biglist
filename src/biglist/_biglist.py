@@ -1055,32 +1055,42 @@ class Biglist(BiglistBase[Element]):
         # appends by other workers. The last call to ``flush`` across all workers
         # will get the final meta info right.
 
+        data = []
+
         if self._append_files_buffer:
-            # Saving file meta data without merging it into `info.json`.
-            # This puts the data structure in a transitional state.
-            filename = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S.%f')}_{str(uuid4()).replace('-', '')[:10]}"
-            (self.path / '_flush_eager' / filename).write_json(
-                self._append_files_buffer, overwrite=False
-            )
-            self._append_files_buffer.clear()
+            if eager:
+                # Saving file meta data without merging it into `info.json`.
+                # This puts the data structure in a transitional state.
+                filename = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S.%f')}_{str(uuid4()).replace('-', '')[:10]}"
+                (self.path / '_flush_eager' / filename).write_json(
+                    self._append_files_buffer, overwrite=False
+                )
+                self._append_files_buffer.clear()
+            else:
+                data.extend(self._append_files_buffer)
 
         if not eager:
             # Merge file meta data into `info.json`, finalizing the data structure.
-            with self._info_file.lock(timeout=lock_timeout) as ff:
-                data = []
+            empty = True
+            if not data:
                 for f in (self.path / '_flush_eager').iterdir():
-                    z = f.read_json()
-                    data.extend(z)
-                    f.remove_file()
-                if data:
-                    self.info.update(ff.read_json())
-                    z0 = self.info['data_files_info']
-                    z = sorted(set((*(tuple(v[:2]) for v in z0), *map(tuple, data))))
-                    # TODO: maybe a merge sort can be more efficient.
-                    cum = list(itertools.accumulate(v[1] for v in z))
-                    z = [(a, b, c) for (a, b), c in zip(z, cum)]
-                    self.info['data_files_info'] = z
-                    ff.write_json(self.info, overwrite=True)
+                    empty = False
+                    break
+            if data or not empty:
+                with self._info_file.lock(timeout=lock_timeout) as ff:
+                    for f in (self.path / '_flush_eager').iterdir():
+                        z = f.read_json()
+                        data.extend(z)
+                        f.remove_file()
+                    if data:
+                        self.info.update(ff.read_json())
+                        z0 = self.info['data_files_info']
+                        z = sorted(set((*(tuple(v[:2]) for v in z0), *map(tuple, data))))
+                        # TODO: maybe a merge sort can be more efficient.
+                        cum = list(itertools.accumulate(v[1] for v in z))
+                        z = [(a, b, c) for (a, b), c in zip(z, cum)]
+                        self.info['data_files_info'] = z
+                        ff.write_json(self.info, overwrite=True)
 
     def reload(self) -> None:
         """

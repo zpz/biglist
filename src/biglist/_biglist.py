@@ -1424,8 +1424,7 @@ class ParquetBiglist(BiglistBase):
         **kwargs
             additional arguments are passed on to :meth:`__init__`.
         """
-        if isinstance(data_path, (str, Path, Upath)):
-            #  TODO: in py 3.10, we will be able to do `isinstance(data_path, PathType)`
+        if isinstance(data_path, PathType):
             data_path = [resolve_path(data_path)]
         else:
             data_path = [resolve_path(p) for p in data_path]

@@ -791,7 +791,7 @@ class Biglist(BiglistBase[Element]):
                             ff.write_json(self.info, overwrite=True)
 
     def __del__(self) -> None:
-        if self._info_file.is_file():  # otherwise `destroy()` has been called
+        if self._info_file.is_file():  # otherwise `destroy()` may have been called
             self._warn_flush()
             self.flush()
 
@@ -816,9 +816,17 @@ class Biglist(BiglistBase[Element]):
 
     def _warn_flush(self):
         if self._append_buffer or self._append_files_buffer:
+            # This is not the only situation that can be suspicious.
+            # If you used `flush(eager=True)` without a `flush()` later,
+            # both `self._append_buffer` and `self._append_files_buffer` can be
+            # empty yet the on-disk info is not fully integrated.
+            #
+            # Unless you know what you are doing, don't use `flush(eager=True)`.
             warnings.warn(
                 f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
             )
+            return True
+        return False
 
     def __len__(self) -> int:
         """
@@ -1028,6 +1036,7 @@ class Biglist(BiglistBase[Element]):
 
         Note that `flush` is called automatically when a Biglist object is garbage collected.
         However, user is strongly recommended to explicitly call `flush` at the end of their writing session.
+        (See :meth:`_warn_flush`.)
 
         On the other hand, you should **not** call `flush` frequently "just to be safe".
         It has I/O overhead, and it may create small data files because it flushes the append buffer

@@ -981,10 +981,10 @@ class Biglist(BiglistBase[Element]):
 
         However, there are two things that the automatic `_flush` does not do:
 
-        First, if the append buffer is only partially filled when the user (of one Biglist object)
+        - First, if the append buffer is only partially filled when the user (of one Biglist object)
         is done adding elements to the biglist, the data in the buffer will not be persisted.
 
-        Second, `_flush` does not add new data files it has created into the meta info file.
+        - Second, `_flush` does not add new data files it has created into the meta info file.
         It does not do so because doing it would need to lock the info file, which adds overhead
         and harms concurrent independent writing.
 
@@ -995,13 +995,13 @@ class Biglist(BiglistBase[Element]):
         (They would be if their count happens to be a multiple of ``self.batch_size``.)
         This will flush the append buffer.
 
-        By default, `flush` also adds new data files the Biglist object has created to the meta info file.
+        By default, `flush` also adds newly created data files to the meta info file.
         (Until that point, all the new data files created by the particular Biglist object
         are recorded in memory.) This operation locks the info file so that concurrent
         writers will not corrupt it.
 
         The parameter `eager` (default `False`) gives this op a twist. If `eager` is `True`,
-        the list of a Biglist object's new data files is written to a small "interim" file,
+        the list of new data files created by `self`--that is, this calling Biglist object--is written to a small "interim" file,
         and the meta info file is *not* updated. The interim file has a random name with no risk
         of name clash between multiple writers. In sum, `flush(eager=True)` persists all data and info
         but puts the data structure in an "interim" state. Importantly, this op does *not*
@@ -1015,7 +1015,9 @@ class Biglist(BiglistBase[Element]):
 
         If `flush(eager=True)` has been used, then `flush()`
         needs to be called at least once before *reading* the data.
-        These two calls may be made by different Biglist objects.
+        Multiple interim files may have been created by multiple writers.
+        One call to `flush()` will take care of all the interim files in existence.
+        This call can be made from any Biglist object as long as it points to same path.
 
         User should assume that data not yet fully persisted via `flush`
         are not visible to data reading via :meth:`__getitem__` or :meth:`__iter__`,
@@ -1025,8 +1027,8 @@ class Biglist(BiglistBase[Element]):
 
         In summary, call :meth:`flush` when
 
-        - You are done adding data (for this "session")
-        - or you need to start reading data
+        - You are done adding data (for this "session"),
+        - or you need to start reading data.
 
         After a call to ``flush()``, there's no problem to add more elements again by
         :meth:`append` or :meth:`extend`. Data files created by ``flush()`` with less than

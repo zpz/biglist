@@ -1080,7 +1080,7 @@ class Biglist(BiglistBase[Element]):
 
         if eager:
             return
-        
+
         # Merge file meta data into `info.json`, finalizing the data structure.
         def _merge():
             with self._info_file.lock(timeout=lock_timeout) as ff:
@@ -1091,9 +1091,7 @@ class Biglist(BiglistBase[Element]):
                 if data:
                     self.info.update(ff.read_json())
                     z0 = self.info['data_files_info']
-                    z = sorted(
-                        set((*(tuple(v[:2]) for v in z0), *map(tuple, data)))
-                    )
+                    z = sorted(set((*(tuple(v[:2]) for v in z0), *map(tuple, data))))
                     # TODO: maybe a merge sort can be more efficient.
                     cum = list(itertools.accumulate(v[1] for v in z))
                     z = [(a, b, c) for (a, b), c in zip(z, cum)]

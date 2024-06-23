@@ -1078,30 +1078,37 @@ class Biglist(BiglistBase[Element]):
             else:
                 data.extend(self._append_files_buffer)
 
-        if not eager:
-            # Merge file meta data into `info.json`, finalizing the data structure.
-            empty = True
-            if not data:
+        if eager:
+            return
+        
+        # Merge file meta data into `info.json`, finalizing the data structure.
+        def _merge():
+            with self._info_file.lock(timeout=lock_timeout) as ff:
                 for f in (self.path / '_flush_eager').iterdir():
-                    empty = False
-                    break
-            if data or not empty:
-                with self._info_file.lock(timeout=lock_timeout) as ff:
-                    for f in (self.path / '_flush_eager').iterdir():
-                        z = f.read_json()
-                        data.extend(z)
-                        f.remove_file()
-                    if data:
-                        self.info.update(ff.read_json())
-                        z0 = self.info['data_files_info']
-                        z = sorted(
-                            set((*(tuple(v[:2]) for v in z0), *map(tuple, data)))
-                        )
-                        # TODO: maybe a merge sort can be more efficient.
-                        cum = list(itertools.accumulate(v[1] for v in z))
-                        z = [(a, b, c) for (a, b), c in zip(z, cum)]
-                        self.info['data_files_info'] = z
-                        ff.write_json(self.info, overwrite=True)
+                    z = f.read_json()
+                    data.extend(z)
+                    f.remove_file()
+                if data:
+                    self.info.update(ff.read_json())
+                    z0 = self.info['data_files_info']
+                    z = sorted(
+                        set((*(tuple(v[:2]) for v in z0), *map(tuple, data)))
+                    )
+                    # TODO: maybe a merge sort can be more efficient.
+                    cum = list(itertools.accumulate(v[1] for v in z))
+                    z = [(a, b, c) for (a, b), c in zip(z, cum)]
+                    self.info['data_files_info'] = z
+                    ff.write_json(self.info, overwrite=True)
+
+        if data:
+            _merge()
+            return
+
+        for f in (self.path / '_flush_eager').iterdir():
+            break  # has files to merge
+        else:
+            return
+        _merge()  # executed if `break`-ed above.
 
     def reload(self) -> None:
         """

@@ -818,7 +818,12 @@ class Biglist(BiglistBase[Element]):
         return self.info.get('storage_version', 0)
 
     def _warn_flush(self):
-        if self._append_buffer or self._append_files_buffer or not self._flushed or self._info_backup != self.info:
+        if (
+            self._append_buffer
+            or self._append_files_buffer
+            or not self._flushed
+            or self._info_backup != self.info
+        ):
             # This warning fires if changed made by this object is not yet
             # fully flushed. This does not consider changed made by other objects
             # pointing to the same underlying dataset.
@@ -1023,7 +1028,7 @@ class Biglist(BiglistBase[Element]):
         This call can be made from any Biglist object as long as it points to same path.
 
         Unless you know what you are doing, don't use `flush(eager=True)`.
-        
+
         User should assume that data not yet fully persisted via `flush`
         are not visible to data reading via :meth:`__getitem__` or :meth:`__iter__`,
         and are not included in :meth:`__len__`, even to the same Biglist object that has performed writing.

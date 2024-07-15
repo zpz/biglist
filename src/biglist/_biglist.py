@@ -790,10 +790,13 @@ class Biglist(BiglistBase[Element]):
                         with self._info_file.lock() as ff:
                             ff.write_json(self.info, overwrite=True)
 
+        self._flushed = True
+        self._info_backup = copy.deepcopy(self.info)
+
     def __del__(self) -> None:
         if self._info_file.is_file():  # otherwise `destroy()` may have been called
-            self._warn_flush()
-            self.flush()
+            if self._warn_flush():
+                self.flush()
 
     @property
     def batch_size(self) -> int:
@@ -815,11 +818,15 @@ class Biglist(BiglistBase[Element]):
         return self.info.get('storage_version', 0)
 
     def _warn_flush(self):
-        if self._append_buffer or self._append_files_buffer:
-            # This is not the only situation that can be suspicious.
-            # If you used `flush(eager=True)` without a `flush()` later,
-            # both `self._append_buffer` and `self._append_files_buffer` can be
-            # empty yet the on-disk info is not fully integrated.
+        if (
+            self._append_buffer
+            or self._append_files_buffer
+            or not self._flushed
+            or self._info_backup != self.info
+        ):
+            # This warning fires if changed made by this object is not yet
+            # fully flushed. This does not consider changed made by other objects
+            # pointing to the same underlying dataset.
             #
             # Unless you know what you are doing, don't use `flush(eager=True)`.
             warnings.warn(
@@ -933,6 +940,7 @@ class Biglist(BiglistBase[Element]):
         buffer = self._append_buffer
         buffer_len = len(buffer)
         self._append_buffer = []
+        self._flushed = False
 
         datafile_ext = self.storage_format.replace('-', '_')
         filename = f'{self.make_file_name(buffer_len)}.{datafile_ext}'
@@ -1019,6 +1027,8 @@ class Biglist(BiglistBase[Element]):
         One call to `flush()` will take care of all the interim files in existence.
         This call can be made from any Biglist object as long as it points to same path.
 
+        Unless you know what you are doing, don't use `flush(eager=True)`.
+
         User should assume that data not yet fully persisted via `flush`
         are not visible to data reading via :meth:`__getitem__` or :meth:`__iter__`,
         and are not included in :meth:`__len__`, even to the same Biglist object that has performed writing.
@@ -1036,7 +1046,8 @@ class Biglist(BiglistBase[Element]):
         This is a legitimate case in parallel or distributed writing, or writing in
         multiple sessions.
 
-        Note that `flush` is called automatically when a Biglist object is garbage collected.
+        Note that `flush` is called automatically when a Biglist object that has not been read-only
+        is garbage collected.
         However, user is strongly recommended to explicitly call `flush` at the end of their writing session.
         (See :meth:`_warn_flush`.)
 
@@ -1077,6 +1088,7 @@ class Biglist(BiglistBase[Element]):
                     self._append_files_buffer, overwrite=False
                 )
                 self._append_files_buffer.clear()
+                self._flushed = False
             else:
                 data.extend(self._append_files_buffer)
 
@@ -1099,6 +1111,8 @@ class Biglist(BiglistBase[Element]):
                     z = [(a, b, c) for (a, b), c in zip(z, cum)]
                     self.info['data_files_info'] = z
                     ff.write_json(self.info, overwrite=True)
+                self._info_backup = copy.deepcopy(self.info)
+            self._flushed = True
 
         if data:
             _merge()

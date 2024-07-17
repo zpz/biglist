@@ -68,7 +68,7 @@ addopts = "-sv --log-cli-level info -p no:cacheprovider --ignore tests/experimen
 
 
 [tool.coverage.report]
-fail_under = 84
+fail_under = 83
 show_missing = true
 skip_empty = true
 

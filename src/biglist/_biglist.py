@@ -829,6 +829,7 @@ class Biglist(BiglistBase[Element]):
             # pointing to the same underlying dataset.
             #
             # Unless you know what you are doing, don't use `flush(eager=True)`.
+
             warnings.warn(
                 f"did you forget to flush {self.__class__.__name__} at '{self.path}'?"
             )
@@ -1087,10 +1088,10 @@ class Biglist(BiglistBase[Element]):
                 (self.path / '_flush_eager' / filename).write_json(
                     self._append_files_buffer, overwrite=False
                 )
-                self._append_files_buffer.clear()
                 self._flushed = False
             else:
                 data.extend(self._append_files_buffer)
+            self._append_files_buffer.clear()
 
         if eager:
             return
@@ -1121,6 +1122,7 @@ class Biglist(BiglistBase[Element]):
         for f in (self.path / '_flush_eager').iterdir():
             break  # has files to merge
         else:
+            self._flushed = True
             return
         _merge()  # executed if `break`-ed above.
 

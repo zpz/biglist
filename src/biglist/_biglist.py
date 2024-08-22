@@ -1095,11 +1095,15 @@ class Biglist(BiglistBase[Element]):
                     try:
                         z = (self.path / '_flush_eager' / filename).read_json()
                     except FileNotFoundError:
-                        (self.path / '_flush_eager' / filename).write_json(self._append_files_buffer, overwrite=False)
+                        (self.path / '_flush_eager' / filename).write_json(
+                            self._append_files_buffer, overwrite=False
+                        )
                     else:
                         # Accumulate the existing file with new file info.
                         z.extend(self._append_files_buffer)
-                        (self.path / '_flush_eager' / filename).write_json(z, overwrite=True)
+                        (self.path / '_flush_eager' / filename).write_json(
+                            z, overwrite=True
+                        )
 
                     # This file contains info of all files written by this object so far.
                     # Although this file has been written previously by this object,

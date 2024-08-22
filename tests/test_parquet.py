@@ -2,6 +2,8 @@ import io
 from types import SimpleNamespace
 
 import pyarrow
+from upathlib import LocalUpath
+
 from biglist import (
     ParquetBatchData,
     ParquetFileReader,
@@ -10,7 +12,6 @@ from biglist import (
     read_parquet_file,
     write_pylist_to_parquet,
 )
-from upathlib import LocalUpath
 
 
 def test_idx_locator():

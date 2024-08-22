@@ -19,6 +19,9 @@ from uuid import uuid4
 
 import pyarrow
 import pytest
+from boltons import iterutils
+from upathlib import LocalUpath
+
 from biglist import (
     Biglist,
     ParquetBiglist,
@@ -29,8 +32,6 @@ from biglist import (
 from biglist._biglist import (
     ParquetSerializer,
 )
-from boltons import iterutils
-from upathlib import LocalUpath
 
 
 def test_custom_file_name():

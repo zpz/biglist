@@ -1083,48 +1083,59 @@ class Biglist(BiglistBase[Element]):
         if self._append_files_buffer:
             if eager:
                 # Saving file meta data without merging it into `info.json`.
-                # This puts the data structure in a transitional state.
-                filename = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S.%f')}_{str(uuid4()).replace('-', '')[:10]}"
-                (self.path / '_flush_eager' / filename).write_json(
-                    self._append_files_buffer, overwrite=False
-                )
+                # This puts the on-disk data structure in a transitional state.
+                filename = getattr(self, '_flush_eager_file', None)
+                if not filename:
+                    filename = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S.%f')}_{str(uuid4()).replace('-', '')}"
+                    (self.path / '_flush_eager' / filename).write_json(
+                        self._append_files_buffer, overwrite=False
+                    )
+                    self._flush_eager_file = filename
+                else:
+                    try:
+                        z = (self.path / '_flush_eager' / filename).read_json()
+                    except FileNotFoundError:
+                        (self.path / '_flush_eager' / filename).write_json(self._append_files_buffer, overwrite=False)
+                    else:
+                        # Accumulate the existing file with new file info.
+                        z.extend(self._append_files_buffer)
+                        (self.path / '_flush_eager' / filename).write_json(z, overwrite=True)
+
+                    # This file contains info of all files written by this object so far.
+                    # Although this file has been written previously by this object,
+                    # the file may not exist. Another object for the same biglist could have
+                    # called `flush`, which would have incorporated all these files into meta info
+                    # and deleted these files.
                 self._flushed = False
             else:
+                # Do not update this object's eager file, which contains info of files written by this object
+                # previously (not including the content of `self._append_files_buffer`).
+                # Take care of `self._append_files_buffer` directly in the meta info file.
                 data.extend(self._append_files_buffer)
             self._append_files_buffer.clear()
 
         if eager:
             return
 
-        # Merge file meta data into `info.json`, finalizing the data structure.
-        def _merge():
-            with self._info_file.lock(timeout=lock_timeout) as ff:
-                for f in (self.path / '_flush_eager').iterdir():
-                    z = f.read_json()
-                    data.extend(z)
-                    f.remove_file()
-                if data:
-                    self.info.update(ff.read_json())
-                    z0 = self.info['data_files_info']
-                    z = sorted(set((*(tuple(v[:2]) for v in z0), *map(tuple, data))))
-                    # TODO: maybe a merge sort can be more efficient.
-                    cum = list(itertools.accumulate(v[1] for v in z))
-                    z = [(a, b, c) for (a, b), c in zip(z, cum)]
-                    self.info['data_files_info'] = z
-                    ff.write_json(self.info, overwrite=True)
-                self._info_backup = copy.deepcopy(self.info)
-            self._flushed = True
+        # Merge file meta data into `info.json`, finalizing the on-disk data structure.
+        with self._info_file.lock(timeout=lock_timeout) as ff:
+            # The info file may have been updated by another object for the same biglist.
+            self.info.update(ff.read_json())
 
-        if data:
-            _merge()
-            return
-
-        for f in (self.path / '_flush_eager').iterdir():
-            break  # has files to merge
-        else:
-            self._flushed = True
-            return
-        _merge()  # executed if `break`-ed above.
+            for f in (self.path / '_flush_eager').iterdir():
+                z = f.read_json()
+                data.extend(z)
+                f.remove_file()
+            if data:
+                z0 = self.info['data_files_info']
+                z = sorted(set((*(tuple(v[:2]) for v in z0), *map(tuple, data))))
+                # TODO: maybe a merge sort can be more efficient.
+                cum = list(itertools.accumulate(v[1] for v in z))
+                z = [(a, b, c) for (a, b), c in zip(z, cum)]
+                self.info['data_files_info'] = z
+                ff.write_json(self.info, overwrite=True)
+            self._info_backup = copy.deepcopy(self.info)
+        self._flushed = True
 
     def reload(self) -> None:
         """

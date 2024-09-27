@@ -17,7 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.9.2] - 2024-07-15
 
-- Do not trying flushing or checking updates if the Biglist object has been read-only.
+- Do not try flushing or checking updates if the Biglist object has been read-only.
 
 
 ## [0.9.1] - 2024-06-20
@@ -27,7 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.9.0] - 2024-06-18
 
-- Removed parameter `keep_files`. `__del__` no longer calls `destroy`; instead, it always try to call `flush`.
+- Removed parameter `keep_files`. `__del__` no longer calls `destroy`; instead, it always tries to call `flush`.
   User must explicitly call `destroy` if so desired.
 - `Biglist.flush` gets new parameter `eager`, default `False`.
 

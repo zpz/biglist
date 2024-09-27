@@ -918,7 +918,7 @@ class Biglist(BiglistBase[Element]):
         """
         if extra:
             extra = extra.lstrip('_').rstrip('_') + '_'
-        return f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S.%f')}_{extra}{str(uuid4()).replace('-', '')[:10]}_{buffer_len}"
+        return f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S.%f')}_{extra}{str(uuid4()).replace('-', '')[:16]}_{buffer_len}"
         # File name pattern introduced on 7/25/2022.
         # This should guarantee the file name is unique, hence
         # we do not need to verify that this file name is not already used.
@@ -926,6 +926,7 @@ class Biglist(BiglistBase[Element]):
         # later we decide to use these pieces of info.
         # Changes in 0.7.4: the time part changes from epoch to datetime, with guaranteed fixed length.
         # Change in 0.8.4: the uuid part has dash removed and length reduced to 10; add ``extra``.
+        # Change in 0.9.5: keep 16 digits of the uuid4 str, instead of the previous 10.
 
     def _flush(self) -> None:
         """
@@ -985,7 +986,7 @@ class Biglist(BiglistBase[Element]):
         each object has its own append buffer and does `_flush` independent of other objects.
         A data file has a random name (comprised of datetime accurate to sub-seconds,
         plus a random string, plus other things);
-        there is no risk of name clash when multiple Biglist objects save data files independent of
+        there is essentially no risk of name clash when multiple Biglist objects save data files independent of
         each other.
 
         However, there are two things that the automatic `_flush` does not do:
@@ -1121,7 +1122,7 @@ class Biglist(BiglistBase[Element]):
         if eager:
             return
 
-        # Merge file meta data into `info.json`, finalizing the on-disk data structure.
+        # Merge data-file meta data into `info.json`, finalizing the persisted data structure.
         with self._info_file.lock(timeout=lock_timeout) as ff:
             # The info file may have been updated by another object for the same biglist.
             self.info.update(ff.read_json())

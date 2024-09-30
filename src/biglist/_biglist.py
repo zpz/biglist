@@ -1077,7 +1077,7 @@ class Biglist(BiglistBase[Element]):
             cum = list(itertools.accumulate(v[1] for v in z))
             z = [(a, b, c) for (a, b), c in zip(z, cum)]
             return z
-        
+
         if eager:
             if self._append_files_buffer:
                 # Saving file meta data without merging it into `info.json`.
@@ -1108,12 +1108,16 @@ class Biglist(BiglistBase[Element]):
                     # the file may not exist. Another object for the same biglist could have
                     # called `flush`, which would have incorporated all these files into meta info
                     # and deleted these files.
-                self.info['data_files_info'] = _merge_data_file_info(self.info['data_files_info'], self._append_files_buffer)
+                self.info['data_files_info'] = _merge_data_file_info(
+                    self.info['data_files_info'], self._append_files_buffer
+                )
                 # Update the info to reflect the data writings by this object.
                 self._append_files_buffer.clear()
-                self._info_backup['data_files_info'] = copy.deepcopy(self.info['data_files_info'])
+                self._info_backup['data_files_info'] = copy.deepcopy(
+                    self.info['data_files_info']
+                )
             return
-        
+
         data = []
         if self._append_files_buffer:
             # Do not update this object's eager file, which contains info of files written by this object
@@ -1133,7 +1137,8 @@ class Biglist(BiglistBase[Element]):
                 f.remove_file()
             if data:
                 self.info['data_files_info'] = _merge_data_file_info(
-                    self.info['data_files_info'], data,
+                    self.info['data_files_info'],
+                    data,
                 )
                 ff.write_json(self.info, overwrite=True)
             self._info_backup = copy.deepcopy(self.info)

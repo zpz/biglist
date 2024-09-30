@@ -60,4 +60,4 @@ from ._util import (
     Slicer,
 )
 
-__version__ = '0.9.4'
+__version__ = '0.9.5'

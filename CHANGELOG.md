@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.9.5] - 2024-09-29
+
+- Finetune `Biglist.flush`, fixing some false alarms about "did you forget to call `flush`?".
+
+
 ## [0.9.4] - 2024-08-22
 
 - Optimization to `Biglist.flush()` by reducing the number of temporary bookkeeping files.
@@ -17,7 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.9.2] - 2024-07-15
 
-- Do not trying flushing or checking updates if the Biglist object has been read-only.
+- Do not try flushing or checking updates if the Biglist object has been read-only.
 
 
 ## [0.9.1] - 2024-06-20
@@ -27,7 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.9.0] - 2024-06-18
 
-- Removed parameter `keep_files`. `__del__` no longer calls `destroy`; instead, it always try to call `flush`.
+- Removed parameter `keep_files`. `__del__` no longer calls `destroy`; instead, it always tries to call `flush`.
   User must explicitly call `destroy` if so desired.
 - `Biglist.flush` gets new parameter `eager`, default `False`.
 

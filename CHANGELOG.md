@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.9.5] - 2024-09-29
+
+- Finetune `Biglist.flush`, fixing some false alarms about "did you forget to call `flush`?".
+
+
 ## [0.9.4] - 2024-08-22
 
 - Optimization to `Biglist.flush()` by reducing the number of temporary bookkeeping files.

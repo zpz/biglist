@@ -376,16 +376,11 @@ def test_parquet():
         bl.extend(data)
         bl.flush()
 
-        print('')
         print(data[:3])
-        print('')
-        print('')
         print(Slicer(bl)[:3].collect())
-        print('')
 
         assert list(bl) == data
 
-        print('len:', len(bl))
         assert len(bl) == len(data)
         print('num_data_files:', bl.num_data_files)
 
@@ -680,11 +675,10 @@ def test_eager_flush():
         for w in workers:
             w.join()
 
-        assert len(list((bl.path / '_flush_eager').iterdir())) == 0
-        # These files have been deleted when `flush` (eager=False) was called
-        # when the Biglist objects in the worker processes were garbage collected.
+        assert len(list((bl.path / '_flush_eager').iterdir())) == 4
         assert not bl
-        bl.reload()
+        bl.flush()
+        assert len(list((bl.path / '_flush_eager').iterdir())) == 0
         assert len(bl) == 400
         assert sorted(bl) == list(range(400))
     finally:

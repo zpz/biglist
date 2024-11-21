@@ -554,7 +554,7 @@ We can get info about the row-groups, or even retrieve a row-group as the unit o
   num_rows: 61
   num_row_groups: 7
   format_version: 2.6
-  serialized_size: 2375
+  serialized_size: 23...
 >>> f0.metadata.row_group(1)  # doctest: +ELLIPSIS
 <pyarrow._parquet.RowGroupMetaData object at 0x7...>
   num_columns: 3
@@ -881,7 +881,7 @@ The function :func:`write_arrays_to_parquet` is provided to write data columns t
   num_rows: 10000
   num_row_groups: 1
   format_version: 2.6
-  serialized_size: 609
+  serialized_size: 6...
 >>> f.metadata.schema  # doctest: +ELLIPSIS
 <pyarrow._parquet.ParquetSchema object at 0x7...>
 required group field_id=-1 schema {

@@ -37,7 +37,8 @@ doc = [
     "pydata-sphinx-theme",
 ]
 gcs = [
-    "upathlib[gcs] >= 0.9.3",
+    "cloudly[gcp] >= 0.0.3",
+    "upathlib[gcs] >= 0.9.8",
 ]
 test = [
     "boltons",

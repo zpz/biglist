@@ -11,7 +11,7 @@ from pyarrow.parquet import FileMetaData, ParquetFile
 from upathlib import LocalUpath, PathType, Upath, resolve_path
 
 try:
-    from upathlib import get_google_auth
+    from cloudly.gcp.auth import get_credentials
 except ImportError:
     pass
 
@@ -48,15 +48,14 @@ class ParquetFileReader(FileReader):
         This is provided under the (un-verified) assumption that the
         default credential inference process is a high overhead.
         """
-        cls._GCP_PROJECT_ID, cls._GCP_CREDENTIALS, renewed = get_google_auth(
-            project_id=getattr(cls, '_GCP_PROJECT_ID', None),
-            credentials=getattr(cls, '_GCP_CREDENTIALS', None),
+        cred, renewed = get_credentials(
             valid_for_seconds=good_for_seconds,
+            return_state=True,
         )
         if renewed or getattr(cls, '_GCSFS', None) is None:
             fs = GcsFileSystem(
-                access_token=cls._GCP_CREDENTIALS.token,
-                credential_token_expiration=cls._GCP_CREDENTIALS.expiry,
+                access_token=cred.token,
+                credential_token_expiration=cred.expiry,
             )
             cls._GCSFS = fs
         return cls._GCSFS

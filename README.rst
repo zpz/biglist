@@ -1,6 +1,16 @@
 biglist
 =======
 
+UPDATE: after 0.9.6, development of this package continues in the repo 
+`cloudly <https://github.com/zpz/cloudly>`_
+as part of the ``cloudly`` package.
+The main APIs are defined in ``cloudly.biglist``.
+
+Users are recommended to use ``cloudly`` directly.
+
+----END OF UPDATE----
+
+
 The package ``biglist`` provides persisted, out-of-memory Python data structures
 that implement the ``Sequence`` and ``Iterable`` interfaces with the capabilities of
 concurrent and distributed reading and writing.

@@ -8,7 +8,7 @@ from multiprocessing.util import Finalize
 import pyarrow
 from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
-from upathlib import LocalUpath, PathType, Upath, resolve_path
+from cloudly.upathlib import LocalUpath, PathType, Upath, resolve_path
 
 try:
     from cloudly.gcp.auth import get_credentials

@@ -2,7 +2,7 @@ import io
 from types import SimpleNamespace
 
 import pyarrow
-from upathlib import LocalUpath
+from cloudly.upathlib import LocalUpath
 
 from biglist import (
     ParquetBatchData,

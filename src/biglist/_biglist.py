@@ -24,8 +24,8 @@ from typing import Any, Callable, TypeVar
 from uuid import uuid4
 
 import pyarrow
-from typing_extensions import Self
 from cloudly.upathlib import LocalUpath, PathType, Upath, resolve_path, serializer
+from typing_extensions import Self
 
 from ._parquet import ParquetFileReader, make_parquet_schema
 from ._util import Element, FileReader, Seq

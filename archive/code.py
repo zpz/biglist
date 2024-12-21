@@ -1,7 +1,7 @@
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from biglist import Biglist
-from upathlib import LocalUpath
+from cloudly.upathlib import LocalUpath
 
 
 def worker(path, idx):

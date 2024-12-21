@@ -18,13 +18,13 @@
 .. _pyarrow.Scalar: https://arrow.apache.org/docs/python/generated/pyarrow.Scalar.html#pyarrow.Scalar
 .. _pyarrow.lib.StringScalar: https://arrow.apache.org/docs/python/generated/pyarrow.StringScalar.html
 .. _pyarrow.fs.GcsFileSystem: https://arrow.apache.org/docs/python/generated/pyarrow.fs.GcsFileSystem.html
-.. _upathlib.Upath: https://github.com/zpz/upathlib/blob/main/src/upathlib/_upath.py
+.. _cloudly.upathlib.Upath: https://github.com/zpz/cloudly/blob/main/src/cloudly/upathlib/_upath.py
 
 
 .. testsetup:: *
 
    from biglist import *
-   from upathlib import LocalUpath
+   from cloudly.upathlib import LocalUpath
 
 .. testcleanup::
 
@@ -301,7 +301,7 @@ in the cloud. Since a FileReader object is pickle-able, it works just fine if we
 and send it to another machine, provided the file path that is contained in the FileReader object
 is in the cloud, hence accessible from the other machine.
 We need a mechanism to distribute these FileReader objects to machines.
-For that, check out ``Multiplexer`` from ``upathlib``.
+For that, check out ``Multiplexer`` from ``cloudly``.
 
 
 Writing to a Biglist in multiple workers
@@ -314,7 +314,7 @@ Let's use multiprocessing to demo the idea.
 
 First, we create a new :class:`Biglist` at a storage location of our choosing:
 
->>> from upathlib import LocalUpath
+>>> from cloudly.upathlib import LocalUpath
 >>> path = LocalUpath('/tmp/a/b/c/d')
 >>> path.rmrf()
 0
@@ -425,7 +425,7 @@ This is analogous to, for example, the "external table" concept in BigQuery.
 
 Let's create a couple small Parquet files to demonstrate this API.
 
->>> from upathlib import LocalUpath
+>>> from cloudly.upathlib import LocalUpath
 >>> import random
 >>> from biglist import write_arrays_to_parquet
 >>>
@@ -863,7 +863,7 @@ The function :func:`write_arrays_to_parquet` is provided to write data columns t
 >>> from uuid import uuid4
 >>> from biglist import write_arrays_to_parquet, read_parquet_file
 >>> import random
->>> from upathlib import LocalUpath
+>>> from cloudly.upathlib import LocalUpath
 >>> N = 10000
 >>> path = LocalUpath('/tmp/a/b/c/d')
 >>> path.rmrf()

@@ -25,7 +25,7 @@ The intended way of data consumption is by iteration, which
 can be done *collectively* by distributed workers.
 
 Persistence can be on local disk or in cloud storage.
-Thanks to the package `upathlib <https://github.com/zpz/upathlib>`_,
+Thanks to the package `cloudly.upathlib <https://github.com/zpz/cloudly>`_,
 the implementation as wel as the end-user API is agnostic to the location of storage.
 
 In support of ``ParquetBiglist``, some utilities are provided for reading and writing Parquet data files.
@@ -60,4 +60,4 @@ from ._util import (
     Slicer,
 )
 
-__version__ = '0.9.6'
+__version__ = '0.9.7'

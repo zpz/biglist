@@ -20,7 +20,7 @@ from uuid import uuid4
 import pyarrow
 import pytest
 from boltons import iterutils
-from upathlib import LocalUpath
+from cloudly.upathlib import LocalUpath
 
 from biglist import (
     Biglist,

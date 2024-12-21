@@ -24,8 +24,8 @@ from typing import Any, Callable, TypeVar
 from uuid import uuid4
 
 import pyarrow
+from cloudly.upathlib import LocalUpath, PathType, Upath, resolve_path, serializer
 from typing_extensions import Self
-from upathlib import LocalUpath, PathType, Upath, resolve_path, serializer
 
 from ._parquet import ParquetFileReader, make_parquet_schema
 from ._util import Element, FileReader, Seq
@@ -535,7 +535,7 @@ class Biglist(BiglistBase[Element]):
             deserializer can be found.
 
         serializer
-            A subclass of `upathlib.serializer.Serializer <https://github.com/zpz/upathlib/blob/main/src/upathlib/serializer.py>`_.
+            A subclass of `cloudly.upathlib.serializer.Serializer <https://github.com/zpz/cloudly/blob/main/src/cloudly/upathlib/serializer.py>`_.
 
             Although this class needs to provide the ``Serializer`` API, it is possible to write data files in text mode.
             The registered 'json' format does that.
@@ -1267,7 +1267,7 @@ class BiglistFileReader(FileReader[Element]):
         loader
             A function that will be used to load the data file.
             This must be pickle-able.
-            Usually this is the bound method ``load`` of  a subclass of :class:`upathlib.serializer.Serializer`.
+            Usually this is the bound method ``load`` of  a subclass of :class:`cloudly.upathlib.serializer.Serializer`.
             If you customize this, please see the doc of :class:`~biglist.FileReader`.
         """
         super().__init__()
@@ -1389,8 +1389,8 @@ class ParquetSerializer(serializer.Serializer):
         # return sink.getvalue()  # bytes
         # return sink.getbuffer()  # memoryview
         return sink
-        # this is a file-like object; `upathlib.LocalUpath.write_bytes` and `upathlib.GcsBlobUpath.write_bytes` accept this.
-        # We do not returnn the bytes because `upathlib.GcsBlobUpath.write_bytes` can take file-like objects directly.
+        # this is a file-like object; `cloudly.upathlib.LocalUpath.write_bytes` and `cloudly.upathlib.GcsBlobUpath.write_bytes` accept this.
+        # We do not returnn the bytes because `cloudly.upathlib.GcsBlobUpath.write_bytes` can take file-like objects directly.
 
     @classmethod
     def deserialize(cls, y: bytes, **kwargs):

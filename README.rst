@@ -1,12 +1,25 @@
 biglist
 =======
 
-UPDATE: after 0.9.6, development of this package continues in the repo 
+----UPDATE----
+
+After 0.9.6 (December 2024), development of this package continues in the repo 
 `cloudly <https://github.com/zpz/cloudly>`_
 as part of the ``cloudly`` package.
 The main APIs are defined in ``cloudly.biglist``.
 
-Users are recommended to use ``cloudly`` directly.
+This move is related to the similar move for `upathlib <https://github.com/zpz/upathlib>`_.
+When you use `biglist`, you are typically dealing with large amounts of data and saving
+the biglist in a cloud blob store. `biglist` builds on `upathlib`, which provides a consistent
+API across local and cloud storages. As such, depending on what cloud provider you use,
+you also need to pull in corresponding dependencies that `upathlib` requires for your cloud.
+This includes authentication and cloud storage utilities for the said cloud.
+These utilities, in turn, are in the scope of `cloudly`. For these reasons, I decided to
+merge both `upathlib` and `biglist` into `cloudly`.
+
+`biglist` has been used in production for several years, and I feel it's pretty stable.
+But who knows how much better it can be? You may want to switch to using it from `cloudly`.
+
 
 ----END OF UPDATE----
 

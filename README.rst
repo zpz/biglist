@@ -6,7 +6,6 @@ biglist
 After 0.9.6 (December 2024), development of this package continues in the repo 
 `cloudly <https://github.com/zpz/cloudly>`_
 as part of the ``cloudly`` package.
-The main APIs are defined in ``cloudly.biglist``.
 
 This move is related to the similar move for `upathlib <https://github.com/zpz/upathlib>`_.
 When you use `biglist`, you are typically dealing with large amounts of data and saving
